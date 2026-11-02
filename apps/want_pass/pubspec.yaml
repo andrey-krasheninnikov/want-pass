@@ -1,0 +1,25 @@
+name: want_pass
+description: Want Pass desktop and mobile client.
+version: 0.1.0+1
+publish_to: none
+resolution: workspace
+environment:
+  sdk: ^3.13.5
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_localizations:
+    sdk: flutter
+  bloc: ^9.0.0
+  bloc_effects: ^2.1.0
+  launch_mode: 0.2.0
+  talker: ^5.1.20
+  talker_bloc_effects: 0.1.0
+  want_desyst: 0.4.0
+  want_pass_core: ^0.1.0
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+flutter:
+  uses-material-design: true

@@ -6,9 +6,9 @@ Read the glossary and relevant decisions before substantive changes. Preserve un
 
 Перед существенными изменениями прочитайте словарь и относящиеся к задаче решения. Сохраняйте посторонние изменения и проверяйте текущее состояние до записи. Сохраняйте нейтральное авторство в тексте и метаданных; не добавляйте атрибуцию происхождения работы и не выдумывайте автора, соавтора или подпись. Названия продуктов допустимы при описании соответствующей интеграции.
 
-The current delivery is documentation, one specification and 71 implementation/research tickets. Application code, package adoption, deployment and store publication require their own task. Keep the documentation PR open for review.
+The specification and 71-ticket roadmap define the implementation scope. Work through explicitly requested tracker tasks; application code, deployment and store publication remain separate tasks. Keep the documentation PR open for review. Merge requires explicit authorization.
 
-Текущая поставка включает документацию, одну спецификацию и 71 задачу реализации или исследования. Код приложения, подключение пакетов, развёртывание и публикация в сторах выполняются отдельными задачами. PR документации остаётся открытым для review.
+Спецификация и roadmap из 71 задачи определяют объём реализации. Выполняйте явно запрошенные задачи трекера; код приложения, развёртывание и публикация в сторах остаются отдельными задачами. PR документации остаётся открытым для review. Merge требует явного разрешения.
 
 Use Flutter with want_desyst, domain_error, package_context, launch_mode and talker_bloc_effects; use Rust for the backend. observatory is excluded. A released immutable Flutter UI kit is a bootstrap prerequisite. Keep authorization, validation, persistence and networking outside widgets. Never put real credentials into examples, diagnostics, fixtures or protocol errors.
 

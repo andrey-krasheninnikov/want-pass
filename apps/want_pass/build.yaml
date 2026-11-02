@@ -1,0 +1,18 @@
+targets:
+  $default:
+    builders:
+      injectable_generator:injectable_config_builder:
+        enabled: false
+      want_pass:registration:
+        generate_for:
+          - lib/src/dependencies/dependencies.dart
+
+builders:
+  registration:
+    import: "tool/registration_builder.dart"
+    builder_factories: ["registrationBuilder"]
+    build_extensions:
+      ".dart": [".config.dart", ".module.dart"]
+    required_inputs: [".injectable.json"]
+    auto_apply: root_package
+    build_to: source

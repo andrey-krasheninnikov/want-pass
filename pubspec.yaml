@@ -1,0 +1,9 @@
+name: want_pass_workspace
+publish_to: none
+environment:
+  sdk: ^3.13.5
+workspace:
+  - apps/want_pass
+  - packages/pass_core
+dev_dependencies:
+  lints: ^6.0.0

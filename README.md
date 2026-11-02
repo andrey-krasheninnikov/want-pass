@@ -14,9 +14,9 @@ Product decisions and the implementation backlog are documented. Application fea
 - [Architecture decisions / Архитектурные решения](docs/adr/)
 - [Project rules / Правила проекта](AGENTS.md)
 
-The first target is a local macOS vault and search widget. Flutter uses want_desyst, domain_error, package_context, launch_mode and talker_bloc_effects; the backend uses Rust. Later work covers Windows, Linux, Android, iOS, passkeys, encrypted sync, browser and developer-tool integrations.
+The first target is a local macOS vault and search widget. Flutter uses want_allure, domain_error, package_context, launch_mode and talker_bloc_effects; the backend uses Rust. Later work covers Windows, Linux, Android, iOS, passkeys, encrypted sync, browser and developer-tool integrations.
 
-Первая цель: локальный macOS-сейф и поисковый виджет. Flutter использует want_desyst, domain_error, package_context, launch_mode и talker_bloc_effects; backend использует Rust. Последующие этапы охватывают Windows, Linux, Android, iOS, passkeys, зашифрованную синхронизацию, браузеры и инструменты разработчика.
+Первая цель: локальный macOS-сейф и поисковый виджет. Flutter использует want_allure, domain_error, package_context, launch_mode и talker_bloc_effects; backend использует Rust. Последующие этапы охватывают Windows, Linux, Android, iOS, passkeys, зашифрованную синхронизацию, браузеры и инструменты разработчика.
 
 ## Development foundation / Фундамент разработки
 
@@ -53,13 +53,13 @@ Health возвращает `200` и `{"status":"ok"}`. Неизвестные �
 
 ### Boundaries / Границы
 
-- `apps/want_pass`: launch-mode initialization, BLoC startup state, allowlisted diagnostics and Want UI presentation. Widgets do not read the package context or implement authorization/storage. / Инициализация режима запуска, BLoC-состояние, разрешённые диагностические маркеры и Want UI. Виджеты не читают package context и не реализуют авторизацию/хранение.
-- `packages/pass_core`: pure Dart application operations, package-owned context and explicit domain results. The foreground startup guard is callable without Flutter widgets or a server. / Операции приложения на Dart, собственный package context и явные domain results. Проверка foreground-запуска доступна без Flutter-виджетов и сервера.
+- `apps/want_pass`: launch-mode initialization, singleton startup use case/controller, allowlisted diagnostics and Want Allure presentation. Widgets do not read the package context or implement authorization/storage. / Инициализация режима запуска, singleton use case/controller запуска, разрешённые диагностические маркеры и Want Allure. Виджеты не читают package context и не реализуют авторизацию/хранение.
+- `packages/pass_core`: pure Dart startup access service, versioned domain errors, package-owned context and explicit domain results. The foreground startup guard is callable without Flutter widgets or a server. / Startup access service на Dart, версионированные доменные ошибки, собственный package context и явные domain results. Проверка foreground-запуска доступна без Flutter-виджетов и сервера.
 - `server`: a Rust HTTP service with a static health route and request-failure tests. / Rust HTTP-сервис со статическим health-маршрутом и проверками ошибочных запросов.
 
-All workspace members use one committed pub lockfile; the backend and native pods have their own committed lockfiles. `want_desyst 0.4.0` is a hosted immutable dependency, not an external path override. Internal workspace modules are versioned in this repository. The native bundle identifier and template app icon are development defaults, not a store submission or reserved production identity.
+All workspace members use one committed pub lockfile; the backend and native pods have their own committed lockfiles. `want_allure 1.0.0` is a hosted immutable dependency, not an external path override. Internal workspace modules are versioned in this repository. The native bundle identifier and template app icon are development defaults, not a store submission or reserved production identity.
 
-Все участники workspace используют один закоммиченный pub lockfile; backend и нативные pods имеют собственные lockfiles. `want_desyst 0.4.0` является опубликованной неизменяемой зависимостью, а не внешней path-подменой. Внутренние модули workspace версионируются в этом репозитории. Bundle identifier и шаблонная иконка являются defaults разработки, а не публикацией в сторе или зарезервированной production-идентичностью.
+Все участники workspace используют один закоммиченный pub lockfile; backend и нативные pods имеют собственные lockfiles. `want_allure 1.0.0` является опубликованной неизменяемой зависимостью, а не внешней path-подменой. Внутренние модули workspace версионируются в этом репозитории. Bundle identifier и шаблонная иконка являются defaults разработки, а не публикацией в сторе или зарезервированной production-идентичностью.
 
 Diagnostics forward only fixed event markers. Arbitrary states, effects, error objects and traces are neither formatted nor retained by the logging adapter. Framework failures render generic text. This boundary has automated checks; it is not a security review of a future encrypted vault.
 

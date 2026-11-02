@@ -6,7 +6,8 @@ resolution: workspace
 environment:
   sdk: ^3.13.5
 dependencies:
-  domain_error: ^5.0.3
+  domain_error: 5.0.3
+  injectable: ^3.0.0
   package_context: ^2.2.0
 dev_dependencies:
   test: ^1.25.6

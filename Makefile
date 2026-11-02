@@ -1,14 +1,17 @@
-.PHONY: bootstrap check format format-check run server build-macos
+.PHONY: bootstrap generate check format format-check run server build-macos
 
 bootstrap:
 	fvm flutter pub get --enforce-lockfile
 
+generate:
+	cd apps/want_pass && fvm dart run build_runner build
+
 format:
-	fvm dart format apps/want_pass/lib apps/want_pass/test packages/pass_core
+	fvm dart format apps/want_pass/lib apps/want_pass/test apps/want_pass/tool packages/pass_core
 	cargo fmt --manifest-path server/Cargo.toml
 
 format-check:
-	fvm dart format --output=none --set-exit-if-changed apps/want_pass/lib apps/want_pass/test packages/pass_core
+	fvm dart format --output=none --set-exit-if-changed apps/want_pass/lib apps/want_pass/test apps/want_pass/tool packages/pass_core
 	cargo fmt --manifest-path server/Cargo.toml -- --check
 
 check: format-check

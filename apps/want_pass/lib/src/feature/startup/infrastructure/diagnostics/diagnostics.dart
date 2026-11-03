@@ -42,6 +42,7 @@ final class SafeBlocObserver extends BlocObserver
       'PlatformRecoveryExportService.selectFileV1():' ||
       'RustVaultAccessService.confirmV2():' ||
       'RustVaultAccessService.exportRecoveryV2():' ||
+      'RustVaultAccessService.waitForExportsV2():' ||
       'RustVaultAccessService.hintsV2():' ||
       'RustVaultAccessService.prepareCreationV2():' ||
       'RustVaultAccessService.prepareRecoveryV2():' ||

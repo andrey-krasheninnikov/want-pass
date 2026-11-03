@@ -379,6 +379,30 @@ void main() {
       await events.close();
     },
   );
+  test(
+    'lock clears keys immediately and waits for admitted export completion',
+    () async {
+      final access = _Access();
+      access.handle.exists = true;
+      access.handle.state = VaultAccessStateV1.unlocked;
+      access.draining = Completer<DomainResult<void>>();
+      final events = StreamController<VaultLockSignal>.broadcast();
+      final controller = _controller(access, events.stream);
+      await controller.init();
+      final locking = controller.lock();
+      await Future<void>.delayed(Duration.zero);
+      expect(access.handle.invalidations, 1);
+      expect(access.handle.state, VaultAccessStateV1.locked);
+      expect(controller.state.phase, VaultPhase.loading);
+      expect(controller.state.busy, isTrue);
+      access.draining!.complete(const Result.success(null));
+      await locking;
+      expect(controller.state.phase, VaultPhase.locked);
+      await controller.close();
+      await events.close();
+    },
+  );
+
   test('close awaits clipboard cleanup already started by lock', () async {
     final access = _Access();
     final export = _Export();
@@ -701,6 +725,11 @@ final class _Handle implements VaultHandleV1 {
 }
 
 final class _Access implements VaultAccessService {
+  Completer<DomainResult<void>>? draining;
+  @override
+  FutureDomainResult<void> waitForExportsV2({required VaultHandleV1 handle}) =>
+      draining?.future ?? Future.value(const Result.success(null));
+
   @override
   FutureDomainResult<VaultHintsDtoV2> hintsV2({
     required VaultHandleV1 handle,

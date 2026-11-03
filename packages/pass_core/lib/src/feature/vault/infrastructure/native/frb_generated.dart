@@ -62,7 +62,7 @@ class VaultRustLib
   String get codegenVersion => '2.13.0';
 
   @override
-  int get rustContentHash => -469700598;
+  int get rustContentHash => -2053444544;
 
   static const kDefaultExternalLibraryLoaderConfig =
       ExternalLibraryLoaderConfig(
@@ -138,6 +138,8 @@ abstract class VaultRustLibApi extends BaseApi {
     required String password,
     required BigInt generation,
   });
+
+  Future<void> crateApiVaultWaitForExportsV2({required Vault that});
 
   RustArcIncrementStrongCountFnType get rust_arc_increment_strong_count_Vault;
 
@@ -662,6 +664,40 @@ class VaultRustLibApiImpl extends VaultRustLibApiImplPlatform
     debugName: "Vault_unlock",
     argNames: ["that", "password", "generation"],
   );
+
+  @override
+  Future<void> crateApiVaultWaitForExportsV2({required Vault that}) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerVault(
+            that,
+            serializer,
+          );
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 15,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_unit,
+          decodeErrorData: sse_decode_vault_failure,
+        ),
+        constMeta: kCrateApiVaultWaitForExportsV2ConstMeta,
+        argValues: const [],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiVaultWaitForExportsV2ConstMeta =>
+      const TaskConstMeta(
+        debugName: "Vault_wait_for_exports_v2",
+        argNames: ["that"],
+      );
 
   RustArcIncrementStrongCountFnType
   get rust_arc_increment_strong_count_Vault => wire
@@ -1262,4 +1298,7 @@ class VaultImpl extends RustOpaque implements Vault {
         password: password,
         generation: generation,
       );
+
+  Future<void> waitForExportsV2() =>
+      VaultRustLib.instance.api.crateApiVaultWaitForExportsV2(that: this);
 }

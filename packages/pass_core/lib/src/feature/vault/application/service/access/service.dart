@@ -41,6 +41,7 @@ abstract interface class VaultAccessService {
     required String password,
     required VaultHintsDtoV2 hints,
   });
+  FutureDomainResult<void> waitForExportsV2({required VaultHandleV1 handle});
   FutureDomainResult<void> exportRecoveryV2({
     required VaultHandleV1 handle,
     required String destination,

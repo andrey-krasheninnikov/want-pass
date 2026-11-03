@@ -291,6 +291,27 @@ final class RustVaultAccessService implements VaultAccessService {
   }
 
   @override
+  FutureDomainResult<void> waitForExportsV2({
+    required VaultHandleV1 handle,
+  }) async {
+    const op = 'RustVaultAccessService.waitForExportsV2():';
+    final result = await captureResult<void>(() async {
+      await (handle as _NativeVaultHandle)._vault.waitForExportsV2();
+    }, mapToDomainError: _mapNativeError);
+    if (result.isError) {
+      reportVaultSafely(
+        _reporter,
+        layer: VaultDiagnosticLayer.infrastructure,
+        operation: op,
+        error: result.error is VaultErrorV1
+            ? result.error as VaultErrorV1
+            : const VaultUnexpectedErrorV1(),
+      );
+    }
+    return result;
+  }
+
+  @override
   FutureDomainResult<void> exportRecoveryV2({
     required VaultHandleV1 handle,
     required String destination,

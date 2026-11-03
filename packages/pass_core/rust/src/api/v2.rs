@@ -104,13 +104,14 @@ impl Vault {
         destination: String,
         generation: u64,
     ) -> Result<(), VaultFailure> {
-        self.export_recovery_with_hook(destination, generation, || {})
+        self.export_recovery_with_hook(destination, generation, || {}, || {})
     }
     fn export_recovery_with_hook(
         &self,
         destination: String,
         generation: u64,
         before_publish: impl FnOnce(),
+        after_admission: impl FnOnce(),
     ) -> Result<(), VaultFailure> {
         use std::{fs, io::Write, path::Path};
         let (entropy, directory) = {
@@ -156,13 +157,25 @@ impl Vault {
             .and_then(|()| file.as_file().sync_all())
             .map_err(|_| VaultFailure::Storage)?;
         before_publish();
+        let _publication = self
+            .export_publication
+            .lock()
+            .map_err(|_| VaultFailure::Unavailable)?;
         if self.generation() != generation {
             return Err(VaultFailure::Stale);
         }
+        after_admission();
         file.persist(path).map_err(|_| VaultFailure::Storage)?;
         fs::File::open(parent)
             .and_then(|f| f.sync_all())
             .map_err(|_| VaultFailure::WriteUncertain)
+    }
+    pub fn wait_for_exports_v2(&self) -> Result<(), VaultFailure> {
+        let _publication = self
+            .export_publication
+            .lock()
+            .map_err(|_| VaultFailure::Unavailable)?;
+        Ok(())
     }
     pub fn hints_v2(&self) -> Result<VaultHintsV2, VaultFailure> {
         let state = self.state.lock().map_err(|_| VaultFailure::Unavailable)?;
@@ -343,6 +356,63 @@ mod tests {
     };
 
     #[test]
+    fn admitted_export_finishes_before_lock_completion_barrier() {
+        let temporary = tempfile::tempdir().unwrap();
+        let vault = Arc::new(
+            Vault::open(temporary.path().join("vault").to_str().unwrap().to_owned()).unwrap(),
+        );
+        vault
+            .prepare_creation_v2(
+                "Synthetic export password 2026!".to_owned(),
+                vault.generation(),
+            )
+            .unwrap();
+        let generation = vault.generation();
+        let destination = temporary.path().join("recovery.txt");
+        let path = destination.to_str().unwrap().to_owned();
+        let (ready_tx, ready_rx) = mpsc::channel();
+        let (resume_tx, resume_rx) = mpsc::channel();
+        let worker_vault = Arc::clone(&vault);
+        let export = thread::spawn(move || {
+            worker_vault.export_recovery_with_hook(
+                path,
+                generation,
+                || {},
+                || {
+                    ready_tx.send(()).unwrap();
+                    resume_rx.recv().unwrap();
+                },
+            )
+        });
+        ready_rx.recv_timeout(Duration::from_secs(2)).unwrap();
+        let (invalidated_tx, invalidated_rx) = mpsc::channel();
+        let (finished_tx, finished_rx) = mpsc::channel();
+        let locking_vault = Arc::clone(&vault);
+        let locking = thread::spawn(move || {
+            locking_vault.lock().unwrap();
+            invalidated_tx.send(()).unwrap();
+            finished_tx
+                .send(locking_vault.wait_for_exports_v2())
+                .unwrap();
+        });
+        let invalidated = invalidated_rx.recv_timeout(Duration::from_secs(2));
+        let early = finished_rx.recv_timeout(Duration::from_millis(100));
+        let keys_cleared = vault.state.lock().unwrap().draft_v2.is_none();
+        resume_tx.send(()).unwrap();
+        assert_eq!(export.join().unwrap(), Ok(()));
+        locking.join().unwrap();
+        invalidated.unwrap();
+        assert!(keys_cleared);
+        assert!(matches!(early, Err(mpsc::RecvTimeoutError::Timeout)));
+        assert_eq!(
+            finished_rx.recv_timeout(Duration::from_secs(2)).unwrap(),
+            Ok(())
+        );
+        assert!(destination.exists());
+        assert_eq!(vault.status().unwrap(), VaultStatus::Missing);
+    }
+
+    #[test]
     fn paused_export_allows_lock_and_never_publishes_after_invalidation() {
         let temporary = tempfile::tempdir().unwrap();
         let vault = Arc::new(
@@ -361,10 +431,15 @@ mod tests {
         let worker_vault = Arc::clone(&vault);
         let path = destination.to_str().unwrap().to_owned();
         let export = thread::spawn(move || {
-            worker_vault.export_recovery_with_hook(path, generation, || {
-                ready_tx.send(()).unwrap();
-                resume_rx.recv().unwrap();
-            })
+            worker_vault.export_recovery_with_hook(
+                path,
+                generation,
+                || {
+                    ready_tx.send(()).unwrap();
+                    resume_rx.recv().unwrap();
+                },
+                || {},
+            )
         });
         ready_rx.recv_timeout(Duration::from_secs(2)).unwrap();
         let (locked_tx, locked_rx) = mpsc::channel();

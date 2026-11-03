@@ -109,6 +109,11 @@ final class _VaultHandle implements VaultHandleV1 {
 final class _VaultAccess implements VaultAccessService {
   const _VaultAccess();
   @override
+  FutureDomainResult<void> waitForExportsV2({
+    required VaultHandleV1 handle,
+  }) async => const Result.success(null);
+
+  @override
   FutureDomainResult<VaultHintsDtoV2> hintsV2({
     required VaultHandleV1 handle,
   }) async => const Result.success(VaultHintsDtoV2());

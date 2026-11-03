@@ -63,6 +63,8 @@ abstract class Vault implements RustOpaqueInterface {
   Future<VaultStatus> status();
 
   Future<void> unlock({required String password, required BigInt generation});
+
+  Future<void> waitForExportsV2();
 }
 
 class RecoveryChallenge {

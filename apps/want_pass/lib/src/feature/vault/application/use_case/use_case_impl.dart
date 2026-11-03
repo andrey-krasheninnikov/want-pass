@@ -139,6 +139,8 @@ final class VaultUseCaseImpl implements VaultUseCase {
     const op = 'VaultUseCaseImpl.lockV1():';
     final result = await captureResult<LockVaultResultV1>(() async {
       params.handle.invalidateSync();
+      final publication = await _access.waitForExportsV2(handle: params.handle);
+      if (publication.isError) throw publication.error;
       final status = await _access.statusV1(handle: params.handle);
       if (status.isError) throw status.error;
       return LockVaultResultV1(state: status.value);

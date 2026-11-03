@@ -62,6 +62,7 @@ struct State {
 pub struct Vault {
     state: Mutex<State>,
     job: Mutex<()>,
+    export_publication: Mutex<()>,
     epoch: AtomicU64,
 }
 
@@ -82,6 +83,7 @@ impl Vault {
                 closed: false,
             }),
             job: Mutex::new(()),
+            export_publication: Mutex::new(()),
             epoch: AtomicU64::new(0),
         })
     }
@@ -245,6 +247,7 @@ impl Vault {
         state.active = Some(opened);
         Ok(())
     }
+    // Invalidate keys immediately; await wait_for_exports_v2 before reporting completion.
     #[frb(sync)]
     pub fn lock(&self) -> Result<(), VaultFailure> {
         self.epoch.fetch_add(1, Ordering::SeqCst);
@@ -260,13 +263,17 @@ impl Vault {
     pub fn close(&self) -> Result<(), VaultFailure> {
         self.epoch.fetch_add(1, Ordering::SeqCst);
         let mut state = self.state.lock().map_err(|_| VaultFailure::Unavailable)?;
-        if !state.closed {
+        let closed = if !state.closed {
             state.active = None;
             state.draft = None;
             state.draft_v2 = None;
             state.closed = true;
-            state.store.close()?;
-        }
-        Ok(())
+            state.store.close()
+        } else {
+            Ok(())
+        };
+        drop(state);
+        let publication = self.wait_for_exports_v2();
+        closed.and(publication)
     }
 }

@@ -1,8 +1,17 @@
+import 'package:want_pass/src/feature/vault/infrastructure/_barrel.dart';
+
 import 'dart:async';
 
 import 'package:domain_error/domain_error.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:flutter/widgets.dart';
+import 'package:flutter/material.dart';
+
+import 'dart:io';
+import 'dart:ui' as ui;
+
+import 'package:flutter/rendering.dart';
+import 'package:flutter/services.dart';
+import 'package:want_pass/src/feature/appearance/application/_barrel.dart';
 import 'package:want_pass/src/feature/_common/presentation/_barrel.dart';
 import 'package:want_pass/src/feature/startup/application/_barrel.dart';
 import 'package:launch_mode/launch_mode.dart';
@@ -16,14 +25,23 @@ const _challenge = VaultRecoveryChallengeV1(
 );
 
 void main() {
-  TestWidgetsFlutterBinding.ensureInitialized();
+  final binding = TestWidgetsFlutterBinding.ensureInitialized();
+  setUp(() {
+    binding.platformDispatcher.accessibilityFeaturesTestValue =
+        const FakeAccessibilityFeatures(disableAnimations: true);
+  });
+  tearDown(binding.platformDispatcher.clearAccessibilityFeaturesTestValue);
   LaunchMode.initializeAutomatically();
 
   test(
     'password mismatch never reaches storage and domain errors keep identity',
     () async {
       final access = _Access();
-      final useCase = VaultUseCaseImpl(access, const _Reporter());
+      final useCase = VaultUseCaseImpl(
+        access,
+        const _Reporter(),
+        const PlatformRecoveryExportService(_Reporter()),
+      );
       final mismatch = await useCase.prepareCreationV1(
         params: PrepareVaultCreationParamsV1(
           handle: access.handle,
@@ -240,12 +258,118 @@ void main() {
     }
   });
 
-  testWidgets('creation and unlock preserve pasted LF in the password', (
+  testWidgets(
+    'branded password fields remove LF while preserving spaces and Unicode',
+    (tester) async {
+      const password = 'Synthetic exact\npassword 2026';
+      const acceptedPassword = 'Synthetic exactpassword 2026';
+      final semantics = tester.ensureSemantics();
+      try {
+        final access = _Access();
+        final events = StreamController<VaultLockSignal>.broadcast();
+        final controller = _controller(access, events.stream);
+        final startup = StartupController(_Startup(), const _Reporter());
+        await tester.runAsync(() async {
+          await startup.init();
+          await controller.init();
+        });
+        await tester.pumpWidget(
+          WantPassApp(startup: startup, vault: controller),
+        );
+        await tester.pumpAndSettle();
+        Finder input(String key) => find.descendant(
+          of: find.byKey(ValueKey(key)),
+          matching: find.bySubtype<EditableText>(),
+        );
+        await _enter(tester, input('master-password'), password);
+        expect(
+          tester.state<EditableTextState>(input('master-password')).copyEnabled,
+          isFalse,
+        );
+        final data = tester
+            .getSemantics(input('master-password'))
+            .getSemanticsData();
+        expect(data.label, contains('Master password'));
+        expect(data.flagsCollection.isObscured, isTrue);
+        expect(data.value, isNot(contains('Synthetic')));
+        await _enter(tester, input('password-confirmation'), password);
+        await tester.tap(find.byKey(const ValueKey('vault-create')));
+        await tester.pumpAndSettle();
+        expect(access.preparedPasswords, [acceptedPassword]);
+        await controller.confirm(['one', 'two', 'three']);
+        await controller.lock();
+        await tester.pumpAndSettle();
+        await _enter(tester, input('master-password'), password);
+        await tester.tap(find.byKey(const ValueKey('vault-unlock')));
+        await tester.pumpAndSettle();
+        expect(access.passwords, [acceptedPassword]);
+        expect(controller.state.phase, VaultPhase.unlocked);
+        await tester.pumpWidget(const SizedBox.shrink());
+        await tester.runAsync(() async {
+          await controller.close();
+          await startup.close();
+          await events.close();
+        });
+      } finally {
+        semantics.dispose();
+      }
+    },
+  );
+
+  test(
+    'lock cancels a pending save chooser and prevents a later export',
+    () async {
+      final access = _Access();
+      final export = _Export();
+      final events = StreamController<VaultLockSignal>.broadcast();
+      final controller = _controller(access, events.stream, export);
+      await controller.init();
+      await controller.prepareSetup(
+        password: _password,
+        confirmation: _password,
+      );
+      final saving = controller.downloadRecovery();
+      await Future<void>.delayed(Duration.zero);
+      await controller.lock();
+      await saving;
+      expect(access.exports, 0);
+      export.selection.complete(
+        const Result.success('/synthetic/recovery.txt'),
+      );
+      await Future<void>.delayed(Duration.zero);
+      expect(access.exports, 0);
+      await controller.close();
+      await events.close();
+    },
+  );
+  testWidgets('clipboard expires conditionally and lock clears our copy', (
     tester,
   ) async {
-    const password = 'Synthetic exact\npassword 2026';
-    final semantics = tester.ensureSemantics();
-    try {
+    final access = _Access();
+    final export = _Export();
+    final events = StreamController<VaultLockSignal>.broadcast();
+    final controller = _controller(access, events.stream, export);
+    await tester.runAsync(controller.init);
+    await controller.prepareSetup(password: _password, confirmation: _password);
+    await controller.copyRecovery();
+    expect(export.clipboard, 'one two three');
+    await tester.pump(const Duration(seconds: 59));
+    expect(export.clipboard, 'one two three');
+    export.clipboard = 'other application';
+    await tester.pump(const Duration(seconds: 1));
+    expect(export.clipboard, 'other application');
+    await controller.copyRecovery();
+    await controller.lock();
+    await tester.pump();
+    expect(export.clipboard, '');
+    await tester.runAsync(() async {
+      await controller.close();
+      await events.close();
+    });
+  });
+  testWidgets(
+    'setup keeps its phrase on Back and validates three separate chips',
+    (tester) async {
       final access = _Access();
       final events = StreamController<VaultLockSignal>.broadcast();
       final controller = _controller(access, events.stream);
@@ -256,32 +380,49 @@ void main() {
       });
       await tester.pumpWidget(WantPassApp(startup: startup, vault: controller));
       await tester.pumpAndSettle();
-      Finder input(String key) => find.descendant(
+      Finder field(String key) => find.descendant(
         of: find.byKey(ValueKey(key)),
         matching: find.bySubtype<EditableText>(),
       );
-      await _enter(tester, input('master-password'), password);
-      expect(
-        tester.state<EditableTextState>(input('master-password')).copyEnabled,
-        isFalse,
-      );
-      final data = tester
-          .getSemantics(input('master-password'))
-          .getSemanticsData();
-      expect(data.label, contains('Master password'));
-      expect(data.flagsCollection.isObscured, isTrue);
-      expect(data.value, isNot(contains('Synthetic')));
-      await _enter(tester, input('password-confirmation'), password);
+      await _enter(tester, field('master-password'), _password);
+      await _enter(tester, field('password-confirmation'), _password);
       await tester.tap(find.byKey(const ValueKey('vault-create')));
       await tester.pumpAndSettle();
-      expect(access.preparedPasswords, [password]);
-      await controller.confirm(['one', 'two', 'three']);
+      final first = controller.state.setupChallenge;
+      await tester.tap(find.byKey(const ValueKey('setup-back')));
+      await tester.pumpAndSettle();
+      expect(
+        tester.widget<EditableText>(field('master-password')).controller.text,
+        _password,
+      );
+      await tester.tap(find.byKey(const ValueKey('vault-create')));
+      await tester.pumpAndSettle();
+      expect(controller.state.setupChallenge, first);
+      await tester.tap(find.byKey(const ValueKey('recovery-qr')));
+      await tester.pumpAndSettle();
+      expect(find.text('Recovery QR'), findsOneWidget);
       await controller.lock();
       await tester.pumpAndSettle();
-      await _enter(tester, input('master-password'), password);
-      await tester.tap(find.byKey(const ValueKey('vault-unlock')));
+      expect(find.text('Recovery QR'), findsNothing);
+      await _enter(tester, field('master-password'), _password);
+      await _enter(tester, field('password-confirmation'), _password);
+      await tester.tap(find.byKey(const ValueKey('vault-create')));
       await tester.pumpAndSettle();
-      expect(access.passwords, [password]);
+      await tester.tap(find.byKey(const ValueKey('setup-next')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('quiz-0-wrong-one')));
+      await tester.pumpAndSettle();
+      expect(controller.state.quizPassed[0], isFalse);
+      for (var i = 0; i < 3; i++) {
+        final word = ['one', 'two', 'three'][i];
+        await tester.tap(find.byKey(ValueKey('quiz-$i-$word')));
+        await tester.pumpAndSettle();
+        expect(controller.state.quizPassed[i], isTrue);
+        await tester.tap(
+          find.byKey(ValueKey(i == 2 ? 'vault-confirm' : 'setup-next')),
+        );
+        await tester.pumpAndSettle();
+      }
       expect(controller.state.phase, VaultPhase.unlocked);
       await tester.pumpWidget(const SizedBox.shrink());
       await tester.runAsync(() async {
@@ -289,11 +430,107 @@ void main() {
         await startup.close();
         await events.close();
       });
-    } finally {
-      semantics.dispose();
-    }
-  });
+    },
+  );
 
+  testWidgets(
+    'header appearance menus persist and fit narrow enlarged Russian layout',
+    (tester) async {
+      await tester.runAsync(() async {
+        for (final (family, asset) in [
+          (
+            'packages/want_allure/Days One',
+            'packages/want_allure/assets/fonts/DaysOne-Regular.ttf',
+          ),
+          (
+            'packages/want_allure/Manrope',
+            'packages/want_allure/assets/fonts/Manrope.ttf',
+          ),
+          (
+            'packages/phosphoricons_flutter/PhosphorRegular',
+            'packages/phosphoricons_flutter/lib/fonts/Phosphor.ttf',
+          ),
+          (
+            'packages/forui_lucide/ForuiLucideIcons',
+            'packages/forui_lucide/assets/lucide.ttf',
+          ),
+        ]) {
+          final loader = FontLoader(family)..addFont(rootBundle.load(asset));
+          await loader.load();
+        }
+      });
+
+      tester.view.devicePixelRatio = 1;
+      tester.view.physicalSize = const Size(1024, 768);
+      tester.platformDispatcher.localesTestValue = const [Locale('en')];
+      addTearDown(tester.view.resetDevicePixelRatio);
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.platformDispatcher.clearLocalesTestValue);
+      addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+      final events = StreamController<VaultLockSignal>.broadcast();
+      final controller = _controller(_Access(), events.stream);
+      final startup = StartupController(_Startup(), const _Reporter());
+      final preferences = _AppearancePreferences();
+      final appearance = AppearanceController(
+        AppearanceUseCaseImpl(preferences, const _Reporter()),
+        const _Reporter(),
+      );
+      await tester.runAsync(() async {
+        await startup.init();
+        await controller.init();
+        await appearance.init();
+      });
+      final boundary = GlobalKey();
+      await tester.pumpWidget(
+        RepaintBoundary(
+          key: boundary,
+          child: WantPassApp(
+            startup: startup,
+            vault: controller,
+            appearance: appearance,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('Appearance'), findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('appearance-theme')));
+      await tester.pumpAndSettle();
+      expect(find.text('System'), findsOneWidget);
+      expect(find.text('Light'), findsOneWidget);
+      expect(find.text('Dark'), findsOneWidget);
+      await tester.tap(find.text('Dark'));
+      await tester.pumpAndSettle();
+      expect(appearance.state.settings.theme, AppearanceThemeV1.dark);
+      await _capture(tester, boundary, 'desktop-dark-en');
+      await tester.tap(find.byKey(const ValueKey('appearance-language')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('🇷🇺 Русский'));
+      await tester.pumpAndSettle();
+      expect(appearance.state.settings.language, AppearanceLanguageV1.ru);
+      await tester.tap(find.byKey(const ValueKey('appearance-theme')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Светлая'));
+      await tester.pumpAndSettle();
+      expect(appearance.state.settings.theme, AppearanceThemeV1.light);
+      await tester.tap(find.byKey(const ValueKey('setup-next')));
+      await tester.pumpAndSettle();
+      expect(appearance.state.settings.configured, isTrue);
+      tester.view.physicalSize = const Size(320, 800);
+      tester.platformDispatcher.textScaleFactorTestValue = 1.8;
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+      expect(find.text('Мастер-пароль'), findsWidgets);
+      await _capture(tester, boundary, 'narrow-light-ru');
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.runAsync(() async {
+        await controller.close();
+        await startup.close();
+        await appearance.close();
+        await events.close();
+      });
+      expect(preferences.saved.configured, isTrue);
+    },
+  );
   test('background initialization does not open the vault', () async {
     final access = _Access();
     await LaunchMode.withBackgroundMode(() async {
@@ -306,12 +543,19 @@ void main() {
   });
 }
 
-VaultController _controller(_Access access, Stream<VaultLockSignal> events) =>
-    VaultController(
-      VaultUseCaseImpl(access, const _Reporter()),
-      const _Reporter(),
-      events,
-    );
+VaultController _controller(
+  _Access access,
+  Stream<VaultLockSignal> events, [
+  RecoveryExportService? export,
+]) => VaultController(
+  VaultUseCaseImpl(
+    access,
+    const _Reporter(),
+    export ?? const PlatformRecoveryExportService(_Reporter()),
+  ),
+  const _Reporter(),
+  events,
+);
 
 final class _Handle implements VaultHandleV1 {
   VaultAccessStateV1 state = VaultAccessStateV1.missing;
@@ -332,9 +576,60 @@ final class _Handle implements VaultHandleV1 {
 }
 
 final class _Access implements VaultAccessService {
+  @override
+  FutureDomainResult<VaultHintsDtoV2> hintsV2({
+    required VaultHandleV1 handle,
+  }) async => const Result.success(VaultHintsDtoV2());
+  @override
+  FutureDomainResult<VaultRecoveryChallengeV2> prepareCreationV2({
+    required VaultHandleV1 handle,
+    required String password,
+  }) async {
+    final result = await prepareCreationV1(handle: handle, password: password);
+    if (result.isError) return Result.error(result.error);
+    return Result.success(
+      VaultRecoveryChallengeV2(
+        words: result.value.words,
+        positions: result.value.positions,
+        choices: List.unmodifiable(
+          result.value.positions.map(
+            (i) => List<String>.unmodifiable([
+              result.value.words[i],
+              'wrong-one',
+              'wrong-two',
+            ]),
+          ),
+        ),
+      ),
+    );
+  }
+
+  @override
+  FutureDomainResult<VaultRecoveryChallengeV2> prepareRecoveryV2({
+    required VaultHandleV1 handle,
+    required String phrase,
+    required String password,
+  }) => prepareCreationV2(handle: handle, password: password);
+  @override
+  FutureDomainResult<void> confirmV2({
+    required VaultHandleV1 handle,
+    required List<String> answers,
+    required String password,
+    required VaultHintsDtoV2 hints,
+  }) => confirmV1(handle: handle, answers: answers);
+  @override
+  FutureDomainResult<void> exportRecoveryV2({
+    required VaultHandleV1 handle,
+    required String destination,
+  }) async {
+    exports++;
+    return const Result.success(null);
+  }
+
   final handle = _Handle();
   int opens = 0;
   int preparations = 0;
+  int exports = 0;
   final passwords = <String>[];
   final preparedPasswords = <String>[];
   final statusReplies = <Completer<DomainResult<VaultAccessStateV1>>>[];
@@ -427,4 +722,60 @@ Future<void> _enter(WidgetTester tester, Finder field, String value) async {
   // WidgetTester.showKeyboard matches only the exact EditableText runtime type.
   tester.testTextInput.enterText(value);
   await tester.pump();
+}
+
+final class _Export implements RecoveryExportService {
+  final selection = Completer<DomainResult<String?>>();
+  String clipboard = '';
+  @override
+  FutureDomainResult<String?> selectFileV1() => selection.future;
+  @override
+  FutureDomainResult<void> copyV1(String phrase) async {
+    clipboard = phrase;
+    return const Result.success(null);
+  }
+
+  @override
+  FutureDomainResult<void> clearClipboardV1(String expected) async {
+    if (clipboard == expected) clipboard = '';
+    return const Result.success(null);
+  }
+}
+
+final class _AppearancePreferences implements AppearancePreferencesService {
+  AppearanceSettingsV1 saved = const AppearanceSettingsV1();
+  @override
+  FutureDomainResult<AppearanceSettingsV1> loadV1() async =>
+      Result.success(saved);
+  @override
+  FutureDomainResult<void> saveV1(AppearanceSettingsV1 settings) async {
+    saved = settings;
+    return const Result.success(null);
+  }
+}
+
+Future<void> _capture(WidgetTester tester, GlobalKey key, String name) async {
+  const directory = String.fromEnvironment('VAULT_VISUAL_DIR');
+  if (directory.isEmpty) return;
+  await tester.runAsync(() async {
+    for (final path in [
+      'assets/brand/logo-dark.png',
+      'assets/brand/logo-light.png',
+    ]) {
+      await precacheImage(AssetImage(path), key.currentContext!);
+    }
+  });
+  await tester.pump();
+  final boundary =
+      key.currentContext!.findRenderObject()! as RenderRepaintBoundary;
+  await tester.runAsync(() async {
+    final image = await boundary.toImage(pixelRatio: 1);
+    try {
+      final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
+      await File('$directory/$name.png')
+          .writeAsBytes(bytes!.buffer.asUint8List(), flush: true);
+    } finally {
+      image.dispose();
+    }
+  });
 }

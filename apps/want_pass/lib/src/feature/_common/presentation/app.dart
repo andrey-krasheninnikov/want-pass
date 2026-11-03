@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:want_pass/src/feature/appearance/application/_barrel.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:want_allure/want_allure.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -10,40 +11,69 @@ import 'package:want_pass/src/feature/vault/presentation/_barrel.dart';
 class WantPassApp extends StatelessWidget {
   final StartupController startup;
   final VaultController vault;
+  final AppearanceController? appearance;
 
-  const WantPassApp({super.key, required this.startup, required this.vault});
+  const WantPassApp({
+    super.key,
+    required this.startup,
+    required this.vault,
+    this.appearance,
+  });
 
   @override
-  Widget build(BuildContext context) => MaterialApp(
+  Widget build(BuildContext context) {
+    final preferences = appearance;
+    if (preferences == null) return _application(const AppearanceState());
+    return BlocBuilder<AppearanceController, AppearanceState>(
+      bloc: preferences,
+      builder: (context, state) => _application(state),
+    );
+  }
+
+  Widget _application(AppearanceState appearanceState) => MaterialApp(
     title: 'Want Pass',
     debugShowCheckedModeBanner: false,
+    locale: appearanceState.settings.language == null
+        ? null
+        : Locale(appearanceState.settings.language!.name),
+    themeMode: switch (appearanceState.settings.theme) {
+      AppearanceThemeV1.system => ThemeMode.system,
+      AppearanceThemeV1.light => ThemeMode.light,
+      AppearanceThemeV1.dark => ThemeMode.dark,
+    },
+    theme: ThemeData.light(),
+    darkTheme: ThemeData.dark(),
     supportedLocales: const [Locale('en'), Locale('ru')],
     localizationsDelegates: const [
       ...GlobalMaterialLocalizations.delegates,
       ...FLocalizations.localizationsDelegates,
     ],
     builder: (context, child) => WantTheme(
-      data: WantThemeData.dark(),
+      data: Theme.of(context).brightness == Brightness.dark
+          ? WantThemeData.dark()
+          : WantThemeData.light(),
       child: WantToaster(child: child!),
     ),
     home: BlocProvider.value(
       value: startup,
       child: BlocBuilder<StartupController, StartupState>(
         builder: (context, state) {
-          if (state is StartupReady) return VaultPage(controller: vault);
+          if (state is StartupReady) {
+            return VaultPage(controller: vault, appearance: appearance);
+          }
           final russian = Localizations.localeOf(context).languageCode == 'ru';
           final (title, message) = switch ((state, russian)) {
             (StartupReady(), _) => ('', ''),
             (StartupFailed(), true) => (
-              'Не удалось запустить Want Pass.',
+              'Запуск недоступен',
               'Перезапустите приложение и попробуйте ещё раз.',
             ),
             (StartupFailed(), false) => (
-              'Want Pass could not start.',
+              'Startup unavailable',
               'Restart the application and try again.',
             ),
-            (StartupLoading(), true) => ('Запуск Want Pass…', ''),
-            (StartupLoading(), false) => ('Starting Want Pass…', ''),
+            (StartupLoading(), true) => ('Запуск', ''),
+            (StartupLoading(), false) => ('Starting', ''),
           };
           return ColoredBox(
             color: WantTheme.of(context).color('background'),
@@ -59,9 +89,11 @@ class WantPassApp extends StatelessWidget {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         spacing: 20,
                         children: [
-                          const WantTypography(
-                            'Want Pass',
-                            variant: WantTypographyVariant.h1,
+                          Image.asset(
+                            'assets/brand/logo-dark.png',
+                            width: 72,
+                            height: 72,
+                            excludeFromSemantics: true,
                           ),
                           WantTypography(
                             title,

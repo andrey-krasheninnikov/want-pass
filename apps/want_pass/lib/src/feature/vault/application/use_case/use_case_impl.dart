@@ -7,7 +7,8 @@ import 'package:want_pass_core/want_pass_core.dart';
 final class VaultUseCaseImpl implements VaultUseCase {
   final VaultAccessService _access;
   final VaultReporter _reporter;
-  const VaultUseCaseImpl(this._access, this._reporter);
+  final RecoveryExportService _export;
+  const VaultUseCaseImpl(this._access, this._reporter, this._export);
   @override
   FutureDomainResult<InitializeVaultResultV1> initializeV1({
     required InitializeVaultParamsV1 params,
@@ -230,6 +231,181 @@ final class VaultUseCaseImpl implements VaultUseCase {
         error: result.error is VaultErrorV1
             ? result.error as VaultErrorV1
             : const VaultUnexpectedErrorV1(),
+      );
+    }
+    return result;
+  }
+
+  @override
+  FutureDomainResult<PrepareVaultSetupResultV2> prepareSetupV2({
+    required PrepareVaultSetupParamsV2 params,
+  }) async {
+    const op = 'VaultUseCaseImpl.prepareSetupV2():';
+    final result = await captureResult<PrepareVaultSetupResultV2>(() async {
+      if (params.password != params.confirmation) {
+        throw const VaultRejectedErrorV1(VaultFailureKindV1.passwordMismatch);
+      }
+      final prepared = params.phrase == null
+          ? await _access.prepareCreationV2(
+              handle: params.handle,
+              password: params.password,
+            )
+          : await _access.prepareRecoveryV2(
+              handle: params.handle,
+              phrase: params.phrase!,
+              password: params.password,
+            );
+      if (prepared.isError) throw prepared.error;
+      return PrepareVaultSetupResultV2(challenge: prepared.value);
+    }, mapToDomainError: (_, _) => const VaultUnexpectedErrorV1());
+    if (result.isError) {
+      reportVaultSafely(
+        _reporter,
+        layer: VaultDiagnosticLayer.application,
+        operation: op,
+        error: result.error is VaultErrorV1
+            ? result.error as VaultErrorV1
+            : const VaultUnexpectedErrorV1(),
+      );
+    }
+    return result;
+  }
+
+  @override
+  FutureDomainResult<ConfirmVaultSetupResultV2> confirmSetupV2({
+    required ConfirmVaultSetupParamsV2 params,
+  }) async {
+    const op = 'VaultUseCaseImpl.confirmSetupV2():';
+    final result = await captureResult<ConfirmVaultSetupResultV2>(() async {
+      final result = await _access.confirmV2(
+        handle: params.handle,
+        answers: params.answers,
+        password: params.password,
+        hints: params.hints,
+      );
+      if (result.isError) throw result.error;
+      final status = await _access.statusV1(handle: params.handle);
+      if (status.isError) throw status.error;
+      return ConfirmVaultSetupResultV2(state: status.value);
+    }, mapToDomainError: (_, _) => const VaultUnexpectedErrorV1());
+    if (result.isError) {
+      reportVaultSafely(
+        _reporter,
+        layer: VaultDiagnosticLayer.application,
+        operation: op,
+        error: result.error is VaultErrorV1
+            ? result.error as VaultErrorV1
+            : const VaultUnexpectedErrorV1(),
+      );
+    }
+    return result;
+  }
+
+  @override
+  FutureDomainResult<ReadVaultHintsResultV2> readHintsV2({
+    required ReadVaultHintsParamsV2 params,
+  }) async {
+    const op = 'VaultUseCaseImpl.readHintsV2():';
+    final result = await captureResult<ReadVaultHintsResultV2>(() async {
+      final result = await _access.hintsV2(handle: params.handle);
+      if (result.isError) throw result.error;
+      return ReadVaultHintsResultV2(hints: result.value);
+    }, mapToDomainError: (_, _) => const VaultUnexpectedErrorV1());
+    if (result.isError) {
+      reportVaultSafely(
+        _reporter,
+        layer: VaultDiagnosticLayer.application,
+        operation: op,
+        error: result.error is VaultErrorV1
+            ? result.error as VaultErrorV1
+            : const VaultUnexpectedErrorV1(),
+      );
+    }
+    return result;
+  }
+
+  @override
+  FutureDomainResult<SelectRecoveryFileResultV1> selectRecoveryFileV1({
+    required SelectRecoveryFileParamsV1 params,
+  }) async {
+    const op = 'VaultUseCaseImpl.selectRecoveryFileV1():';
+    final result = await captureResult<SelectRecoveryFileResultV1>(() async {
+      final result = await _export.selectFileV1();
+      if (result.isError) throw result.error;
+      return SelectRecoveryFileResultV1(destination: result.value);
+    }, mapToDomainError: (_, _) => const VaultUnexpectedErrorV1());
+    if (result.isError) {
+      reportVaultSafely(
+        _reporter,
+        layer: VaultDiagnosticLayer.application,
+        operation: op,
+        error: const VaultUnexpectedErrorV1(),
+      );
+    }
+    return result;
+  }
+
+  @override
+  FutureDomainResult<RecoveryExportResultV1> exportRecoveryV2({
+    required ExportRecoveryParamsV2 params,
+  }) async {
+    const op = 'VaultUseCaseImpl.exportRecoveryV2():';
+    final result = await captureResult<RecoveryExportResultV1>(() async {
+      final result = await _access.exportRecoveryV2(
+        handle: params.handle,
+        destination: params.destination,
+      );
+      if (result.isError) throw result.error;
+      return const RecoveryExportResultV1();
+    }, mapToDomainError: (_, _) => const VaultUnexpectedErrorV1());
+    if (result.isError) {
+      reportVaultSafely(
+        _reporter,
+        layer: VaultDiagnosticLayer.application,
+        operation: op,
+        error: const VaultUnexpectedErrorV1(),
+      );
+    }
+    return result;
+  }
+
+  @override
+  FutureDomainResult<RecoveryExportResultV1> copyRecoveryV1({
+    required RecoveryClipboardParamsV1 params,
+  }) async {
+    const op = 'VaultUseCaseImpl.copyRecoveryV1():';
+    final result = await captureResult<RecoveryExportResultV1>(() async {
+      final result = await _export.copyV1(params.phrase);
+      if (result.isError) throw result.error;
+      return const RecoveryExportResultV1();
+    }, mapToDomainError: (_, _) => const VaultUnexpectedErrorV1());
+    if (result.isError) {
+      reportVaultSafely(
+        _reporter,
+        layer: VaultDiagnosticLayer.application,
+        operation: op,
+        error: const VaultUnexpectedErrorV1(),
+      );
+    }
+    return result;
+  }
+
+  @override
+  FutureDomainResult<RecoveryExportResultV1> clearRecoveryClipboardV1({
+    required RecoveryClipboardParamsV1 params,
+  }) async {
+    const op = 'VaultUseCaseImpl.clearRecoveryClipboardV1():';
+    final result = await captureResult<RecoveryExportResultV1>(() async {
+      final result = await _export.clearClipboardV1(params.phrase);
+      if (result.isError) throw result.error;
+      return const RecoveryExportResultV1();
+    }, mapToDomainError: (_, _) => const VaultUnexpectedErrorV1());
+    if (result.isError) {
+      reportVaultSafely(
+        _reporter,
+        layer: VaultDiagnosticLayer.application,
+        operation: op,
+        error: const VaultUnexpectedErrorV1(),
       );
     }
     return result;

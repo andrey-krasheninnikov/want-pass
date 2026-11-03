@@ -62,7 +62,7 @@ class VaultRustLib
   String get codegenVersion => '2.13.0';
 
   @override
-  int get rustContentHash => -689688626;
+  int get rustContentHash => -469700598;
 
   static const kDefaultExternalLibraryLoaderConfig =
       ExternalLibraryLoaderConfig(
@@ -82,7 +82,24 @@ abstract class VaultRustLibApi extends BaseApi {
     required BigInt generation,
   });
 
+  Future<void> crateApiVaultConfirmV2({
+    required Vault that,
+    required List<String> answers,
+    required String password,
+    required String passwordHint,
+    required String recoveryHint,
+    required BigInt generation,
+  });
+
+  Future<void> crateApiVaultExportRecoveryV2({
+    required Vault that,
+    required String destination,
+    required BigInt generation,
+  });
+
   BigInt crateApiVaultGeneration({required Vault that});
+
+  Future<VaultHintsV2> crateApiVaultHintsV2({required Vault that});
 
   void crateApiVaultLock({required Vault that});
 
@@ -94,7 +111,20 @@ abstract class VaultRustLibApi extends BaseApi {
     required BigInt generation,
   });
 
+  Future<RecoveryChallengeV2> crateApiVaultPrepareCreationV2({
+    required Vault that,
+    required String password,
+    required BigInt generation,
+  });
+
   Future<RecoveryChallenge> crateApiVaultPrepareRecovery({
+    required Vault that,
+    required String phrase,
+    required String password,
+    required BigInt generation,
+  });
+
+  Future<RecoveryChallengeV2> crateApiVaultPrepareRecoveryV2({
     required Vault that,
     required String phrase,
     required String password,
@@ -196,6 +226,98 @@ class VaultRustLibApiImpl extends VaultRustLibApiImplPlatform
   );
 
   @override
+  Future<void> crateApiVaultConfirmV2({
+    required Vault that,
+    required List<String> answers,
+    required String password,
+    required String passwordHint,
+    required String recoveryHint,
+    required BigInt generation,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerVault(
+            that,
+            serializer,
+          );
+          sse_encode_list_String(answers, serializer);
+          sse_encode_String(password, serializer);
+          sse_encode_String(passwordHint, serializer);
+          sse_encode_String(recoveryHint, serializer);
+          sse_encode_u_64(generation, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 3,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_unit,
+          decodeErrorData: sse_decode_vault_failure,
+        ),
+        constMeta: kCrateApiVaultConfirmV2ConstMeta,
+        argValues: const [],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiVaultConfirmV2ConstMeta => const TaskConstMeta(
+    debugName: "Vault_confirm_v2",
+    argNames: [
+      "that",
+      "answers",
+      "password",
+      "passwordHint",
+      "recoveryHint",
+      "generation",
+    ],
+  );
+
+  @override
+  Future<void> crateApiVaultExportRecoveryV2({
+    required Vault that,
+    required String destination,
+    required BigInt generation,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerVault(
+            that,
+            serializer,
+          );
+          sse_encode_String(destination, serializer);
+          sse_encode_u_64(generation, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 4,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_unit,
+          decodeErrorData: sse_decode_vault_failure,
+        ),
+        constMeta: kCrateApiVaultExportRecoveryV2ConstMeta,
+        argValues: const [],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiVaultExportRecoveryV2ConstMeta =>
+      const TaskConstMeta(
+        debugName: "Vault_export_recovery_v2",
+        argNames: ["that", "destination", "generation"],
+      );
+
+  @override
   BigInt crateApiVaultGeneration({required Vault that}) {
     return handler.executeSync(
       SyncTask(
@@ -205,7 +327,7 @@ class VaultRustLibApiImpl extends VaultRustLibApiImplPlatform
             that,
             serializer,
           );
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 3)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 5)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_u_64,
@@ -222,6 +344,37 @@ class VaultRustLibApiImpl extends VaultRustLibApiImplPlatform
       const TaskConstMeta(debugName: "Vault_generation", argNames: ["that"]);
 
   @override
+  Future<VaultHintsV2> crateApiVaultHintsV2({required Vault that}) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerVault(
+            that,
+            serializer,
+          );
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 6,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_vault_hints_v_2,
+          decodeErrorData: sse_decode_vault_failure,
+        ),
+        constMeta: kCrateApiVaultHintsV2ConstMeta,
+        argValues: const [],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiVaultHintsV2ConstMeta =>
+      const TaskConstMeta(debugName: "Vault_hints_v2", argNames: ["that"]);
+
+  @override
   void crateApiVaultLock({required Vault that}) {
     return handler.executeSync(
       SyncTask(
@@ -231,7 +384,7 @@ class VaultRustLibApiImpl extends VaultRustLibApiImplPlatform
             that,
             serializer,
           );
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 4)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 7)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_unit,
@@ -257,7 +410,7 @@ class VaultRustLibApiImpl extends VaultRustLibApiImplPlatform
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 5,
+            funcId: 8,
             port: port_,
           );
         },
@@ -295,7 +448,7 @@ class VaultRustLibApiImpl extends VaultRustLibApiImplPlatform
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 6,
+            funcId: 9,
             port: port_,
           );
         },
@@ -313,6 +466,46 @@ class VaultRustLibApiImpl extends VaultRustLibApiImplPlatform
   TaskConstMeta get kCrateApiVaultPrepareCreationConstMeta =>
       const TaskConstMeta(
         debugName: "Vault_prepare_creation",
+        argNames: ["that", "password", "generation"],
+      );
+
+  @override
+  Future<RecoveryChallengeV2> crateApiVaultPrepareCreationV2({
+    required Vault that,
+    required String password,
+    required BigInt generation,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerVault(
+            that,
+            serializer,
+          );
+          sse_encode_String(password, serializer);
+          sse_encode_u_64(generation, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 10,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_recovery_challenge_v_2,
+          decodeErrorData: sse_decode_vault_failure,
+        ),
+        constMeta: kCrateApiVaultPrepareCreationV2ConstMeta,
+        argValues: const [],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiVaultPrepareCreationV2ConstMeta =>
+      const TaskConstMeta(
+        debugName: "Vault_prepare_creation_v2",
         argNames: ["that", "password", "generation"],
       );
 
@@ -337,7 +530,7 @@ class VaultRustLibApiImpl extends VaultRustLibApiImplPlatform
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 7,
+            funcId: 11,
             port: port_,
           );
         },
@@ -359,6 +552,48 @@ class VaultRustLibApiImpl extends VaultRustLibApiImplPlatform
       );
 
   @override
+  Future<RecoveryChallengeV2> crateApiVaultPrepareRecoveryV2({
+    required Vault that,
+    required String phrase,
+    required String password,
+    required BigInt generation,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerVault(
+            that,
+            serializer,
+          );
+          sse_encode_String(phrase, serializer);
+          sse_encode_String(password, serializer);
+          sse_encode_u_64(generation, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 12,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_recovery_challenge_v_2,
+          decodeErrorData: sse_decode_vault_failure,
+        ),
+        constMeta: kCrateApiVaultPrepareRecoveryV2ConstMeta,
+        argValues: const [],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiVaultPrepareRecoveryV2ConstMeta =>
+      const TaskConstMeta(
+        debugName: "Vault_prepare_recovery_v2",
+        argNames: ["that", "phrase", "password", "generation"],
+      );
+
+  @override
   Future<VaultStatus> crateApiVaultStatus({required Vault that}) {
     return handler.executeNormal(
       NormalTask(
@@ -371,7 +606,7 @@ class VaultRustLibApiImpl extends VaultRustLibApiImplPlatform
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 8,
+            funcId: 13,
             port: port_,
           );
         },
@@ -408,7 +643,7 @@ class VaultRustLibApiImpl extends VaultRustLibApiImplPlatform
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 9,
+            funcId: 14,
             port: port_,
           );
         },
@@ -482,6 +717,12 @@ class VaultRustLibApiImpl extends VaultRustLibApiImplPlatform
   }
 
   @protected
+  List<List<String>> dco_decode_list_list_String(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return (raw as List<dynamic>).map(dco_decode_list_String).toList();
+  }
+
+  @protected
   Uint32List dco_decode_list_prim_u_32_strict(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return raw as Uint32List;
@@ -502,6 +743,19 @@ class VaultRustLibApiImpl extends VaultRustLibApiImplPlatform
     return RecoveryChallenge(
       words: dco_decode_list_String(arr[0]),
       positions: dco_decode_list_prim_u_32_strict(arr[1]),
+    );
+  }
+
+  @protected
+  RecoveryChallengeV2 dco_decode_recovery_challenge_v_2(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 3)
+      throw Exception('unexpected arr length: expect 3 but see ${arr.length}');
+    return RecoveryChallengeV2(
+      words: dco_decode_list_String(arr[0]),
+      positions: dco_decode_list_prim_u_32_strict(arr[1]),
+      choices: dco_decode_list_list_String(arr[2]),
     );
   }
 
@@ -539,6 +793,18 @@ class VaultRustLibApiImpl extends VaultRustLibApiImplPlatform
   VaultFailure dco_decode_vault_failure(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return VaultFailure.values[raw as int];
+  }
+
+  @protected
+  VaultHintsV2 dco_decode_vault_hints_v_2(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 2)
+      throw Exception('unexpected arr length: expect 2 but see ${arr.length}');
+    return VaultHintsV2(
+      password: dco_decode_String(arr[0]),
+      recovery: dco_decode_String(arr[1]),
+    );
   }
 
   @protected
@@ -609,6 +875,18 @@ class VaultRustLibApiImpl extends VaultRustLibApiImplPlatform
   }
 
   @protected
+  List<List<String>> sse_decode_list_list_String(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var len_ = sse_decode_i_32(deserializer);
+    var ans_ = <List<String>>[];
+    for (var idx_ = 0; idx_ < len_; ++idx_) {
+      ans_.add(sse_decode_list_String(deserializer));
+    }
+    return ans_;
+  }
+
+  @protected
   Uint32List sse_decode_list_prim_u_32_strict(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var len_ = sse_decode_i_32(deserializer);
@@ -630,6 +908,21 @@ class VaultRustLibApiImpl extends VaultRustLibApiImplPlatform
     var var_words = sse_decode_list_String(deserializer);
     var var_positions = sse_decode_list_prim_u_32_strict(deserializer);
     return RecoveryChallenge(words: var_words, positions: var_positions);
+  }
+
+  @protected
+  RecoveryChallengeV2 sse_decode_recovery_challenge_v_2(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_words = sse_decode_list_String(deserializer);
+    var var_positions = sse_decode_list_prim_u_32_strict(deserializer);
+    var var_choices = sse_decode_list_list_String(deserializer);
+    return RecoveryChallengeV2(
+      words: var_words,
+      positions: var_positions,
+      choices: var_choices,
+    );
   }
 
   @protected
@@ -666,6 +959,14 @@ class VaultRustLibApiImpl extends VaultRustLibApiImplPlatform
     // Codec=Sse (Serialization based), see doc to use other codecs
     var inner = sse_decode_i_32(deserializer);
     return VaultFailure.values[inner];
+  }
+
+  @protected
+  VaultHintsV2 sse_decode_vault_hints_v_2(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_password = sse_decode_String(deserializer);
+    var var_recovery = sse_decode_String(deserializer);
+    return VaultHintsV2(password: var_password, recovery: var_recovery);
   }
 
   @protected
@@ -742,6 +1043,18 @@ class VaultRustLibApiImpl extends VaultRustLibApiImplPlatform
   }
 
   @protected
+  void sse_encode_list_list_String(
+    List<List<String>> self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    for (final item in self) {
+      sse_encode_list_String(item, serializer);
+    }
+  }
+
+  @protected
   void sse_encode_list_prim_u_32_strict(
     Uint32List self,
     SseSerializer serializer,
@@ -769,6 +1082,17 @@ class VaultRustLibApiImpl extends VaultRustLibApiImplPlatform
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_list_String(self.words, serializer);
     sse_encode_list_prim_u_32_strict(self.positions, serializer);
+  }
+
+  @protected
+  void sse_encode_recovery_challenge_v_2(
+    RecoveryChallengeV2 self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_list_String(self.words, serializer);
+    sse_encode_list_prim_u_32_strict(self.positions, serializer);
+    sse_encode_list_list_String(self.choices, serializer);
   }
 
   @protected
@@ -804,6 +1128,13 @@ class VaultRustLibApiImpl extends VaultRustLibApiImplPlatform
   void sse_encode_vault_failure(VaultFailure self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_i_32(self.index, serializer);
+  }
+
+  @protected
+  void sse_encode_vault_hints_v_2(VaultHintsV2 self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_String(self.password, serializer);
+    sse_encode_String(self.recovery, serializer);
   }
 
   @protected
@@ -850,8 +1181,35 @@ class VaultImpl extends RustOpaque implements Vault {
     generation: generation,
   );
 
+  Future<void> confirmV2({
+    required List<String> answers,
+    required String password,
+    required String passwordHint,
+    required String recoveryHint,
+    required BigInt generation,
+  }) => VaultRustLib.instance.api.crateApiVaultConfirmV2(
+    that: this,
+    answers: answers,
+    password: password,
+    passwordHint: passwordHint,
+    recoveryHint: recoveryHint,
+    generation: generation,
+  );
+
+  Future<void> exportRecoveryV2({
+    required String destination,
+    required BigInt generation,
+  }) => VaultRustLib.instance.api.crateApiVaultExportRecoveryV2(
+    that: this,
+    destination: destination,
+    generation: generation,
+  );
+
   BigInt generation() =>
       VaultRustLib.instance.api.crateApiVaultGeneration(that: this);
+
+  Future<VaultHintsV2> hintsV2() =>
+      VaultRustLib.instance.api.crateApiVaultHintsV2(that: this);
 
   void lock() => VaultRustLib.instance.api.crateApiVaultLock(that: this);
 
@@ -864,11 +1222,31 @@ class VaultImpl extends RustOpaque implements Vault {
     generation: generation,
   );
 
+  Future<RecoveryChallengeV2> prepareCreationV2({
+    required String password,
+    required BigInt generation,
+  }) => VaultRustLib.instance.api.crateApiVaultPrepareCreationV2(
+    that: this,
+    password: password,
+    generation: generation,
+  );
+
   Future<RecoveryChallenge> prepareRecovery({
     required String phrase,
     required String password,
     required BigInt generation,
   }) => VaultRustLib.instance.api.crateApiVaultPrepareRecovery(
+    that: this,
+    phrase: phrase,
+    password: password,
+    generation: generation,
+  );
+
+  Future<RecoveryChallengeV2> prepareRecoveryV2({
+    required String phrase,
+    required String password,
+    required BigInt generation,
+  }) => VaultRustLib.instance.api.crateApiVaultPrepareRecoveryV2(
     that: this,
     phrase: phrase,
     password: password,

@@ -48,6 +48,9 @@ abstract class VaultRustLibApiImplPlatform
   List<String> dco_decode_list_String(dynamic raw);
 
   @protected
+  List<List<String>> dco_decode_list_list_String(dynamic raw);
+
+  @protected
   Uint32List dco_decode_list_prim_u_32_strict(dynamic raw);
 
   @protected
@@ -55,6 +58,9 @@ abstract class VaultRustLibApiImplPlatform
 
   @protected
   RecoveryChallenge dco_decode_recovery_challenge(dynamic raw);
+
+  @protected
+  RecoveryChallengeV2 dco_decode_recovery_challenge_v_2(dynamic raw);
 
   @protected
   int dco_decode_u_32(dynamic raw);
@@ -73,6 +79,9 @@ abstract class VaultRustLibApiImplPlatform
 
   @protected
   VaultFailure dco_decode_vault_failure(dynamic raw);
+
+  @protected
+  VaultHintsV2 dco_decode_vault_hints_v_2(dynamic raw);
 
   @protected
   VaultStatus dco_decode_vault_status(dynamic raw);
@@ -105,6 +114,9 @@ abstract class VaultRustLibApiImplPlatform
   List<String> sse_decode_list_String(SseDeserializer deserializer);
 
   @protected
+  List<List<String>> sse_decode_list_list_String(SseDeserializer deserializer);
+
+  @protected
   Uint32List sse_decode_list_prim_u_32_strict(SseDeserializer deserializer);
 
   @protected
@@ -112,6 +124,11 @@ abstract class VaultRustLibApiImplPlatform
 
   @protected
   RecoveryChallenge sse_decode_recovery_challenge(SseDeserializer deserializer);
+
+  @protected
+  RecoveryChallengeV2 sse_decode_recovery_challenge_v_2(
+    SseDeserializer deserializer,
+  );
 
   @protected
   int sse_decode_u_32(SseDeserializer deserializer);
@@ -130,6 +147,9 @@ abstract class VaultRustLibApiImplPlatform
 
   @protected
   VaultFailure sse_decode_vault_failure(SseDeserializer deserializer);
+
+  @protected
+  VaultHintsV2 sse_decode_vault_hints_v_2(SseDeserializer deserializer);
 
   @protected
   VaultStatus sse_decode_vault_status(SseDeserializer deserializer);
@@ -168,6 +188,12 @@ abstract class VaultRustLibApiImplPlatform
   void sse_encode_list_String(List<String> self, SseSerializer serializer);
 
   @protected
+  void sse_encode_list_list_String(
+    List<List<String>> self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_list_prim_u_32_strict(
     Uint32List self,
     SseSerializer serializer,
@@ -182,6 +208,12 @@ abstract class VaultRustLibApiImplPlatform
   @protected
   void sse_encode_recovery_challenge(
     RecoveryChallenge self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_recovery_challenge_v_2(
+    RecoveryChallengeV2 self,
     SseSerializer serializer,
   );
 
@@ -202,6 +234,9 @@ abstract class VaultRustLibApiImplPlatform
 
   @protected
   void sse_encode_vault_failure(VaultFailure self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_vault_hints_v_2(VaultHintsV2 self, SseSerializer serializer);
 
   @protected
   void sse_encode_vault_status(VaultStatus self, SseSerializer serializer);

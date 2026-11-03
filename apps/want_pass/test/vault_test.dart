@@ -1,3 +1,5 @@
+import 'package:want_pass/src/feature/vault/infrastructure/_barrel.dart';
+
 import 'dart:async';
 import 'dart:io';
 
@@ -21,7 +23,11 @@ void main() {
         directory: '${temporary.path}/vault',
         reporter: reporter,
       );
-      final useCase = VaultUseCaseImpl(access, reporter);
+      final useCase = VaultUseCaseImpl(
+        access,
+        reporter,
+        PlatformRecoveryExportService(reporter),
+      );
       final initialized = await useCase.initializeV1(
         params: const InitializeVaultParamsV1(),
       );
@@ -71,7 +77,11 @@ void main() {
       reporter: reporter,
     );
     final controller = VaultController(
-      VaultUseCaseImpl(access, reporter),
+      VaultUseCaseImpl(
+        access,
+        reporter,
+        PlatformRecoveryExportService(reporter),
+      ),
       reporter,
       events.stream,
     );

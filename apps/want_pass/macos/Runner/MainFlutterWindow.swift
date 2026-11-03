@@ -2,6 +2,7 @@ import Cocoa
 import FlutterMacOS
 
 class MainFlutterWindow: NSWindow {
+  private var splashView: NSView?
   private var vaultLockEvents: VaultLockEvents?
   override func awakeFromNib() {
     let flutterViewController = FlutterViewController()
@@ -11,6 +12,31 @@ class MainFlutterWindow: NSWindow {
 
     RegisterGeneratedPlugins(registry: flutterViewController)
     vaultLockEvents = VaultLockEvents(messenger: flutterViewController.engine.binaryMessenger)
+
+    let splash = NSView(frame: flutterViewController.view.bounds)
+    splash.autoresizingMask = [.width, .height]
+    splash.wantsLayer = true
+    splash.layer?.backgroundColor = NSColor(named: "SplashBackground")?.cgColor
+    let image = NSImageView()
+    image.image = NSImage(named: "SplashLogo")
+    image.imageScaling = .scaleProportionallyUpOrDown
+    image.translatesAutoresizingMaskIntoConstraints = false
+    splash.addSubview(image)
+    NSLayoutConstraint.activate([
+      image.centerXAnchor.constraint(equalTo: splash.centerXAnchor),
+      image.centerYAnchor.constraint(equalTo: splash.centerYAnchor),
+      image.widthAnchor.constraint(equalToConstant: 160),
+      image.heightAnchor.constraint(equalToConstant: 160)
+    ])
+    flutterViewController.view.addSubview(splash)
+    splashView = splash
+    FlutterMethodChannel(name: "want_pass/splash", binaryMessenger: flutterViewController.engine.binaryMessenger)
+      .setMethodCallHandler { [weak self] call, result in
+        guard call.method == "firstFrame" else { result(FlutterMethodNotImplemented); return }
+        self?.splashView?.removeFromSuperview()
+        self?.splashView = nil
+        result(true)
+      }
 
     super.awakeFromNib()
   }

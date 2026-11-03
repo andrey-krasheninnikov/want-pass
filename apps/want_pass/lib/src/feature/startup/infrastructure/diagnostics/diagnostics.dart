@@ -37,6 +37,29 @@ final class SafeBlocObserver extends BlocObserver
       VaultUnexpectedErrorV1() => 'unexpectedError',
     };
     final safeOperation = switch (operation) {
+      'PlatformRecoveryExportService.clearClipboardV1():' ||
+      'PlatformRecoveryExportService.copyV1():' ||
+      'PlatformRecoveryExportService.selectFileV1():' ||
+      'RustVaultAccessService.confirmV2():' ||
+      'RustVaultAccessService.exportRecoveryV2():' ||
+      'RustVaultAccessService.hintsV2():' ||
+      'RustVaultAccessService.prepareCreationV2():' ||
+      'RustVaultAccessService.prepareRecoveryV2():' ||
+      'VaultController._clearClipboard():' ||
+      'VaultController.chooseSetupWord():' ||
+      'VaultController.confirmSetup():' ||
+      'VaultController.copyRecovery():' ||
+      'VaultController.dismissFailure():' ||
+      'VaultController.downloadRecovery():' ||
+      'VaultController.prepareSetup():' ||
+      'VaultController.readHints():' ||
+      'VaultUseCaseImpl.clearRecoveryClipboardV1():' ||
+      'VaultUseCaseImpl.confirmSetupV2():' ||
+      'VaultUseCaseImpl.copyRecoveryV1():' ||
+      'VaultUseCaseImpl.exportRecoveryV2():' ||
+      'VaultUseCaseImpl.prepareSetupV2():' ||
+      'VaultUseCaseImpl.readHintsV2():' ||
+      'VaultUseCaseImpl.selectRecoveryFileV1():' ||
       'RustVaultAccessService.openV1():' ||
       'RustVaultAccessService.statusV1():' ||
       'RustVaultAccessService.prepareCreationV1():' ||
@@ -130,6 +153,13 @@ final class SafeBlocObserver extends BlocObserver
     };
     // Operation text is supplied by fixed call sites, never by an exception or user input.
     final safeOperation = switch (operation) {
+      'AppearanceController.close():' ||
+      'AppearanceController.init():' ||
+      'AppearanceController.save():' ||
+      'AppearanceUseCaseImpl.loadV1():' ||
+      'AppearanceUseCaseImpl.saveV1():' ||
+      'FileAppearancePreferencesService.loadV1():' ||
+      'FileAppearancePreferencesService.saveV1():' ||
       'StartupAccessServiceImpl.checkForegroundV1():' ||
       'StartupUseCaseImpl.initializeV1():' ||
       'StartupController.init():' ||

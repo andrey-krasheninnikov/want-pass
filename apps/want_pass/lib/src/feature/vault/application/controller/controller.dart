@@ -18,6 +18,10 @@ final class VaultController extends Cubit<VaultState> {
   VaultHandleV1? _handle;
   StreamSubscription<VaultLockSignal>? _subscription;
   Timer? _idle;
+  Timer? _clipboardExpiry;
+  String? _clipboardContent;
+  Future<void>? _exportOperation;
+  Completer<void>? _fileSelectionCancelled;
   Future<void>? _initFuture;
   Future<void>? _closeFuture;
   Future<void>? _operation;
@@ -141,6 +145,220 @@ final class VaultController extends Cubit<VaultState> {
     );
   }
 
+  Future<void> prepareSetup({
+    required String password,
+    required String confirmation,
+    String? phrase,
+  }) {
+    const op = 'VaultController.prepareSetup():';
+    return _perform(
+      op,
+      (handle) => _useCase.prepareSetupV2(
+        params: PrepareVaultSetupParamsV2(
+          handle: handle,
+          password: password,
+          confirmation: confirmation,
+          phrase: phrase,
+        ),
+      ),
+      (value) => emit(
+        VaultState(
+          phase: VaultPhase.confirmation,
+          setupChallenge: value.challenge,
+          hints: state.hints,
+          recovering: phrase != null,
+          setupAnswers: state.setupChallenge == value.challenge
+              ? state.setupAnswers
+              : const [null, null, null],
+          quizPassed: state.setupChallenge == value.challenge
+              ? state.quizPassed
+              : const [false, false, false],
+        ),
+      ),
+    );
+  }
+
+  Future<void> confirmSetup({
+    required List<String> answers,
+    required String password,
+    required VaultHintsDtoV2 hints,
+  }) {
+    const op = 'VaultController.confirmSetup():';
+    return _perform(
+      op,
+      (handle) => _useCase.confirmSetupV2(
+        params: ConfirmVaultSetupParamsV2(
+          handle: handle,
+          answers: List.unmodifiable(answers),
+          password: password,
+          hints: hints,
+        ),
+      ),
+      (value) => emit(VaultState(phase: _phase(value.state), hints: hints)),
+    );
+  }
+
+  Future<void> readHints() {
+    const op = 'VaultController.readHints():';
+    return _perform(
+      op,
+      (handle) =>
+          _useCase.readHintsV2(params: ReadVaultHintsParamsV2(handle: handle)),
+      (value) => emit(state.copyWith(busy: false, hints: value.hints)),
+    );
+  }
+
+  void dismissFailure() {
+    const op = 'VaultController.dismissFailure():';
+    if (_closing || isClosed || state.busy || state.error == null) return;
+    if (!LaunchMode.isInitialized || !LaunchMode.isForeground) {
+      reportVaultSafely(
+        _reporter,
+        layer: VaultDiagnosticLayer.controller,
+        operation: op,
+        error: const VaultRejectedErrorV1(VaultFailureKindV1.unavailable),
+      );
+      return;
+    }
+    emit(state.copyWith(error: () => null));
+  }
+
+  void chooseSetupWord(int index, String word) {
+    const op = 'VaultController.chooseSetupWord():';
+    final challenge = state.setupChallenge;
+    if (_closing ||
+        state.busy ||
+        challenge == null ||
+        index < 0 ||
+        index >= 3 ||
+        !challenge.choices[index].contains(word)) {
+      return;
+    }
+    final answers = [...state.setupAnswers]..[index] = word;
+    final passed = [...state.quizPassed]
+      ..[index] = word == challenge.words[challenge.positions[index]];
+    if (!passed[index]) {
+      reportVaultSafely(
+        _reporter,
+        layer: VaultDiagnosticLayer.controller,
+        operation: op,
+        error: const VaultRejectedErrorV1(VaultFailureKindV1.confirmation),
+      );
+    }
+    emit(
+      state.copyWith(
+        setupAnswers: List.unmodifiable(answers),
+        quizPassed: List.unmodifiable(passed),
+        error: () => passed[index]
+            ? null
+            : const VaultRejectedErrorV1(VaultFailureKindV1.confirmation),
+      ),
+    );
+    activity();
+  }
+
+  Future<void> downloadRecovery() {
+    const op = 'VaultController.downloadRecovery():';
+    if (_closing ||
+        state.busy ||
+        state.setupChallenge == null ||
+        _exportOperation != null ||
+        _handle == null) {
+      return Future.value();
+    }
+    final epoch = _epoch;
+    final cancelled = Completer<void>();
+    _fileSelectionCancelled = cancelled;
+    final operation = () async {
+      final selected =
+          await Future.any<DomainResult<SelectRecoveryFileResultV1>?>([
+            _useCase.selectRecoveryFileV1(
+              params: const SelectRecoveryFileParamsV1(),
+            ),
+            cancelled.future.then((_) => null),
+          ]);
+      if (selected == null || _closing || epoch != _epoch) return;
+      if (selected.isError) {
+        _fail(op, _error(selected.error));
+        return;
+      }
+      final destination = selected.value.destination;
+      if (destination == null) return;
+      final result = await _useCase.exportRecoveryV2(
+        params: ExportRecoveryParamsV2(
+          handle: _handle!,
+          destination: destination,
+        ),
+      );
+      if (!_closing && epoch == _epoch && result.isError) {
+        _fail(op, _error(result.error));
+      }
+    }();
+    _exportOperation = operation;
+    return operation.whenComplete(() {
+      if (identical(_exportOperation, operation)) _exportOperation = null;
+      if (identical(_fileSelectionCancelled, cancelled)) {
+        _fileSelectionCancelled = null;
+      }
+    });
+  }
+
+  Future<void> copyRecovery() async {
+    const op = 'VaultController.copyRecovery():';
+    if (_closing ||
+        state.busy ||
+        state.setupChallenge == null ||
+        _exportOperation != null) {
+      return;
+    }
+    final epoch = _epoch;
+    final phrase = state.setupChallenge!.words.join(' ');
+    final operation = () async {
+      await _clearClipboard();
+      if (_closing || epoch != _epoch) return;
+      final result = await _useCase.copyRecoveryV1(
+        params: RecoveryClipboardParamsV1(phrase: phrase),
+      );
+      if (_closing || epoch != _epoch) {
+        await _useCase.clearRecoveryClipboardV1(
+          params: RecoveryClipboardParamsV1(phrase: phrase),
+        );
+        return;
+      }
+      if (result.isError) {
+        _fail(op, _error(result.error));
+        return;
+      }
+      _clipboardContent = phrase;
+      _clipboardExpiry = Timer(
+        const Duration(seconds: 60),
+        () => unawaited(_clearClipboard()),
+      );
+    }();
+    _exportOperation = operation;
+    await operation;
+    if (identical(_exportOperation, operation)) _exportOperation = null;
+  }
+
+  Future<void> _clearClipboard() async {
+    const op = 'VaultController._clearClipboard():';
+    _clipboardExpiry?.cancel();
+    final content = _clipboardContent;
+    _clipboardContent = null;
+    if (content == null) return;
+    final result = await _useCase.clearRecoveryClipboardV1(
+      params: RecoveryClipboardParamsV1(phrase: content),
+    );
+    if (result.isError) {
+      reportVaultSafely(
+        _reporter,
+        layer: VaultDiagnosticLayer.controller,
+        operation: op,
+        error: _error(result.error),
+      );
+    }
+  }
+
   Future<void> unlock(String password) {
     const op = 'VaultController.unlock():';
     return _perform(
@@ -200,6 +418,10 @@ final class VaultController extends Cubit<VaultState> {
     const op = 'VaultController.lock():';
     if (_closing || isClosed || _handle == null) return;
     final epoch = ++_epoch;
+    if (_fileSelectionCancelled?.isCompleted == false) {
+      _fileSelectionCancelled!.complete();
+    }
+    unawaited(_clearClipboard());
     _idle?.cancel();
     emit(const VaultState(phase: VaultPhase.loading, busy: true));
     try {
@@ -286,6 +508,10 @@ final class VaultController extends Cubit<VaultState> {
       _closing = true;
       _epoch++;
       _idle?.cancel();
+      _clipboardExpiry?.cancel();
+      if (_fileSelectionCancelled?.isCompleted == false) {
+        _fileSelectionCancelled!.complete();
+      }
       try {
         _handle?.invalidateSync();
       } on Object {
@@ -307,6 +533,7 @@ final class VaultController extends Cubit<VaultState> {
   }
 
   Future<void> _dispose(String operation) async {
+    await _clearClipboard();
     await _subscription?.cancel();
     await _initFuture;
     final handle = _handle;
@@ -324,6 +551,7 @@ final class VaultController extends Cubit<VaultState> {
       }
     }
     await _operation;
+    await _exportOperation;
     _handle = null;
   }
 

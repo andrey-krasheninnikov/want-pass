@@ -36,6 +36,32 @@ Register use cases and controllers as singletons through constructor injection. 
 
 Регистрируйте use cases и контроллеры как singletons с constructor injection. Composition root владеет их lifecycle. Доменные типы версионируются; barrels слоёв содержат только exports. Внутри слоя импортируется его корневой barrel, между пакетами используется публичный entrypoint. Регистрация DI является отдельной внутренней библиотекой composition root и экспортируется его barrel; меняйте исходные аннотации и запускайте генерацию.
 
+## Product UI and local security / Интерфейс и локальная безопасность
+
+Use the released, pinned Want Allure package and its public components. Prefer Want inputs; when a required secret-input capability is absent, use Forui under WantTheme and track the missing shared component upstream. Secret fields disable autocorrection, suggestions, keyboard learning, smart substitutions and autofill unless explicitly required. Master-password fields are single-line and provide a labelled visibility toggle.
+
+Используйте закреплённый выпущенный Want Allure и его публичные компоненты. Предпочитайте Want inputs; если нужной возможности секретного поля нет, используйте Forui под WantTheme и заведите задачу на общий компонент. Секретные поля отключают автокоррекцию, подсказки, обучение клавиатуры, умные подстановки и autofill, если они явно не нужны. Мастер-пароль вводится одной строкой; переключатель видимости имеет доступное название.
+
+Import approved product artwork into versioned application assets. Preserve its geometry, proportions and colors. Apply product identity consistently to in-app artwork, native icons and startup screens; keep native identifiers consistent across host and test targets. Use semantic theme tokens and short task titles without repeated product names or redundant subtitles.
+
+Переносите утверждённую графику продукта в assets приложения под контролем версий. Сохраняйте геометрию, пропорции и цвета. Применяйте идентичность продукта в интерфейсе, native icons и startup screens; согласуйте native identifiers приложения и тестовых targets. Используйте семантические токены темы и короткие заголовки действий без повторения продукта и лишних subtitle.
+
+Multi-step setup uses visible progress, validated forward navigation and Back without regenerating recovery material. Presentation owns page and animation controllers; application scenarios own validation and persistence. Clear transient secret fields and overlays on lock, cancellation, completion and disposal. Decorative motion needs pause, inactive-view suspension and reduced-motion support.
+
+Многошаговая настройка показывает прогресс, проверяет переход вперёд и поддерживает возврат без повторной генерации материала восстановления. Presentation владеет контроллерами страниц и анимации; application-сценарии владеют валидацией и хранением. Очищайте временные секретные поля и overlays при блокировке, отмене, завершении и disposal. Декоративная анимация поддерживает паузу, остановку неактивного экрана и reduced motion.
+
+Prefer equal-width horizontal action rows, with responsive stacking when labels or text scaling need space. Keep keyboard focus, localized labels and targets of at least 44 logical pixels. Persist device appearance choices, offer them during first setup and keep compact theme/language controls accessible afterward.
+
+Предпочитайте горизонтальные ряды кнопок равной ширины с переносом в колонку, когда подписям или увеличенному тексту нужно место. Сохраняйте клавиатурный фокус, локализованные подписи и цели минимум 44 logical pixels. Сохраняйте оформление устройства, предлагайте его при первой настройке и оставляйте компактные переключатели темы и языка доступными далее.
+
+Rust remains authoritative for password policy, recovery confirmation, encryption and vault writes. Document format changes explicitly. Approved pre-unlock hints are bounded plaintext metadata authenticated with the encrypted file; explain that exception in the UI and keep hints out of diagnostics. Generate recovery QR locally; export only after an explicit action, use private file permissions and clear only an unchanged owned clipboard copy. Recheck session validity after asynchronous selection.
+
+Rust остаётся источником правил пароля, подтверждения восстановления, шифрования и записи сейфа. Явно документируйте изменения формата. Согласованные подсказки до разблокировки являются ограниченными открытыми метаданными с аутентификацией в файле; объясняйте это исключение в UI и исключайте подсказки из диагностики. Создавайте recovery QR локально; экспортируйте только по явному действию, задавайте приватные права файла и очищайте только неизменённую собственную копию буфера. Повторно проверяйте актуальность сессии после асинхронного выбора.
+
+Data-reset commands use a fixed current-application allowlist, ownership and symlink checks, and an exclusive vault lock. Validate all targets before deleting anything. Preserve old application namespaces, user exports and unknown files. Test reset logic only with disposable fixtures; never reset real data as part of verification.
+
+Команды сброса данных используют фиксированный allowlist текущего приложения, проверку владельца и symlink, эксклюзивную блокировку сейфа. Проверяйте все цели до удаления. Сохраняйте старые namespaces приложения, пользовательские экспорты и неизвестные файлы. Проверяйте сброс только на временных fixtures; не сбрасывайте реальные данные при проверках.
+
 ## Agent skills
 
 ### Issue tracker

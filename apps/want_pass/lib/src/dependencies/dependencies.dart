@@ -13,6 +13,7 @@ import 'package:want_pass/src/dependencies/_barrel.dart';
     StartupReporter,
     VaultAccessService,
     VaultReporter,
+    String,
     Stream<VaultLockSignal>,
   ],
 )

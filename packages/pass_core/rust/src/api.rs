@@ -1,3 +1,4 @@
+pub(crate) mod v2;
 use crate::{
     format::{self, Opened, Prepared},
     storage::{Store, digest},
@@ -10,6 +11,7 @@ use std::{
         atomic::{AtomicU64, Ordering},
     },
 };
+pub use v2::{RecoveryChallengeV2, VaultHintsV2};
 use zeroize::Zeroizing;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -52,6 +54,7 @@ struct State {
     store: Store,
     active: Option<Opened>,
     draft: Option<Draft>,
+    draft_v2: Option<v2::DraftV2>,
     closed: bool,
 }
 
@@ -75,6 +78,7 @@ impl Vault {
                 store,
                 active: None,
                 draft: None,
+                draft_v2: None,
                 closed: false,
             }),
             job: Mutex::new(()),
@@ -86,7 +90,7 @@ impl Vault {
         if state.closed {
             return Err(VaultFailure::Closed);
         }
-        if state.draft.is_some() {
+        if state.draft.is_some() || state.draft_v2.is_some() {
             return Ok(VaultStatus::Confirmation);
         }
         if state.active.is_some() {
@@ -117,7 +121,7 @@ impl Vault {
             if state.store.read()?.is_some() {
                 return Err(VaultFailure::Exists);
             }
-            if state.draft.is_some() {
+            if state.draft.is_some() || state.draft_v2.is_some() {
                 return Err(VaultFailure::Busy);
             }
         }
@@ -157,7 +161,7 @@ impl Vault {
             if state.closed {
                 return Err(VaultFailure::Closed);
             }
-            if state.draft.is_some() {
+            if state.draft.is_some() || state.draft_v2.is_some() {
                 return Err(VaultFailure::Busy);
             }
             state.store.read()?.ok_or(VaultFailure::Missing)?
@@ -225,7 +229,7 @@ impl Vault {
             if state.active.is_some() {
                 return Ok(());
             }
-            if state.draft.is_some() {
+            if state.draft.is_some() || state.draft_v2.is_some() {
                 return Err(VaultFailure::Busy);
             }
             state.store.read()?.ok_or(VaultFailure::Missing)?
@@ -250,6 +254,7 @@ impl Vault {
         }
         state.active = None;
         state.draft = None;
+        state.draft_v2 = None;
         Ok(())
     }
     pub fn close(&self) -> Result<(), VaultFailure> {
@@ -258,6 +263,7 @@ impl Vault {
         if !state.closed {
             state.active = None;
             state.draft = None;
+            state.draft_v2 = None;
             state.closed = true;
             state.store.close()?;
         }

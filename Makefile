@@ -1,4 +1,4 @@
-.PHONY: bootstrap generate check format format-check run server build-macos native-ui
+.PHONY: bootstrap generate check format format-check run server build-macos native-ui clean-data
 
 bootstrap:
 	fvm flutter pub get --enforce-lockfile
@@ -19,6 +19,7 @@ format-check:
 	cargo fmt --manifest-path packages/pass_core/rust/Cargo.toml -- --check
 
 check: format-check
+	python3 -m unittest discover -s tool -p 'test_clean_data.py'
 	fvm flutter analyze --no-pub
 	cd packages/pass_core && fvm dart test
 	cd apps/want_pass && fvm flutter test --no-pub
@@ -40,3 +41,6 @@ VAULT_UI_RUN := local_$(shell date +%Y%m%d_%H%M%S)
 native-ui:
 	cd apps/want_pass && fvm flutter test integration_test/vault_flow_test.dart -d macos --no-pub --dart-define=VAULT_TEST_RUN=$(VAULT_UI_RUN) --dart-define=VAULT_TEST_PHASE=create
 	cd apps/want_pass && fvm flutter test integration_test/vault_flow_test.dart -d macos --no-pub --dart-define=VAULT_TEST_RUN=$(VAULT_UI_RUN) --dart-define=VAULT_TEST_PHASE=reopen
+
+clean-data:
+	python3 tool/clean_data.py

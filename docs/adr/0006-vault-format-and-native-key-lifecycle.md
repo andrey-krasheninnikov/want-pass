@@ -1,5 +1,5 @@
 ---
-status: accepted
+status: superseded by ADR-0007 for format and setup policy
 ---
 
 # Vault V1 and native key ownership / Сейф V1 и владение ключами

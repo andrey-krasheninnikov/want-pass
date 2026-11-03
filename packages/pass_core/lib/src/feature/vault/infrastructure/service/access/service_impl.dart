@@ -166,6 +166,154 @@ final class RustVaultAccessService implements VaultAccessService {
     }
     return result;
   }
+
+  @override
+  FutureDomainResult<VaultHintsDtoV2> hintsV2({
+    required VaultHandleV1 handle,
+  }) async {
+    const op = 'RustVaultAccessService.hintsV2():';
+    final result = await captureResult<VaultHintsDtoV2>(() async {
+      final value = await (handle as _NativeVaultHandle)._vault.hintsV2();
+      return VaultHintsDtoV2(
+        password: value.password,
+        recovery: value.recovery,
+      );
+    }, mapToDomainError: _mapNativeError);
+    if (result.isError) {
+      reportVaultSafely(
+        _reporter,
+        layer: VaultDiagnosticLayer.infrastructure,
+        operation: op,
+        error: result.error is VaultErrorV1
+            ? result.error as VaultErrorV1
+            : const VaultUnexpectedErrorV1(),
+      );
+    }
+    return result;
+  }
+
+  @override
+  FutureDomainResult<VaultRecoveryChallengeV2> prepareCreationV2({
+    required VaultHandleV1 handle,
+    required String password,
+  }) async {
+    const op = 'RustVaultAccessService.prepareCreationV2():';
+    final result = await captureResult<VaultRecoveryChallengeV2>(() async {
+      final value = await (handle as _NativeVaultHandle)._vault
+          .prepareCreationV2(
+            password: password,
+            generation: handle._vault.generation(),
+          );
+      return VaultRecoveryChallengeV2(
+        words: List.unmodifiable(value.words),
+        positions: List.unmodifiable(value.positions),
+        choices: List.unmodifiable(
+          value.choices.map((v) => List<String>.unmodifiable(v)),
+        ),
+      );
+    }, mapToDomainError: _mapNativeError);
+    if (result.isError) {
+      reportVaultSafely(
+        _reporter,
+        layer: VaultDiagnosticLayer.infrastructure,
+        operation: op,
+        error: result.error is VaultErrorV1
+            ? result.error as VaultErrorV1
+            : const VaultUnexpectedErrorV1(),
+      );
+    }
+    return result;
+  }
+
+  @override
+  FutureDomainResult<VaultRecoveryChallengeV2> prepareRecoveryV2({
+    required VaultHandleV1 handle,
+    required String phrase,
+    required String password,
+  }) async {
+    const op = 'RustVaultAccessService.prepareRecoveryV2():';
+    final result = await captureResult<VaultRecoveryChallengeV2>(() async {
+      final value = await (handle as _NativeVaultHandle)._vault
+          .prepareRecoveryV2(
+            phrase: phrase,
+            password: password,
+            generation: handle._vault.generation(),
+          );
+      return VaultRecoveryChallengeV2(
+        words: List.unmodifiable(value.words),
+        positions: List.unmodifiable(value.positions),
+        choices: List.unmodifiable(
+          value.choices.map((v) => List<String>.unmodifiable(v)),
+        ),
+      );
+    }, mapToDomainError: _mapNativeError);
+    if (result.isError) {
+      reportVaultSafely(
+        _reporter,
+        layer: VaultDiagnosticLayer.infrastructure,
+        operation: op,
+        error: result.error is VaultErrorV1
+            ? result.error as VaultErrorV1
+            : const VaultUnexpectedErrorV1(),
+      );
+    }
+    return result;
+  }
+
+  @override
+  FutureDomainResult<void> confirmV2({
+    required VaultHandleV1 handle,
+    required List<String> answers,
+    required String password,
+    required VaultHintsDtoV2 hints,
+  }) async {
+    const op = 'RustVaultAccessService.confirmV2():';
+    final result = await captureResult<void>(() async {
+      await (handle as _NativeVaultHandle)._vault.confirmV2(
+        answers: answers,
+        password: password,
+        passwordHint: hints.password,
+        recoveryHint: hints.recovery,
+        generation: handle._vault.generation(),
+      );
+    }, mapToDomainError: _mapNativeError);
+    if (result.isError) {
+      reportVaultSafely(
+        _reporter,
+        layer: VaultDiagnosticLayer.infrastructure,
+        operation: op,
+        error: result.error is VaultErrorV1
+            ? result.error as VaultErrorV1
+            : const VaultUnexpectedErrorV1(),
+      );
+    }
+    return result;
+  }
+
+  @override
+  FutureDomainResult<void> exportRecoveryV2({
+    required VaultHandleV1 handle,
+    required String destination,
+  }) async {
+    const op = 'RustVaultAccessService.exportRecoveryV2():';
+    final result = await captureResult<void>(() async {
+      await (handle as _NativeVaultHandle)._vault.exportRecoveryV2(
+        destination: destination,
+        generation: handle._vault.generation(),
+      );
+    }, mapToDomainError: _mapNativeError);
+    if (result.isError) {
+      reportVaultSafely(
+        _reporter,
+        layer: VaultDiagnosticLayer.infrastructure,
+        operation: op,
+        error: result.error is VaultErrorV1
+            ? result.error as VaultErrorV1
+            : const VaultUnexpectedErrorV1(),
+      );
+    }
+    return result;
+  }
 }
 
 final class _NativeVaultHandle implements VaultHandleV1 {

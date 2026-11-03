@@ -27,4 +27,25 @@ abstract interface class VaultUseCase {
   FutureDomainResult<CloseVaultResultV1> closeV1({
     required CloseVaultParamsV1 params,
   });
+  FutureDomainResult<PrepareVaultSetupResultV2> prepareSetupV2({
+    required PrepareVaultSetupParamsV2 params,
+  });
+  FutureDomainResult<ConfirmVaultSetupResultV2> confirmSetupV2({
+    required ConfirmVaultSetupParamsV2 params,
+  });
+  FutureDomainResult<ReadVaultHintsResultV2> readHintsV2({
+    required ReadVaultHintsParamsV2 params,
+  });
+  FutureDomainResult<SelectRecoveryFileResultV1> selectRecoveryFileV1({
+    required SelectRecoveryFileParamsV1 params,
+  });
+  FutureDomainResult<RecoveryExportResultV1> exportRecoveryV2({
+    required ExportRecoveryParamsV2 params,
+  });
+  FutureDomainResult<RecoveryExportResultV1> copyRecoveryV1({
+    required RecoveryClipboardParamsV1 params,
+  });
+  FutureDomainResult<RecoveryExportResultV1> clearRecoveryClipboardV1({
+    required RecoveryClipboardParamsV1 params,
+  });
 }

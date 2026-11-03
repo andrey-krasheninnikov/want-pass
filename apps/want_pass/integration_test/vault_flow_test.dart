@@ -10,11 +10,13 @@ import 'package:want_pass/src/feature/_common/presentation/_barrel.dart';
 import 'package:want_pass/src/feature/vault/application/_barrel.dart';
 import 'package:want_pass_core/want_pass_core.dart';
 
-const password = 'Synthetic native UI\npassword 2026';
-const nextPassword = 'Synthetic recovered UI\npassword 2026';
+const password = 'Synthetic native UI\npassword 2026!';
+const nextPassword = 'Synthetic recovered UI\npassword 2026!';
 
 void main() {
-  IntegrationTestWidgetsFlutterBinding.ensureInitialized();
+  final binding = IntegrationTestWidgetsFlutterBinding.ensureInitialized();
+  binding.platformDispatcher.accessibilityFeaturesTestValue =
+      const FakeAccessibilityFeatures(disableAnimations: true);
   LaunchMode.initializeAutomatically();
   const phase = String.fromEnvironment(
     'VAULT_TEST_PHASE',
@@ -45,16 +47,30 @@ void main() {
       reporter: const _Reporter(),
     );
     final testErrorHandler = FlutterError.onError;
-    final runtime = await AppRuntime.bootstrap(vaultAccess: access);
+    final runtime = await AppRuntime.bootstrap(
+      vaultAccess: access,
+      preferencesDirectory: '${directory.path}/preferences',
+    );
     final productErrorHandler = FlutterError.onError;
     FlutterError.onError = testErrorHandler;
     var completed = false;
     try {
       await tester.pumpWidget(
-        WantPassApp(startup: runtime.startup, vault: runtime.vault),
+        WantPassApp(
+          startup: runtime.startup,
+          vault: runtime.vault,
+          appearance: runtime.appearance,
+        ),
       );
       await tester.pumpAndSettle();
+      expect(await signalWantPassFirstFrame(), isTrue);
       if (phase == 'create') {
+        await _tap(tester, 'setup-next');
+        await _until(
+          tester,
+          () => runtime.appearance.state.settings.configured,
+        );
+        await tester.pumpAndSettle();
         await _enter(tester, 'master-password', password);
         await _enter(tester, 'password-confirmation', password);
         await _tap(tester, 'vault-create');
@@ -62,18 +78,19 @@ void main() {
           tester,
           () => runtime.vault.state.phase == VaultPhase.confirmation,
         );
-        final first = runtime.vault.state.challenge!;
+        final first = runtime.vault.state.setupChallenge!;
         for (final word in first.words) {
           expect(find.text(word), findsWidgets);
         }
-        for (var i = 0; i < 3; i++) {
-          await _enter(
-            tester,
-            'recovery-confirm-$i',
-            first.words[first.positions[i]],
-          );
-        }
-        await _tap(tester, 'vault-confirm');
+        await _enter(tester, 'recovery-hint', 'Synthetic first location');
+        await _tap(tester, 'setup-back');
+        await _enter(tester, 'password-hint', 'Synthetic password hint');
+        await _tap(tester, 'vault-create');
+        await _until(tester, () => !runtime.vault.state.busy);
+        await tester.pumpAndSettle();
+        expect(runtime.vault.state.setupChallenge, first);
+        await _confirm(tester, first);
+
         await _until(
           tester,
           () => runtime.vault.state.phase == VaultPhase.unlocked,
@@ -92,23 +109,25 @@ void main() {
         await _until(tester, () => runtime.vault.state.error != null);
         expect(runtime.vault.state.phase, VaultPhase.locked);
         await _tap(tester, 'vault-recovery');
+        await tester.pumpAndSettle();
+        expect(find.text('Synthetic password hint'), findsOneWidget);
+        await _tap(tester, 'start-recovery');
+        await tester.pumpAndSettle();
         await _enter(tester, 'recovery-phrase', first.words.join(' '));
+        await _tap(tester, 'setup-next');
+        await tester.pumpAndSettle();
         await _enter(tester, 'master-password', nextPassword);
         await _enter(tester, 'password-confirmation', nextPassword);
+        await _enter(tester, 'password-hint', 'Synthetic renewed hint');
         await _tap(tester, 'vault-recover');
         await _until(
           tester,
           () => runtime.vault.state.phase == VaultPhase.confirmation,
         );
-        final next = runtime.vault.state.challenge!;
-        for (var i = 0; i < 3; i++) {
-          await _enter(
-            tester,
-            'recovery-confirm-$i',
-            next.words[next.positions[i]],
-          );
-        }
-        await _tap(tester, 'vault-confirm');
+        final next = runtime.vault.state.setupChallenge!;
+        await _enter(tester, 'recovery-hint', 'Synthetic renewed location');
+        await _confirm(tester, next);
+
         await _until(
           tester,
           () => runtime.vault.state.phase == VaultPhase.unlocked,
@@ -145,6 +164,7 @@ Future<void> _enter(WidgetTester tester, String key, String value) async {
     matching: find.bySubtype<EditableText>(),
   );
   await tester.ensureVisible(field);
+  await tester.pumpAndSettle();
   await tester.tap(field);
   await tester.pump();
   expect(
@@ -153,7 +173,24 @@ Future<void> _enter(WidgetTester tester, String key, String value) async {
   );
   tester.testTextInput.enterText(value);
   await tester.pump();
-  expect(tester.widget<EditableText>(field).controller.text, value);
+  expect(
+    tester.widget<EditableText>(field).controller.text,
+    value.replaceAll('\n', ''),
+  );
+}
+
+Future<void> _confirm(
+  WidgetTester tester,
+  VaultRecoveryChallengeV2 challenge,
+) async {
+  await _tap(tester, 'setup-next');
+  await tester.pumpAndSettle();
+  for (var i = 0; i < 3; i++) {
+    final word = challenge.words[challenge.positions[i]];
+    await _tap(tester, 'quiz-$i-$word');
+    await _tap(tester, i == 2 ? 'vault-confirm' : 'setup-next');
+    if (i < 2) await tester.pumpAndSettle();
+  }
 }
 
 Future<void> _until(WidgetTester tester, bool Function() ready) async {
@@ -180,6 +217,7 @@ final class _Reporter implements VaultReporter {
 Future<void> _tap(WidgetTester tester, String key) async {
   final button = find.byKey(ValueKey(key));
   await tester.ensureVisible(button);
+  await tester.pumpAndSettle();
   await tester.tap(button);
   await tester.pump();
 }

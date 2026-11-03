@@ -16,7 +16,22 @@ abstract class Vault implements RustOpaqueInterface {
     required BigInt generation,
   });
 
+  Future<void> confirmV2({
+    required List<String> answers,
+    required String password,
+    required String passwordHint,
+    required String recoveryHint,
+    required BigInt generation,
+  });
+
+  Future<void> exportRecoveryV2({
+    required String destination,
+    required BigInt generation,
+  });
+
   BigInt generation();
+
+  Future<VaultHintsV2> hintsV2();
 
   void lock();
 
@@ -28,7 +43,18 @@ abstract class Vault implements RustOpaqueInterface {
     required BigInt generation,
   });
 
+  Future<RecoveryChallengeV2> prepareCreationV2({
+    required String password,
+    required BigInt generation,
+  });
+
   Future<RecoveryChallenge> prepareRecovery({
+    required String phrase,
+    required String password,
+    required BigInt generation,
+  });
+
+  Future<RecoveryChallengeV2> prepareRecoveryV2({
     required String phrase,
     required String password,
     required BigInt generation,

@@ -25,4 +25,24 @@ abstract interface class VaultAccessService {
     required VaultHandleV1 handle,
     required String password,
   });
+  FutureDomainResult<VaultHintsDtoV2> hintsV2({required VaultHandleV1 handle});
+  FutureDomainResult<VaultRecoveryChallengeV2> prepareCreationV2({
+    required VaultHandleV1 handle,
+    required String password,
+  });
+  FutureDomainResult<VaultRecoveryChallengeV2> prepareRecoveryV2({
+    required VaultHandleV1 handle,
+    required String phrase,
+    required String password,
+  });
+  FutureDomainResult<void> confirmV2({
+    required VaultHandleV1 handle,
+    required List<String> answers,
+    required String password,
+    required VaultHintsDtoV2 hints,
+  });
+  FutureDomainResult<void> exportRecoveryV2({
+    required VaultHandleV1 handle,
+    required String destination,
+  });
 }

@@ -1,5 +1,8 @@
+import 'package:want_pass/src/feature/vault/infrastructure/_barrel.dart';
+
 import 'dart:async';
 import 'dart:isolate';
+import 'dart:io';
 
 import 'package:bloc/bloc.dart';
 import 'package:bloc_effects/bloc_effects.dart';
@@ -106,6 +109,38 @@ final class _VaultHandle implements VaultHandleV1 {
 final class _VaultAccess implements VaultAccessService {
   const _VaultAccess();
   @override
+  FutureDomainResult<VaultHintsDtoV2> hintsV2({
+    required VaultHandleV1 handle,
+  }) async => const Result.success(VaultHintsDtoV2());
+  @override
+  FutureDomainResult<VaultRecoveryChallengeV2> prepareCreationV2({
+    required VaultHandleV1 handle,
+    required String password,
+  }) async =>
+      const Result.error(VaultRejectedErrorV1(VaultFailureKindV1.unavailable));
+  @override
+  FutureDomainResult<VaultRecoveryChallengeV2> prepareRecoveryV2({
+    required VaultHandleV1 handle,
+    required String phrase,
+    required String password,
+  }) async =>
+      const Result.error(VaultRejectedErrorV1(VaultFailureKindV1.unavailable));
+  @override
+  FutureDomainResult<void> confirmV2({
+    required VaultHandleV1 handle,
+    required List<String> answers,
+    required String password,
+    required VaultHintsDtoV2 hints,
+  }) async =>
+      const Result.error(VaultRejectedErrorV1(VaultFailureKindV1.unavailable));
+  @override
+  FutureDomainResult<void> exportRecoveryV2({
+    required VaultHandleV1 handle,
+    required String destination,
+  }) async =>
+      const Result.error(VaultRejectedErrorV1(VaultFailureKindV1.unavailable));
+
+  @override
   FutureDomainResult<VaultHandleV1> openV1() async =>
       const Result.success(_VaultHandle());
   @override
@@ -140,15 +175,24 @@ final class _VaultAccess implements VaultAccessService {
 }
 
 void main() {
-  TestWidgetsFlutterBinding.ensureInitialized();
+  final binding = TestWidgetsFlutterBinding.ensureInitialized();
+  setUp(() {
+    binding.platformDispatcher.accessibilityFeaturesTestValue =
+        const FakeAccessibilityFeatures(disableAnimations: true);
+  });
+  tearDown(binding.platformDispatcher.clearAccessibilityFeaturesTestValue);
   LaunchMode.initializeAutomatically();
   late Talker talker;
   late SafeBlocObserver observer;
   late BlocObserver previousObserver;
   late StreamController<VaultLockSignal> vaultLockEvents;
   late Stream<VaultLockSignal> vaultEvents;
+  late Directory preferencesDirectory;
 
   setUp(() {
+    preferencesDirectory = Directory.systemTemp.createTempSync(
+      'want-pass-preferences-test-',
+    );
     vaultLockEvents = StreamController<VaultLockSignal>.broadcast();
     vaultEvents = vaultLockEvents.stream;
     talker = Talker(settings: TalkerSettings(useConsoleLogs: false));
@@ -160,16 +204,22 @@ void main() {
   tearDown(() async {
     Bloc.observer = previousObserver;
     await vaultLockEvents.close();
+    await preferencesDirectory.delete(recursive: true);
   });
 
   Future<AppRuntime> bootstrapRuntime() => AppRuntime.bootstrap(
     vaultAccess: const _VaultAccess(),
     vaultLockEvents: vaultEvents,
+    preferencesDirectory: preferencesDirectory.path,
   );
 
   Future<VaultController> shellVault() async {
     final controller = VaultController(
-      VaultUseCaseImpl(const _VaultAccess(), observer),
+      VaultUseCaseImpl(
+        const _VaultAccess(),
+        observer,
+        PlatformRecoveryExportService(observer),
+      ),
       observer,
       vaultEvents,
     );
@@ -202,8 +252,8 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    expect(find.text('Want Pass'), findsOneWidget);
-    expect(find.text('Create your local vault'), findsOneWidget);
+    expect(find.text('Master password'), findsWidgets);
+    expect(find.byKey(const ValueKey('vault-create')), findsOneWidget);
     expect(startup.state, const StartupReady());
     expect(
       talker.history.single.message,
@@ -224,7 +274,7 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    expect(find.text('Want Pass could not start.'), findsOneWidget);
+    expect(find.text('Startup unavailable'), findsOneWidget);
     expect(
       startup.state,
       const StartupFailed(StartupForegroundRequiredErrorV1()),
@@ -245,7 +295,7 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
-      expect(find.text('Создайте локальный сейф'), findsOneWidget);
+      expect(find.text('Мастер-пароль'), findsWidgets);
     },
   );
 

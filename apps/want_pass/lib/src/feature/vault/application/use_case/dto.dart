@@ -166,3 +166,111 @@ final class CloseVaultResultV1 extends Equatable {
   @override
   String toString() => 'CloseVaultResultV1(<redacted>)';
 }
+
+final class PrepareVaultSetupParamsV2 extends Equatable {
+  final VaultHandleV1 handle;
+  final String password, confirmation;
+  final String? phrase;
+  const PrepareVaultSetupParamsV2({
+    required this.handle,
+    required this.password,
+    required this.confirmation,
+    this.phrase,
+  });
+  @override
+  List<Object?> get props => [handle, password, confirmation, phrase];
+  @override
+  String toString() => 'PrepareVaultSetupParamsV2(<redacted>)';
+}
+
+final class PrepareVaultSetupResultV2 extends Equatable {
+  final VaultRecoveryChallengeV2 challenge;
+  const PrepareVaultSetupResultV2({required this.challenge});
+  @override
+  List<Object?> get props => [challenge];
+  @override
+  String toString() => 'PrepareVaultSetupResultV2(<redacted>)';
+}
+
+final class ConfirmVaultSetupParamsV2 extends Equatable {
+  final VaultHandleV1 handle;
+  final List<String> answers;
+  final String password;
+  final VaultHintsDtoV2 hints;
+  const ConfirmVaultSetupParamsV2({
+    required this.handle,
+    required this.answers,
+    required this.password,
+    required this.hints,
+  });
+  @override
+  List<Object?> get props => [handle, answers, password, hints];
+  @override
+  String toString() => 'ConfirmVaultSetupParamsV2(<redacted>)';
+}
+
+final class ConfirmVaultSetupResultV2 extends Equatable {
+  final VaultAccessStateV1 state;
+  const ConfirmVaultSetupResultV2({required this.state});
+  @override
+  List<Object?> get props => [state];
+}
+
+final class ReadVaultHintsParamsV2 extends Equatable {
+  final VaultHandleV1 handle;
+  const ReadVaultHintsParamsV2({required this.handle});
+  @override
+  List<Object?> get props => [handle];
+}
+
+final class ReadVaultHintsResultV2 extends Equatable {
+  final VaultHintsDtoV2 hints;
+  const ReadVaultHintsResultV2({required this.hints});
+  @override
+  List<Object?> get props => [hints];
+  @override
+  String toString() => 'ReadVaultHintsResultV2(<redacted>)';
+}
+
+final class SelectRecoveryFileParamsV1 extends Equatable {
+  const SelectRecoveryFileParamsV1();
+  @override
+  List<Object?> get props => [];
+}
+
+final class SelectRecoveryFileResultV1 extends Equatable {
+  final String? destination;
+  const SelectRecoveryFileResultV1({required this.destination});
+  @override
+  List<Object?> get props => [destination];
+  @override
+  String toString() => 'SelectRecoveryFileResultV1(<redacted>)';
+}
+
+final class ExportRecoveryParamsV2 extends Equatable {
+  final VaultHandleV1 handle;
+  final String destination;
+  const ExportRecoveryParamsV2({
+    required this.handle,
+    required this.destination,
+  });
+  @override
+  List<Object?> get props => [handle, destination];
+  @override
+  String toString() => 'ExportRecoveryParamsV2(<redacted>)';
+}
+
+final class RecoveryClipboardParamsV1 extends Equatable {
+  final String phrase;
+  const RecoveryClipboardParamsV1({required this.phrase});
+  @override
+  List<Object?> get props => [phrase];
+  @override
+  String toString() => 'RecoveryClipboardParamsV1(<redacted>)';
+}
+
+final class RecoveryExportResultV1 extends Equatable {
+  const RecoveryExportResultV1();
+  @override
+  List<Object?> get props => [];
+}

@@ -1,5 +1,7 @@
 import 'dart:ui';
 
+import 'package:want_pass/src/feature/appearance/application/_barrel.dart';
+
 import 'package:path_provider/path_provider.dart';
 
 import 'package:bloc/bloc.dart';
@@ -18,6 +20,7 @@ Future<AppRuntime>? _bootstrap;
 LaunchModeType? _bootstrapMode;
 VaultAccessService? _accessOverride;
 Stream<VaultLockSignal>? _eventsOverride;
+String? _preferencesOverride;
 
 final class AppRuntime {
   final GetIt _container;
@@ -45,11 +48,14 @@ final class AppRuntime {
 
   StartupController get startup => _container<StartupController>();
 
+  AppearanceController get appearance => _container<AppearanceController>();
+
   VaultController get vault => _container<VaultController>();
 
   static Future<AppRuntime> bootstrap({
     VaultAccessService? vaultAccess,
     Stream<VaultLockSignal>? vaultLockEvents,
+    String? preferencesDirectory,
   }) {
     const op = 'AppRuntime.bootstrap():';
     final mode = LaunchMode.current;
@@ -57,7 +63,8 @@ final class AppRuntime {
     if (pending != null) {
       if (_bootstrapMode != mode ||
           !identical(_accessOverride, vaultAccess) ||
-          !identical(_eventsOverride, vaultLockEvents)) {
+          !identical(_eventsOverride, vaultLockEvents) ||
+          _preferencesOverride != preferencesDirectory) {
         return Future<AppRuntime>.error(
           const StartupConfigurationConflictErrorV1(),
         );
@@ -70,13 +77,20 @@ final class AppRuntime {
     _bootstrapMode = mode;
     _accessOverride = vaultAccess;
     _eventsOverride = vaultLockEvents;
-    return _bootstrap = _initialize(op, vaultAccess, vaultLockEvents);
+    _preferencesOverride = preferencesDirectory;
+    return _bootstrap = _initialize(
+      op,
+      vaultAccess,
+      vaultLockEvents,
+      preferencesDirectory,
+    );
   }
 
   static Future<AppRuntime> _initialize(
     String operation,
     VaultAccessService? vaultAccess,
     Stream<VaultLockSignal>? vaultLockEvents,
+    String? preferencesDirectory,
   ) async {
     final container = GetIt.asNewInstance();
     final observer = SafeBlocObserver(talker: Talker());
@@ -106,6 +120,10 @@ final class AppRuntime {
         events,
         instanceName: 'vaultLockEvents',
       );
+      container.registerSingleton<String>(
+        preferencesDirectory ?? (await getApplicationSupportDirectory()).path,
+        instanceName: 'preferencesDirectory',
+      );
       await configureDependencies(container);
       return AppRuntime._(
         container,
@@ -133,6 +151,7 @@ final class AppRuntime {
         _bootstrapMode = null;
         _accessOverride = null;
         _eventsOverride = null;
+        _preferencesOverride = null;
       }
       observer.report(
         layer: StartupDiagnosticLayer.bootstrap,
@@ -161,6 +180,7 @@ final class AppRuntime {
       _bootstrapMode = null;
       _accessOverride = null;
       _eventsOverride = null;
+      _preferencesOverride = null;
     }
   }
 }

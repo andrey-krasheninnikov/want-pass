@@ -292,6 +292,43 @@ void main() {
         expect(data.label, contains('Master password'));
         expect(data.flagsCollection.isObscured, isTrue);
         expect(data.value, isNot(contains('Synthetic')));
+        void expectPrivateInput(bool obscured) {
+          final state = tester.state<EditableTextState>(
+            input('master-password'),
+          );
+          expect(state.widget.obscureText, obscured);
+          expect(state.widget.autofillHints, isNull);
+          expect(state.widget.autocorrect, isFalse);
+          expect(state.widget.enableSuggestions, isFalse);
+          expect(state.widget.enableIMEPersonalizedLearning, isFalse);
+          expect(
+            state.textInputConfiguration.autofillConfiguration.enabled,
+            isFalse,
+          );
+          expect(
+            state.textInputConfiguration.toJson().containsKey('autofill'),
+            isFalse,
+          );
+        }
+
+        Future<void> toggle(String label) async {
+          final button = find.descendant(
+            of: find.byKey(const ValueKey('master-password')),
+            matching: find.bySemanticsLabel(label),
+          );
+          await tester.ensureVisible(button);
+          await tester.pumpAndSettle();
+          await tester.tap(button);
+          await tester.pumpAndSettle();
+        }
+
+        expectPrivateInput(true);
+        await toggle('Show password');
+        await _enter(tester, input('master-password'), password);
+        expectPrivateInput(false);
+        await toggle('Hide password');
+        expectPrivateInput(true);
+
         await _enter(tester, input('password-confirmation'), password);
         await tester.tap(find.byKey(const ValueKey('vault-create')));
         await tester.pumpAndSettle();
@@ -342,6 +379,94 @@ void main() {
       await events.close();
     },
   );
+  test('close awaits clipboard cleanup already started by lock', () async {
+    final access = _Access();
+    final export = _Export();
+    final events = StreamController<VaultLockSignal>.broadcast();
+    final controller = _controller(access, events.stream, export);
+    await controller.init();
+    await controller.prepareSetup(password: _password, confirmation: _password);
+    await controller.copyRecovery();
+    export.clearing = Completer<void>();
+    await controller.lock();
+    var closed = false;
+    final closing = controller.close().then((_) => closed = true);
+    await Future<void>.delayed(Duration.zero);
+    expect(closed, isFalse);
+    expect(export.clipboard, 'one two three');
+    export.clearing!.complete();
+    await closing;
+    expect(export.clipboard, isEmpty);
+    expect(export.clears, 1);
+    await events.close();
+  });
+
+  testWidgets(
+    'cancel prepared recovery returns to unlock and invalidates exports',
+    (tester) async {
+      final access = _Access();
+      access.handle.exists = true;
+      access.handle.state = VaultAccessStateV1.locked;
+      final export = _Export();
+      final events = StreamController<VaultLockSignal>.broadcast();
+      final controller = _controller(access, events.stream, export);
+      final startup = StartupController(_Startup(), const _Reporter());
+      await tester.runAsync(() async {
+        await startup.init();
+        await controller.init();
+      });
+      await tester.pumpWidget(WantPassApp(startup: startup, vault: controller));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Forgot password?'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('start-recovery')));
+      await tester.pumpAndSettle();
+      Finder field(String key) => find.descendant(
+        of: find.byKey(ValueKey(key)),
+        matching: find.bySubtype<EditableText>(),
+      );
+      await _enter(
+        tester,
+        field('recovery-phrase'),
+        'synthetic recovery phrase',
+      );
+      await tester.tap(find.byKey(const ValueKey('setup-next')));
+      await tester.pumpAndSettle();
+      await _enter(tester, field('master-password'), _password);
+      await _enter(tester, field('password-confirmation'), _password);
+      await tester.tap(find.byKey(const ValueKey('vault-recover')));
+      await tester.pumpAndSettle();
+      expect(controller.state.setupChallenge, isNotNull);
+      await controller.copyRecovery();
+      final saving = controller.downloadRecovery();
+      await tester.pump();
+      for (var i = 0; i < 2; i++) {
+        await tester.tap(find.byKey(const ValueKey('setup-back')));
+        await tester.pumpAndSettle();
+      }
+      await tester.tap(find.text('Back to unlock'));
+      await tester.pumpAndSettle();
+      await saving;
+      expect(controller.state.phase, VaultPhase.locked);
+      expect(controller.state.setupChallenge, isNull);
+      expect(access.handle.invalidations, 1);
+      expect(find.byKey(const ValueKey('vault-unlock')), findsOneWidget);
+      expect(find.text('Appearance'), findsNothing);
+      expect(export.clipboard, isEmpty);
+      export.selection.complete(
+        const Result.success('/synthetic/recovery.txt'),
+      );
+      await tester.pump();
+      expect(access.exports, 0);
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.runAsync(() async {
+        await controller.close();
+        await startup.close();
+        await events.close();
+      });
+    },
+  );
+
   testWidgets('clipboard expires conditionally and lock clears our copy', (
     tester,
   ) async {
@@ -727,6 +852,8 @@ Future<void> _enter(WidgetTester tester, Finder field, String value) async {
 final class _Export implements RecoveryExportService {
   final selection = Completer<DomainResult<String?>>();
   String clipboard = '';
+  Completer<void>? clearing;
+  int clears = 0;
   @override
   FutureDomainResult<String?> selectFileV1() => selection.future;
   @override
@@ -737,6 +864,8 @@ final class _Export implements RecoveryExportService {
 
   @override
   FutureDomainResult<void> clearClipboardV1(String expected) async {
+    clears++;
+    await clearing?.future;
     if (clipboard == expected) clipboard = '';
     return const Result.success(null);
   }

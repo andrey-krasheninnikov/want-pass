@@ -50,17 +50,8 @@ impl Store {
             lock,
         })
     }
-    pub fn is_reserved_destination(&self, path: &Path) -> Result<bool, VaultFailure> {
-        let parent = path
-            .parent()
-            .ok_or(VaultFailure::Storage)?
-            .canonicalize()
-            .map_err(|_| VaultFailure::Storage)?;
-        Ok(parent
-            == self
-                .directory
-                .canonicalize()
-                .map_err(|_| VaultFailure::Storage)?)
+    pub fn directory(&self) -> &Path {
+        &self.directory
     }
     pub fn read(&self) -> Result<Option<Vec<u8>>, VaultFailure> {
         let file = match OpenOptions::new()

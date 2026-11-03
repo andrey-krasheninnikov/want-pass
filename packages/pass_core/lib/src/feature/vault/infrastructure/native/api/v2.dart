@@ -4,7 +4,7 @@ import 'package:want_pass_core/src/feature/vault/infrastructure/_barrel.dart';
 
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `challenge`, `index`, `new`
+// These functions are ignored because they are not marked as `pub`: `challenge`, `export_recovery_with_hook`, `index`, `new`
 // These types are ignored because they are neither used by any `pub` functions nor (for structs and enums) marked `#[frb(unignore)]`: `DraftV2`
 
 class RecoveryChallengeV2 {

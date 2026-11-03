@@ -21,6 +21,7 @@ final class VaultController extends Cubit<VaultState> {
   Timer? _clipboardExpiry;
   String? _clipboardContent;
   Future<void>? _exportOperation;
+  Future<void>? _clipboardCleanup;
   Completer<void>? _fileSelectionCancelled;
   Future<void>? _initFuture;
   Future<void>? _closeFuture;
@@ -343,19 +344,31 @@ final class VaultController extends Cubit<VaultState> {
   Future<void> _clearClipboard() async {
     const op = 'VaultController._clearClipboard():';
     _clipboardExpiry?.cancel();
+    if (_clipboardCleanup case final pending?) {
+      await pending;
+      return;
+    }
     final content = _clipboardContent;
     _clipboardContent = null;
     if (content == null) return;
-    final result = await _useCase.clearRecoveryClipboardV1(
-      params: RecoveryClipboardParamsV1(phrase: content),
-    );
-    if (result.isError) {
-      reportVaultSafely(
-        _reporter,
-        layer: VaultDiagnosticLayer.controller,
-        operation: op,
-        error: _error(result.error),
+    final operation = () async {
+      final result = await _useCase.clearRecoveryClipboardV1(
+        params: RecoveryClipboardParamsV1(phrase: content),
       );
+      if (result.isError) {
+        reportVaultSafely(
+          _reporter,
+          layer: VaultDiagnosticLayer.controller,
+          operation: op,
+          error: _error(result.error),
+        );
+      }
+    }();
+    _clipboardCleanup = operation;
+    try {
+      await operation;
+    } finally {
+      if (identical(_clipboardCleanup, operation)) _clipboardCleanup = null;
     }
   }
 

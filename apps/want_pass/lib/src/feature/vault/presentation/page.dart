@@ -934,13 +934,9 @@ class _VaultPageState extends State<VaultPage> {
                                                   WantButtonVariant.secondary,
                                               onPressed: state.busy
                                                   ? null
-                                                  : () {
-                                                      _clear();
-                                                      setState(
-                                                        () =>
-                                                            _recovering = false,
-                                                      );
-                                                    },
+                                                  : () => unawaited(
+                                                      widget.controller.lock(),
+                                                    ),
                                               child: Text(
                                                 _text(
                                                   'Back to unlock',

@@ -104,15 +104,31 @@ impl Vault {
         destination: String,
         generation: u64,
     ) -> Result<(), VaultFailure> {
+        self.export_recovery_with_hook(destination, generation, || {})
+    }
+    fn export_recovery_with_hook(
+        &self,
+        destination: String,
+        generation: u64,
+        before_publish: impl FnOnce(),
+    ) -> Result<(), VaultFailure> {
         use std::{fs, io::Write, path::Path};
-        let state = self.state.lock().map_err(|_| VaultFailure::Unavailable)?;
-        if state.closed || self.generation() != generation {
-            return Err(VaultFailure::Stale);
-        }
-        let draft = state.draft_v2.as_ref().ok_or(VaultFailure::Confirmation)?;
+        let (entropy, directory) = {
+            let state = self.state.lock().map_err(|_| VaultFailure::Unavailable)?;
+            if state.closed || self.generation() != generation {
+                return Err(VaultFailure::Stale);
+            }
+            let draft = state.draft_v2.as_ref().ok_or(VaultFailure::Confirmation)?;
+            (draft.entropy.clone(), state.store.directory().to_path_buf())
+        };
+        // Destination I/O must never delay synchronous key invalidation.
         let path = Path::new(&destination);
         let parent = path.parent().ok_or(VaultFailure::Storage)?;
-        if state.store.is_reserved_destination(path)? {
+        if parent.canonicalize().map_err(|_| VaultFailure::Storage)?
+            == directory
+                .canonicalize()
+                .map_err(|_| VaultFailure::Storage)?
+        {
             return Err(VaultFailure::Storage);
         }
         match fs::symlink_metadata(path) {
@@ -123,7 +139,7 @@ impl Vault {
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
             Err(_) => return Err(VaultFailure::Storage),
         }
-        let words = format::words(draft.entropy.as_ref())?
+        let words = format::words(entropy.as_ref())?
             .into_iter()
             .map(Zeroizing::new)
             .collect::<Vec<_>>();
@@ -139,6 +155,10 @@ impl Vault {
         file.write_all(phrase.as_bytes())
             .and_then(|()| file.as_file().sync_all())
             .map_err(|_| VaultFailure::Storage)?;
+        before_publish();
+        if self.generation() != generation {
+            return Err(VaultFailure::Stale);
+        }
         file.persist(path).map_err(|_| VaultFailure::Storage)?;
         fs::File::open(parent)
             .and_then(|f| f.sync_all())
@@ -310,5 +330,53 @@ impl Vault {
         let draft = state.draft_v2.take().ok_or(VaultFailure::Confirmation)?;
         state.active = Some(draft.candidate.ok_or(VaultFailure::Confirmation)?.opened);
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::{
+        sync::{Arc, mpsc},
+        thread,
+        time::Duration,
+    };
+
+    #[test]
+    fn paused_export_allows_lock_and_never_publishes_after_invalidation() {
+        let temporary = tempfile::tempdir().unwrap();
+        let vault = Arc::new(
+            Vault::open(temporary.path().join("vault").to_str().unwrap().to_owned()).unwrap(),
+        );
+        vault
+            .prepare_creation_v2(
+                "Synthetic export password 2026!".to_owned(),
+                vault.generation(),
+            )
+            .unwrap();
+        let generation = vault.generation();
+        let destination = temporary.path().join("recovery.txt");
+        let (ready_tx, ready_rx) = mpsc::channel();
+        let (resume_tx, resume_rx) = mpsc::channel();
+        let worker_vault = Arc::clone(&vault);
+        let path = destination.to_str().unwrap().to_owned();
+        let export = thread::spawn(move || {
+            worker_vault.export_recovery_with_hook(path, generation, || {
+                ready_tx.send(()).unwrap();
+                resume_rx.recv().unwrap();
+            })
+        });
+        ready_rx.recv_timeout(Duration::from_secs(2)).unwrap();
+        let (locked_tx, locked_rx) = mpsc::channel();
+        let locking_vault = Arc::clone(&vault);
+        let locking = thread::spawn(move || locked_tx.send(locking_vault.lock()).unwrap());
+        let locked = locked_rx.recv_timeout(Duration::from_secs(2));
+        resume_tx.send(()).unwrap();
+        locking.join().unwrap();
+        assert_eq!(locked.unwrap(), Ok(()));
+        assert_eq!(export.join().unwrap(), Err(VaultFailure::Stale));
+        assert_eq!(vault.status().unwrap(), VaultStatus::Missing);
+        assert!(!destination.exists());
+        assert_eq!(std::fs::read_dir(temporary.path()).unwrap().count(), 1);
     }
 }

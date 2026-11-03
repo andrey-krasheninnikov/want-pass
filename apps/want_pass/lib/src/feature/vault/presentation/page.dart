@@ -403,6 +403,7 @@ class _VaultPageState extends State<VaultPage> {
         controller: widget.controller,
         onRecovery: _startRecovery,
         requirements: _passwordRequirements,
+        errorText: _error,
       ),
     );
   }
@@ -812,19 +813,14 @@ class _VaultPageState extends State<VaultPage> {
                               SizedBox(
                                 width: 48,
                                 height: 48,
-                                child: WantGlow(
-                                  borderRadius: BorderRadius.circular(24),
-                                  child: WantSvg3D.asset(
-                                    'assets/brand/logo.svg',
-                                    semanticsLabel: 'Want Pass',
-                                    glow: false,
-                                    placeholderBuilder: (_) => Image.asset(
-                                      'assets/brand/logo-dark.png',
-                                    ),
-                                    errorBuilder: (_, error) => Image.asset(
-                                      'assets/brand/logo-dark.png',
-                                    ),
-                                  ),
+                                child: WantSvg3D.asset(
+                                  'assets/brand/logo.svg',
+                                  semanticsLabel: 'Want Pass',
+                                  glow: !MediaQuery.highContrastOf(context),
+                                  placeholderBuilder: (_) =>
+                                      Image.asset('assets/brand/logo-dark.png'),
+                                  errorBuilder: (_, error) =>
+                                      Image.asset('assets/brand/logo-dark.png'),
                                 ),
                               ),
                               if (widget.appearance case final appearance?)
@@ -834,6 +830,7 @@ class _VaultPageState extends State<VaultPage> {
                           Expanded(
                             child: LayoutBuilder(
                               builder: (context, constraints) => WantCard(
+                                hoverEffect: false,
                                 padding: EdgeInsets.zero,
                                 child: SizedBox(
                                   height: constraints.maxHeight,
@@ -917,7 +914,17 @@ class _VaultPageState extends State<VaultPage> {
                                               ],
                                             ]),
                                           ),
-                                        if (state.error case final error?)
+                                        if (state.error case final error?
+                                            when state.phase !=
+                                                    VaultPhase.locked ||
+                                                error
+                                                    is! VaultRejectedErrorV1 ||
+                                                (error.kind !=
+                                                        VaultFailureKindV1
+                                                            .credentials &&
+                                                    error.kind !=
+                                                        VaultFailureKindV1
+                                                            .invalidPassword))
                                           WantTypography(
                                             _error(error),
                                             colorRole: 'destructive',
@@ -1032,8 +1039,8 @@ class _VaultPageState extends State<VaultPage> {
       'Проверьте запрошенные слова и повторите попытку.',
     ),
     VaultRejectedErrorV1(kind: VaultFailureKindV1.credentials) => _text(
-      'Access could not be verified. Check your password or recovery phrase; the vault file may also be damaged.',
-      'Не удалось подтвердить доступ. Проверьте пароль или recovery-фразу; файл сейфа также может быть повреждён.',
+      'Check your password or recovery phrase.',
+      'Проверьте пароль или фразу восстановления.',
     ),
     VaultRejectedErrorV1(kind: VaultFailureKindV1.unsupported) => _text(
       'This vault format is not supported. The file has not been changed.',

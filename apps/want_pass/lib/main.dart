@@ -30,6 +30,7 @@ Future<void> main() async {
               child: Padding(
                 padding: const EdgeInsets.all(24),
                 child: WantCard(
+                  hoverEffect: false,
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     spacing: 16,

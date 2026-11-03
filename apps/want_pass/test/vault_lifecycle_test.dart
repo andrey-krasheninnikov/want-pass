@@ -5,6 +5,7 @@ import 'dart:convert';
 
 import 'package:domain_error/domain_error.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:forui/forui.dart';
 import 'package:flutter/material.dart';
 import 'package:want_allure/want_allure.dart';
 
@@ -258,10 +259,46 @@ void main() {
         of: find.byKey(const ValueKey('unlock-password')),
         matching: find.bySubtype<EditableText>(),
       );
+      final postfixButtons = find.descendant(
+        of: find.byKey(const ValueKey('unlock-password')),
+        matching: find.byType(FButton),
+      );
+      expect(postfixButtons, findsNWidgets(2));
+      for (final element in postfixButtons.evaluate()) {
+        final button = element.widget as FButton;
+        final base = WantTheme.of(element).forui.buttonStyles
+            .resolve({FButtonVariant.ghost})
+            .resolve({FButtonSizeVariant.md});
+        final decoration = button.style(base).decoration.resolve({
+          FTappableVariant.hovered,
+        }) as BoxDecoration;
+        expect(decoration.color, isNull);
+        expect(decoration.border, isNull);
+        expect(element.size!.shortestSide, greaterThanOrEqualTo(44));
+      }
       await _enter(tester, field, 'short');
-      await tester.tap(find.byKey(const ValueKey('vault-unlock')));
+      await tester.pump(const Duration(milliseconds: 200));
+      await tester.pumpAndSettle();
+      expect(controller.state.passwordValid, isFalse);
+      expect(
+        tester
+            .widget<VaultSecretInput>(
+              find.byKey(const ValueKey('unlock-password')),
+            )
+            .invalid,
+        isFalse,
+      );
+      await tester.testTextInput.receiveAction(TextInputAction.done);
       await tester.pumpAndSettle();
       expect(access.passwords, isEmpty);
+      expect(
+        tester
+            .widget<VaultSecretInput>(
+              find.byKey(const ValueKey('unlock-password')),
+            )
+            .invalid,
+        isTrue,
+      );
       await _capture(tester, boundary, 'unlock-invalid');
       expect(find.byKey(const ValueKey('vault-recovery')), findsNothing);
       expect(find.byKey(const ValueKey('vault-show-hint')), findsNothing);
@@ -271,6 +308,13 @@ void main() {
       expect(controller.state.error, isNotNull);
       expect(find.byKey(const ValueKey('vault-recovery')), findsOneWidget);
       expect(find.byKey(const ValueKey('vault-show-hint')), findsOneWidget);
+      expect(find.textContaining('Access could not be verified'), findsNothing);
+      expect(find.text('No password hint was added.'), findsNothing);
+      await _tapKey(tester, 'vault-show-hint');
+      expect(find.text('No password hint was added.'), findsOneWidget);
+      await _capture(tester, boundary, 'unlock-hint');
+      await _tapKey(tester, 'vault-show-hint');
+      expect(find.text('No password hint was added.'), findsNothing);
       await _capture(tester, boundary, 'unlock-rejected');
       expect(notices, isEmpty);
       access.failure = null;
@@ -293,6 +337,14 @@ void main() {
       expect(notices, [VaultNoticeKind.unlocked]);
       expect(find.text('Access granted'), findsWidgets);
       expect(find.text('05:00'), findsOneWidget);
+      final glows = find.byType(WantGlow);
+      expect(glows, findsOneWidget);
+      expect(
+        find.ancestor(of: glows, matching: find.byType(VaultSafeDial)),
+        findsOneWidget,
+      );
+      final dialSize = tester.getSize(find.byKey(const ValueKey('vault-dial')));
+      expect(dialSize.width, dialSize.height);
       await _capture(tester, boundary, 'unlock-granted');
       expect(access.passwords, ['Wrong synthetic password 2026!', _password]);
       await tester.pumpWidget(const SizedBox.shrink());
@@ -303,6 +355,77 @@ void main() {
         await startup.close();
         await events.close();
       });
+    },
+  );
+
+  testWidgets(
+    'unlock operational failures remain in the active dialog semantics',
+    (tester) async {
+      final semantics = tester.ensureSemantics();
+      try {
+        final access = _Access();
+        access.handle.state = VaultAccessStateV1.locked;
+        final events = StreamController<VaultLockSignal>.broadcast();
+        final controller = _controller(access, events.stream);
+        final startup = StartupController(_Startup(), const _Reporter());
+        await tester.runAsync(() async {
+          await startup.init();
+          await controller.init();
+        });
+        await tester.pumpWidget(
+          WantPassApp(startup: startup, vault: controller),
+        );
+        await tester.pumpAndSettle();
+        await _tapKey(tester, 'vault-dial');
+        final field = find.descendant(
+          of: find.byKey(const ValueKey('unlock-password')),
+          matching: find.bySubtype<EditableText>(),
+        );
+        for (final (failure, message) in <(VaultErrorV1, String)>[
+          (
+            const VaultRejectedErrorV1(VaultFailureKindV1.storage),
+            'The vault is unavailable. Restart Want Pass and try again. Your file has not been reset.',
+          ),
+          (
+            const VaultRejectedErrorV1(VaultFailureKindV1.unsupported),
+            'This vault format is not supported. The file has not been changed.',
+          ),
+          (
+            const VaultUnexpectedErrorV1(),
+            'The vault is unavailable. Restart Want Pass and try again. Your file has not been reset.',
+          ),
+        ]) {
+          access.failure = failure;
+          await _enter(tester, field, _password);
+          await _tapKey(tester, 'vault-unlock');
+          expect(controller.state.phase, VaultPhase.locked);
+          expect(
+            find.descendant(
+              of: find.byType(VaultUnlockDialog),
+              matching: find.text(message),
+            ),
+            findsOneWidget,
+          );
+          final errorNode = tester.getSemantics(
+            find.descendant(
+              of: find.byType(VaultUnlockDialog),
+              matching: find.text(message),
+            ),
+          );
+          expect(errorNode.getSemanticsData().label, message);
+          expect(errorNode.flagsCollection.isLiveRegion, isTrue);
+          expect(find.byKey(const ValueKey('vault-recovery')), findsNothing);
+          expect(find.byKey(const ValueKey('vault-show-hint')), findsNothing);
+        }
+        await tester.pumpWidget(const SizedBox.shrink());
+        await tester.runAsync(() async {
+          await controller.close();
+          await startup.close();
+          await events.close();
+        });
+      } finally {
+        semantics.dispose();
+      }
     },
   );
 
@@ -837,8 +960,14 @@ void main() {
         WantThemeData.dark().color('muted-foreground'),
       );
       await _capture(tester, boundary, 'desktop-dark-en');
+      // Cached asset callbacks must also run outside fake async.
+      await tester.runAsync(() => Future<void>.delayed(Duration.zero));
       await tester.pumpAndSettle();
       expect(find.byType(WantSvg3D), findsOneWidget);
+      expect(find.byType(WantGlow), findsNothing);
+      for (final card in tester.widgetList<WantCard>(find.byType(WantCard))) {
+        expect(card.hoverEffect, isFalse);
+      }
       expect(
         find.descendant(
           of: find.byType(WantSvg3D),

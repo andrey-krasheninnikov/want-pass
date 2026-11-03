@@ -127,6 +127,9 @@ void main() {
         expect(find.text('Synthetic password hint'), findsNothing);
         await _tap(tester, 'vault-show-hint');
         expect(find.text('Synthetic password hint'), findsOneWidget);
+        await _tap(tester, 'vault-show-hint');
+        await _settle(tester);
+        expect(find.text('Synthetic password hint'), findsNothing);
         await _tap(tester, 'vault-recovery');
         await _settle(tester);
         await _enter(tester, 'recovery-phrase', first.json);

@@ -142,30 +142,37 @@ final class _VaultSafeDialState extends State<VaultSafeDial>
     toggled: widget.opened,
     child: WantTooltip(
       message: widget.label,
-      child: WantButton(
-        onPressed: widget.onPressed,
-        variant: WantButtonVariant.secondary,
-        child: ExcludeSemantics(
-          child: AnimatedBuilder(
-            animation: _frames,
-            builder: (context, _) {
-              final fraction = widget.opened
-                  ? (WantTheme.reducedMotionOf(context)
-                        ? 1.0
-                        : (widget.remaining().inMicroseconds /
-                                  const Duration(minutes: 5).inMicroseconds)
-                              .clamp(0.0, 1.0))
-                  : 0.0;
-              return CustomPaint(
-                size: const Size(176, 176),
-                painter: _DialPainter(
-                  fraction,
-                  WantTheme.of(context).color('primary'),
-                  WantTheme.of(context).color('foreground'),
-                  WantTheme.of(context).color('muted-foreground'),
-                ),
-              );
-            },
+      child: SizedBox.square(
+        dimension: 196,
+        child: WantGlow(
+          borderRadius: BorderRadius.circular(999),
+          paused: widget.onPressed == null,
+          child: WantButton(
+            onPressed: widget.onPressed,
+            variant: WantButtonVariant.secondary,
+            child: ExcludeSemantics(
+              child: AnimatedBuilder(
+                animation: _frames,
+                builder: (context, _) {
+                  final fraction = widget.opened
+                      ? (WantTheme.reducedMotionOf(context)
+                            ? 1.0
+                            : (widget.remaining().inMicroseconds /
+                                      const Duration(minutes: 5).inMicroseconds)
+                                  .clamp(0.0, 1.0))
+                      : 0.0;
+                  return CustomPaint(
+                    size: const Size(160, 160),
+                    painter: _DialPainter(
+                      fraction,
+                      WantTheme.of(context).color('primary'),
+                      WantTheme.of(context).color('foreground'),
+                      WantTheme.of(context).color('muted-foreground'),
+                    ),
+                  );
+                },
+              ),
+            ),
           ),
         ),
       ),

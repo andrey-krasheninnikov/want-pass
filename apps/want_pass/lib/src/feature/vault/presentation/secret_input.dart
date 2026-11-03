@@ -66,18 +66,27 @@ final class _VaultSecretInputState extends State<VaultSecretInput> {
       onSubmit: widget.last ? (_) => widget.onSubmitted() : null,
       suffixBuilder: widget.multiline
           ? null
-          : (context, style, variants) => Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                ?widget.postfix,
-                FTextField.defaultObscureIconBuilder(
-                  context,
-                  style,
-                  _obscure,
-                  variants,
-                ),
-              ],
-            ),
+          : (context, _, variants) {
+              final labels =
+                  FLocalizations.of(context) ?? FDefaultLocalizations();
+              return Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  ?widget.postfix,
+                  _postfixButton(
+                    label: obscure
+                        ? labels.passwordFieldUnobscureTextButtonSemanticsLabel
+                        : labels.passwordFieldObscureTextButtonSemanticsLabel,
+                    onPressed: variants.contains(FTextFieldVariant.disabled)
+                        ? null
+                        : () => _obscure.value = !obscure,
+                    child: obscure
+                        ? context.theme.icons.eye(context)
+                        : context.theme.icons.eyeClosed(context),
+                  ),
+                ],
+              );
+            },
     ),
   );
 }
@@ -92,16 +101,28 @@ final class VaultPasswordHelp extends StatelessWidget {
   @override
   Widget build(BuildContext context) => WantPopover(
     child: const WantIcon(WantIcons.question, size: 18),
-    triggerBuilder: (context, toggle, child) => WantButton(
-      size: WantButtonSize.icon,
-      variant: WantButtonVariant.ghost,
-      semanticsLabel: label,
-      onPressed: toggle,
-      child: child,
-    ),
+    triggerBuilder: (context, toggle, child) =>
+        _postfixButton(label: label, onPressed: toggle, child: child),
     contentBuilder: (context, close) => ConstrainedBox(
       constraints: const BoxConstraints(maxWidth: 280),
       child: Text(message),
     ),
   );
 }
+
+Widget _postfixButton({
+  required String label,
+  required VoidCallback? onPressed,
+  required Widget child,
+}) => SizedBox.square(
+  dimension: 44,
+  child: FButton.icon(
+    variant: FButtonVariant.ghost,
+    style: FButtonStyleDelta.delta(
+      decoration: FVariants.from(const BoxDecoration(), variants: {}),
+    ),
+    semanticsLabel: label,
+    onPress: onPressed,
+    child: child,
+  ),
+);

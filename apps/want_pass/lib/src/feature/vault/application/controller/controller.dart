@@ -696,7 +696,12 @@ final class VaultController extends CubitWithEffects<VaultState, VaultEffect> {
     }
   }
 
-  void _fail(String operation, VaultErrorV1 error, {bool unavailable = false}) {
+  void _fail(
+    String operation,
+    VaultErrorV1 error, {
+    bool unavailable = false,
+    bool clearBusy = true,
+  }) {
     reportVaultSafely(
       _reporter,
       layer: VaultDiagnosticLayer.controller,
@@ -707,7 +712,10 @@ final class VaultController extends CubitWithEffects<VaultState, VaultEffect> {
       emit(
         unavailable
             ? VaultState(phase: VaultPhase.unavailable, error: error)
-            : state.copyWith(busy: false, error: () => error),
+            : state.copyWith(
+                busy: clearBusy ? false : state.busy,
+                error: () => error,
+              ),
       );
     }
   }
@@ -870,7 +878,7 @@ final class VaultController extends CubitWithEffects<VaultState, VaultEffect> {
         return null;
       }
       if (result.isError) {
-        _fail(op, _error(result.error));
+        _fail(op, _error(result.error), clearBusy: false);
         return null;
       }
       return result.value.matches;
@@ -911,7 +919,7 @@ final class VaultController extends CubitWithEffects<VaultState, VaultEffect> {
         return null;
       }
       if (result.isError) {
-        _fail(op, _error(result.error));
+        _fail(op, _error(result.error), clearBusy: false);
         return null;
       }
       return result.value.rows;

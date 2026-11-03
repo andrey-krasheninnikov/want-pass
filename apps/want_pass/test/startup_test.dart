@@ -175,6 +175,13 @@ final class _VaultAccess implements VaultAccessService {
   }) async =>
       const Result.error(VaultRejectedErrorV1(VaultFailureKindV1.unavailable));
   @override
+  FutureDomainResult<String> copyCardFieldV1({
+    required VaultHandleV1 handle,
+    required String id,
+    required FieldIdV1 field,
+  }) async =>
+      const Result.error(VaultRejectedErrorV1(VaultFailureKindV1.unavailable));
+  @override
   FutureDomainResult<String> copyAccountV1({
     required VaultHandleV1 handle,
     required String id,

@@ -1135,6 +1135,34 @@ final class RustVaultAccessService implements VaultAccessService {
   }
 
   @override
+  FutureDomainResult<String> copyCardFieldV1({
+    required VaultHandleV1 handle,
+    required String id,
+    required FieldIdV1 field,
+  }) async {
+    const op = 'RustVaultAccessService.copyCardFieldV1():';
+    final result = await captureResult<String>(() async {
+      final vault = (handle as _NativeVaultHandle)._vault;
+      return vault.copyCardFieldV1(
+        id: id,
+        field: _nativeFieldId(field),
+        generation: vault.generation(),
+      );
+    }, mapToDomainError: _mapNativeError);
+    if (result.isError) {
+      reportVaultSafely(
+        _reporter,
+        layer: VaultDiagnosticLayer.infrastructure,
+        operation: op,
+        error: result.error is VaultErrorV1
+            ? result.error as VaultErrorV1
+            : const VaultUnexpectedErrorV1(),
+      );
+    }
+    return result;
+  }
+
+  @override
   FutureDomainResult<String> copyAccountV1({
     required VaultHandleV1 handle,
     required String id,

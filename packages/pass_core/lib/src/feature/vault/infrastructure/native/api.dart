@@ -54,6 +54,12 @@ abstract class Vault implements RustOpaqueInterface {
     required BigInt generation,
   });
 
+  Future<String> copyCardFieldV1({
+    required String id,
+    required FieldIdV1 field,
+    required BigInt generation,
+  });
+
   Future<TotpCodeV1> currentTotpV1({
     required String id,
     required BigInt generation,

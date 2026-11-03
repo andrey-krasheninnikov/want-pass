@@ -44,6 +44,7 @@ final class SafeBlocObserver extends BlocObserver
       'RustVaultAccessService.cardRowsV1():' ||
       'RustVaultAccessService.cardV1():' ||
       'RustVaultAccessService.contentV2():' ||
+      'RustVaultAccessService.copyCardFieldV1():' ||
       'RustVaultAccessService.copyAccountV1():' ||
       'RustVaultAccessService.currentTotpV1():' ||
       'RustVaultAccessService.deleteCardV1():' ||
@@ -238,6 +239,7 @@ final class SafeBlocObserver extends BlocObserver
       'RustVaultAccessService.cardRowsV1():' ||
       'RustVaultAccessService.cardV1():' ||
       'RustVaultAccessService.contentV2():' ||
+      'RustVaultAccessService.copyCardFieldV1():' ||
       'RustVaultAccessService.copyAccountV1():' ||
       'RustVaultAccessService.currentTotpV1():' ||
       'RustVaultAccessService.deleteCardV1():' ||

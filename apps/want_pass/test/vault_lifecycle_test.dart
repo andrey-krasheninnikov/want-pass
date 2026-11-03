@@ -803,6 +803,183 @@ void main() {
     },
   );
 
+  for (final pendingCopy in [false, true]) {
+    testWidgets(
+      pendingCopy
+          ? 'table masks expired OTP during pending copy'
+          : 'table retries an already expired row response',
+      (tester) async {
+        const id = '0123456789abcdef0123456789abcdef';
+        final access = _Access()..accountCopy = 'synthetic credential';
+        access.handle.exists = true;
+        access.handle.state = VaultAccessStateV1.unlocked;
+        access.snapshot = ContentSnapshotV2(
+          revision: BigInt.zero,
+          groups: const [],
+          cards: [
+            CardSummaryV1(
+              id: id,
+              name: 'Synthetic account',
+              service: 'github',
+              groupIds: const [],
+              cardType: CardTypeV1.account,
+              templateVersion: 1,
+            ),
+          ],
+        );
+        CardRowV1 row(String code, DateTime deadline) => CardRowV1(
+          id: id,
+          fields: const [],
+          otp: TotpCodeV1(
+            code: code,
+            validUntil: deadline,
+            period: const Duration(seconds: 1),
+          ),
+        );
+        final oldDeadline = DateTime.now().toUtc().add(
+          const Duration(seconds: 1),
+        );
+        access.rows = [row('123456', oldDeadline)];
+        if (!pendingCopy) {
+          access.rowsReply = Completer<DomainResult<List<CardRowV1>>>();
+        }
+        final export = _Export()..writing = Completer<void>();
+        final events = StreamController<VaultLockSignal>.broadcast();
+        final controller = _controller(access, events.stream, export);
+        await controller.init();
+        await controller.loadContent();
+        await tester.pumpWidget(
+          MaterialApp(
+            builder: (context, child) => WantTheme(
+              data: WantThemeData.light(),
+              child: WantToaster(child: child!),
+            ),
+            home: Scaffold(body: VaultContentView(controller: controller)),
+          ),
+        );
+        await tester.pump();
+        await tester.tap(find.byKey(const ValueKey('group-filter-none')));
+        for (var i = 0; i < 20 && access.rowReads == 0; i++) {
+          await tester.pump(const Duration(milliseconds: 20));
+        }
+        expect(access.rowReads, 1);
+        if (pendingCopy) {
+          await tester.pump();
+          expect(find.text('123456'), findsOneWidget);
+          final copying = controller.copyCard(id);
+          await tester.pump();
+          expect(controller.state.busy, isTrue);
+          final delay =
+              oldDeadline.difference(DateTime.now().toUtc()) +
+              const Duration(milliseconds: 20);
+          if (delay > Duration.zero) {
+            await tester.runAsync(() => Future<void>.delayed(delay));
+          }
+          await tester.pump(const Duration(seconds: 2));
+          expect(find.text('123456'), findsNothing);
+          expect(controller.state.busy, isTrue);
+          access.rows = [
+            row(
+              '654321',
+              DateTime.now().toUtc().add(const Duration(seconds: 30)),
+            ),
+          ];
+          export.writing!.complete();
+          await copying;
+        } else {
+          access.rows = [
+            row(
+              '654321',
+              DateTime.now().toUtc().add(const Duration(seconds: 30)),
+            ),
+          ];
+          access.rowsReply!.complete(
+            Result.success([
+              row(
+                '123456',
+                DateTime.now().toUtc().subtract(const Duration(seconds: 1)),
+              ),
+            ]),
+          );
+          access.rowsReply = null;
+          await tester.pump();
+          expect(find.text('123456'), findsNothing);
+        }
+        await tester.pump(const Duration(milliseconds: 120));
+        await tester.pump();
+        expect(find.text('654321'), findsOneWidget);
+        expect(access.rowReads, greaterThanOrEqualTo(2));
+        await tester.pumpWidget(const SizedBox.shrink());
+        var closed = false;
+        final closing = controller.close().then((_) => closed = true);
+        for (var i = 0; i < 30 && !closed; i++) {
+          await tester.runAsync(
+            () => Future<void>.delayed(const Duration(milliseconds: 10)),
+          );
+          await tester.pump(const Duration(milliseconds: 20));
+        }
+        expect(closed, isTrue);
+        await closing;
+        await events.close();
+      },
+    );
+  }
+  test('single-field copy never reads the complete card', () async {
+    final access = _Access()..fieldCopy = 'fixture@example.invalid';
+    access.handle.exists = true;
+    access.handle.state = VaultAccessStateV1.unlocked;
+    final export = _Export();
+    final events = StreamController<VaultLockSignal>.broadcast();
+    final controller = _controller(access, events.stream, export);
+    await controller.init();
+    await controller.loadContent();
+    await controller.copyCard(
+      '0123456789abcdef0123456789abcdef',
+      field: FieldIdV1.login,
+    );
+    expect(export.clipboard, access.fieldCopy);
+    expect(access.fieldCopies, 1);
+    expect(access.fullCardReads, 0);
+    await controller.close();
+    await events.close();
+  });
+  for (final rows in [false, true]) {
+    test(
+      'late ${rows ? "row" : "search"} error preserves foreground busy',
+      () async {
+        final access = _Access()..accountCopy = 'synthetic credential';
+        access.handle.exists = true;
+        access.handle.state = VaultAccessStateV1.unlocked;
+        final export = _Export()..writing = Completer<void>();
+        final events = StreamController<VaultLockSignal>.broadcast();
+        final controller = _controller(access, events.stream, export);
+        await controller.init();
+        await controller.loadContent();
+        access.searchReply = Completer<DomainResult<CardMatchesV1>>();
+        access.rowsReply = Completer<DomainResult<List<CardRowV1>>>();
+        final browsing = rows
+            ? controller.readCardRows(['synthetic-id'])
+            : controller.searchCards(const CardSearchV1(text: 'synthetic'));
+        final copying = controller.copyCard('0123456789abcdef0123456789abcdef');
+        await Future<void>.delayed(Duration.zero);
+        expect(controller.state.busy, isTrue);
+        const error = VaultRejectedErrorV1(VaultFailureKindV1.unavailable);
+        if (rows) {
+          access.rowsReply!.complete(const Result.error(error));
+        } else {
+          access.searchReply!.complete(const Result.error(error));
+        }
+        await browsing;
+        expect(controller.state.error, error);
+        expect(controller.state.busy, isTrue);
+        export.writing!.complete();
+        await copying;
+        expect(controller.state.busy, isFalse);
+        await controller.close();
+        await events.close();
+      },
+    );
+  }
   testWidgets(
     'credential copies expire after thirty seconds and preserve another clipboard value',
     (tester) async {
@@ -1313,22 +1490,39 @@ final class _Handle implements VaultHandleV1 {
 }
 
 final class _Access implements VaultAccessService {
-  String? accountCopy;
+  String? accountCopy, fieldCopy;
+  int fullCardReads = 0, fieldCopies = 0, rowReads = 0;
+  ContentSnapshotV2? snapshot;
+  List<CardRowV1> rows = const [];
+  Completer<DomainResult<CardMatchesV1>>? searchReply;
+  Completer<DomainResult<List<CardRowV1>>>? rowsReply;
 
   @override
   FutureDomainResult<CardMatchesV1> searchCardsV1({
     required VaultHandleV1 handle,
     required CardSearchV1 query,
     required BigInt revision,
-  }) async => Result.success(
-    CardMatchesV1(revision: revision, cardIds: const [], groupIds: const []),
-  );
+  }) async => searchReply == null
+      ? Result.success(
+          CardMatchesV1(
+            revision: revision,
+            cardIds: List.unmodifiable(
+              snapshot?.cards.map((c) => c.id) ?? const <String>[],
+            ),
+            groupIds: const [],
+          ),
+        )
+      : await searchReply!.future;
   @override
   FutureDomainResult<List<CardRowV1>> cardRowsV1({
     required VaultHandleV1 handle,
     required List<String> ids,
     required BigInt revision,
-  }) async => const Result.success([]);
+  }) async {
+    rowReads++;
+    return rowsReply == null ? Result.success(rows) : await rowsReply!.future;
+  }
+
   @override
   FutureDomainResult<CardCatalogV1> cardCatalogV1() async => Result.success(
     CardCatalogV1(
@@ -1340,7 +1534,12 @@ final class _Access implements VaultAccessService {
   FutureDomainResult<ContentSnapshotV2> contentV2({
     required VaultHandleV1 handle,
   }) async => Result.success(
-    ContentSnapshotV2(revision: BigInt.zero, groups: const [], cards: const []),
+    snapshot ??
+        ContentSnapshotV2(
+          revision: BigInt.zero,
+          groups: const [],
+          cards: const [],
+        ),
   );
   @override
   FutureDomainResult<ContentSnapshotV2> saveGroupV2({
@@ -1362,8 +1561,13 @@ final class _Access implements VaultAccessService {
   FutureDomainResult<CardV1> cardV1({
     required VaultHandleV1 handle,
     required String id,
-  }) async =>
-      const Result.error(VaultRejectedErrorV1(VaultFailureKindV1.unavailable));
+  }) async {
+    fullCardReads++;
+    return const Result.error(
+      VaultRejectedErrorV1(VaultFailureKindV1.unavailable),
+    );
+  }
+
   @override
   FutureDomainResult<ContentSnapshotV2> saveCardV1({
     required VaultHandleV1 handle,
@@ -1384,6 +1588,20 @@ final class _Access implements VaultAccessService {
     required String id,
   }) async =>
       const Result.error(VaultRejectedErrorV1(VaultFailureKindV1.unavailable));
+  @override
+  FutureDomainResult<String> copyCardFieldV1({
+    required VaultHandleV1 handle,
+    required String id,
+    required FieldIdV1 field,
+  }) async {
+    fieldCopies++;
+    return fieldCopy == null
+        ? const Result.error(
+            VaultRejectedErrorV1(VaultFailureKindV1.unavailable),
+          )
+        : Result.success(fieldCopy!);
+  }
+
   @override
   FutureDomainResult<String> copyAccountV1({
     required VaultHandleV1 handle,

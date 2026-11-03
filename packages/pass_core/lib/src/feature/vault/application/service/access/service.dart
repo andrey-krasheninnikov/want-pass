@@ -148,6 +148,11 @@ abstract interface class VaultAccessService {
     required VaultHandleV1 handle,
     required String id,
   });
+  FutureDomainResult<String> copyCardFieldV1({
+    required VaultHandleV1 handle,
+    required String id,
+    required FieldIdV1 field,
+  });
   FutureDomainResult<String> copyAccountV1({
     required VaultHandleV1 handle,
     required String id,

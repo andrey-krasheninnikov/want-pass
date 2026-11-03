@@ -23,7 +23,7 @@ final class _VaultBrowserState extends State<_VaultBrowser>
       const [];
   CardMatchesV1? _matches;
   String _type = 'all', _service = 'all', _environment = 'all';
-  Timer? _debounce, _rowTimer;
+  Timer? _debounce, _rowTimer, _otpExpiry;
   int _epoch = 0;
   bool _disposed = false, _tickerEnabled = true;
   bool _active = true,
@@ -55,6 +55,7 @@ final class _VaultBrowserState extends State<_VaultBrowser>
     _epoch++;
     _debounce?.cancel();
     _rowTimer?.cancel();
+    _otpExpiry?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     _search.clear();
     _search.dispose();
@@ -79,6 +80,7 @@ final class _VaultBrowserState extends State<_VaultBrowser>
     if (!enabled) {
       _epoch++;
       _rowTimer?.cancel();
+      _otpExpiry?.cancel();
       _debounce?.cancel();
       _rows.clear();
     } else {
@@ -92,6 +94,7 @@ final class _VaultBrowserState extends State<_VaultBrowser>
     _epoch++;
     _debounce?.cancel();
     _rowTimer?.cancel();
+    _otpExpiry?.cancel();
     if (!_available) {
       if (mounted) setState(_rows.clear);
       return;
@@ -105,6 +108,7 @@ final class _VaultBrowserState extends State<_VaultBrowser>
     _epoch++;
     _debounce?.cancel();
     _rowTimer?.cancel();
+    _otpExpiry?.cancel();
     setState(() {
       _searching = true;
       _rows.clear();
@@ -120,6 +124,7 @@ final class _VaultBrowserState extends State<_VaultBrowser>
     _epoch++;
     _debounce?.cancel();
     _rowTimer?.cancel();
+    _otpExpiry?.cancel();
     setState(() {
       _searching = true;
       _rows.clear();
@@ -230,14 +235,35 @@ final class _VaultBrowserState extends State<_VaultBrowser>
     );
   }
 
+  void _scheduleOtpExpiry() {
+    _otpExpiry?.cancel();
+    if (!_available) return;
+    final now = DateTime.now().toUtc();
+    final deadlines =
+        _rows.values
+            .map((r) => r.otp?.validUntil)
+            .whereType<DateTime>()
+            .where((d) => d.isAfter(now))
+            .toList()
+          ..sort();
+    if (deadlines.isEmpty) return;
+    _otpExpiry = Timer(deadlines.first.difference(now), () {
+      if (!_available) return;
+      setState(() {});
+      _scheduleOtpExpiry();
+    });
+  }
+
   Future<void> _readRows() async {
-    if (!_available || widget.controller.state.busy || _reading) return;
+    if (!_available) return;
+    // Expiration remains local even while native work or clipboard publication is pending.
+    setState(() {});
+    if (widget.controller.state.busy || _reading) return;
     _reading = true;
     _pendingRows = false;
+    var completed = false;
     final epoch = _epoch;
     final ids = _visible.keys.toList(growable: false);
-    // Rebuild at the deadline before awaiting native work, so expired OTPs disappear.
-    setState(() {});
     try {
       for (var start = 0; start < ids.length; start += 50) {
         final end = (start + 50).clamp(0, ids.length);
@@ -251,25 +277,27 @@ final class _VaultBrowserState extends State<_VaultBrowser>
             if (_visible.containsKey(row.id)) _rows[row.id] = row;
           }
         });
+        _scheduleOtpExpiry();
       }
+      completed = true;
     } finally {
       _reading = false;
       if (_available) {
         if (_pendingRows) {
           _scheduleRows();
-        } else {
+        } else if (completed) {
           final now = DateTime.now().toUtc();
           final deadlines =
               _rows.values
                   .map((r) => r.otp?.validUntil)
                   .whereType<DateTime>()
-                  .where((d) => d.isAfter(now))
                   .toList()
                 ..sort();
           if (deadlines.isNotEmpty) {
             _rowTimer?.cancel();
+            final delay = deadlines.first.difference(now);
             _rowTimer = Timer(
-              deadlines.first.difference(now),
+              delay.isNegative ? const Duration(milliseconds: 100) : delay,
               () => unawaited(_readRows()),
             );
           }
@@ -510,6 +538,7 @@ final class _VaultBrowserState extends State<_VaultBrowser>
         _epoch++;
         _debounce?.cancel();
         _rowTimer?.cancel();
+        _otpExpiry?.cancel();
         _search.clear();
         _rows.clear();
         _visible.clear();

@@ -512,6 +512,25 @@ impl Vault {
             super::otp::current_code(&c.fields)
         })
     }
+    pub fn copy_card_field_v1(
+        &self,
+        id: String,
+        field: FieldIdV1,
+        generation: u64,
+    ) -> Result<String, VaultFailure> {
+        self.read_cards(generation, |d| {
+            let c = d
+                .cards
+                .iter()
+                .find(|c| c.id == id)
+                .ok_or(VaultFailure::Missing)?;
+            c.fields
+                .iter()
+                .find(|f| f.id == field)
+                .map(|f| f.value.clone())
+                .ok_or(VaultFailure::Missing)
+        })
+    }
     pub fn copy_account_v1(&self, id: String, generation: u64) -> Result<String, VaultFailure> {
         self.read_cards(generation, |d| {
             let c = d

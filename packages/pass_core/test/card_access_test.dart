@@ -105,8 +105,40 @@ void main() {
       )).isError,
       isTrue,
     );
+    expect(
+      (await access.copyCardFieldV1(
+        handle: handle,
+        id: summary.id,
+        field: FieldIdV1.login,
+      )).value,
+      'fixture@example.invalid',
+    );
+    expect(
+      (await access.copyCardFieldV1(
+        handle: handle,
+        id: summary.id,
+        field: FieldIdV1.password,
+      )).value,
+      ' exact\nsynthetic password ',
+    );
+    expect(
+      (await access.copyCardFieldV1(
+        handle: handle,
+        id: summary.id,
+        field: FieldIdV1.privateKey,
+      )).isError,
+      isTrue,
+    );
     handle.invalidateSync();
     expect((await access.contentV2(handle: handle)).isError, isTrue);
+    expect(
+      (await access.copyCardFieldV1(
+        handle: handle,
+        id: summary.id,
+        field: FieldIdV1.login,
+      )).isError,
+      isTrue,
+    );
     await access.unlockV3(handle: handle, password: password);
     final card = (await access.cardV1(handle: handle, id: summary.id)).value;
     expect(

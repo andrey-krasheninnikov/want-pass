@@ -1082,16 +1082,13 @@ final class VaultUseCaseImpl implements VaultUseCase {
           if (result.isError) throw result.error;
           text = result.value.code;
         case CardCopyKindV1.field:
-          final result = await _access.cardV1(
+          final result = await _access.copyCardFieldV1(
             handle: params.handle,
             id: params.id,
+            field: params.field!,
           );
           if (result.isError) throw result.error;
-          final values = result.value.fields.where((f) => f.id == params.field);
-          if (values.isEmpty) {
-            throw const VaultRejectedErrorV1(VaultFailureKindV1.missing);
-          }
-          text = values.single.value;
+          text = result.value;
       }
       final copied = await _export.copyV1(text);
       if (copied.isError) throw copied.error;

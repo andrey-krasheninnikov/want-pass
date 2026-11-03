@@ -72,6 +72,41 @@ fn service_accounts_remain_distinct_and_reopen_exactly() {
     );
 }
 #[test]
+fn field_copy_returns_only_the_selected_value_and_checks_access() {
+    let (_directory, vault) = create();
+    let saved = vault
+        .save_card_v1(account(), 0, vault.generation())
+        .unwrap();
+    let id = saved.cards[0].id.clone();
+    let generation = vault.generation();
+    assert_eq!(
+        vault
+            .copy_card_field_v1(id.clone(), FieldIdV1::Login, generation)
+            .unwrap(),
+        "fixture@example.invalid"
+    );
+    assert_eq!(
+        vault
+            .copy_card_field_v1(id.clone(), FieldIdV1::Password, generation)
+            .unwrap(),
+        " exact\npassword "
+    );
+    assert!(matches!(
+        vault.copy_card_field_v1(id.clone(), FieldIdV1::TotpSeed, generation),
+        Err(VaultFailure::Missing)
+    ));
+    assert!(matches!(
+        vault.copy_card_field_v1("missing".into(), FieldIdV1::Login, generation),
+        Err(VaultFailure::Missing)
+    ));
+    vault.lock().unwrap();
+    assert!(
+        vault
+            .copy_card_field_v1(id, FieldIdV1::Login, generation)
+            .is_err()
+    );
+}
+#[test]
 fn missing_service_and_stale_writes_preserve_current_data() {
     let (_directory, vault) = create();
     let saved = vault

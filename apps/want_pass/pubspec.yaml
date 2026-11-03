@@ -21,7 +21,7 @@ dependencies:
   path_provider: 2.1.6
   talker: ^5.1.20
   talker_bloc_effects: 0.1.0
-  want_allure: 1.2.1
+  want_allure: 1.2.2
   forui: 0.27.7
   file_selector: 1.1.0
   qr_flutter: 4.1.0

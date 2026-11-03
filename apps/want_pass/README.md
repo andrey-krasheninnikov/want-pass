@@ -1,8 +1,8 @@
 # Want Pass client / Клиент Want Pass
 
-The macOS client uses published Want Allure 1.2.1 and works without a server. It creates an encrypted local vault, confirms recovery words, locks, unlocks and rotates credentials through recovery. Cards and other platforms follow separate tickets.
+The macOS client uses published Want Allure 1.2.2 and works without a server. It creates an encrypted local vault, confirms recovery words, locks, unlocks and rotates credentials through recovery. Cards and other platforms follow separate tickets.
 
-Клиент macOS использует опубликованный Want Allure 1.2.1 и работает без сервера. Он создаёт локальный сейф с шифрованием, проверяет recovery-слова, блокирует и разблокирует доступ, меняет credentials через recovery. Карточки и другие платформы выполняются отдельными задачами.
+Клиент macOS использует опубликованный Want Allure 1.2.2 и работает без сервера. Он создаёт локальный сейф с шифрованием, проверяет recovery-слова, блокирует и разблокирует доступ, меняет credentials через recovery. Карточки и другие платформы выполняются отдельными задачами.
 
 Use the pinned SDK and commands from the [repository instructions](../../README.md#development-foundation--фундамент-разработки). `make run` starts macOS; `make check` runs local checks; `make native-ui` verifies creation, recovery and reopening with disposable data. Run `make generate` after changing DI annotations or the Rust bridge API.
 

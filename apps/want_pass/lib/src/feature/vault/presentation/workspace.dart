@@ -96,8 +96,9 @@ final class _VaultContentViewState extends State<VaultContentView>
     if (_available) return true;
     if (!mounted ||
         _disposing ||
-        widget.controller.state.phase != VaultPhase.unlocked)
+        widget.controller.state.phase != VaultPhase.unlocked) {
       return false;
+    }
     final waiting = _availability ??= Completer<void>();
     await waiting.future;
     return _available;
@@ -405,8 +406,9 @@ final class _VaultContentViewState extends State<VaultContentView>
   Future<void> _saved() async {
     final editor = _editingGroup ? _groupEditor : _cardEditor;
     if (!await _waitAvailable() ||
-        editor != (_editingGroup ? _groupEditor : _cardEditor))
+        editor != (_editingGroup ? _groupEditor : _cardEditor)) {
       return;
+    }
     setState(() {
       if (_editingGroup) {
         _group =

@@ -1,5 +1,8 @@
+import 'package:want_pass/src/feature/vault/infrastructure/_barrel.dart';
+
 import 'dart:async';
 import 'dart:isolate';
+import 'dart:io';
 
 import 'package:bloc/bloc.dart';
 import 'package:bloc_effects/bloc_effects.dart';
@@ -13,6 +16,7 @@ import 'package:want_pass/src/feature/_common/presentation/_barrel.dart';
 import 'package:want_pass/src/feature/startup/application/_barrel.dart';
 import 'package:want_pass/src/feature/startup/infrastructure/_barrel.dart';
 import 'package:want_pass_core/want_pass_core.dart';
+import 'package:want_pass/src/feature/vault/application/_barrel.dart';
 
 final class _Access implements StartupAccessService {
   final FutureDomainResult<void> Function() run;
@@ -94,23 +98,195 @@ final class _BrokenTalker extends Talker {
 FutureDomainResult<InitializeStartupResultV1> _success() async =>
     const Result.success(InitializeStartupResultV1());
 
+final class _VaultHandle implements VaultHandleV1 {
+  const _VaultHandle();
+  @override
+  void invalidateSync() {}
+  @override
+  Future<void> close() async {}
+}
+
+final class _VaultAccess implements VaultAccessService {
+  @override
+  FutureDomainResult<bool> validatePasswordV3({
+    required String password,
+  }) async => const Result.success(true);
+  @override
+  FutureDomainResult<void> unlockV3({
+    required VaultHandleV1 handle,
+    required String password,
+  }) => unlockV1(handle: handle, password: password);
+  @override
+  FutureDomainResult<void> validateRecoveryV3({
+    required VaultHandleV1 handle,
+    required String phrase,
+  }) async =>
+      const Result.error(VaultRejectedErrorV1(VaultFailureKindV1.unavailable));
+
+  @override
+  FutureDomainResult<VaultRecoveryChallengeV3> prepareCreationV3({
+    required VaultHandleV1 handle,
+    required String password,
+  }) async =>
+      const Result.error(VaultRejectedErrorV1(VaultFailureKindV1.unavailable));
+
+  @override
+  FutureDomainResult<VaultRecoveryChallengeV3> prepareRecoveryV3({
+    required VaultHandleV1 handle,
+    required String phrase,
+    required String password,
+  }) async =>
+      const Result.error(VaultRejectedErrorV1(VaultFailureKindV1.unavailable));
+
+  @override
+  FutureDomainResult<VaultRecoveryChallengeV3> regenerateRecoveryV3({
+    required VaultHandleV1 handle,
+  }) async =>
+      const Result.error(VaultRejectedErrorV1(VaultFailureKindV1.unavailable));
+
+  @override
+  FutureDomainResult<void> exportRecoveryV3({
+    required VaultHandleV1 handle,
+    required String destination,
+    required BigInt revision,
+  }) async =>
+      const Result.error(VaultRejectedErrorV1(VaultFailureKindV1.unavailable));
+
+  @override
+  FutureDomainResult<void> confirmV3({
+    required VaultHandleV1 handle,
+    required List<String> answers,
+    required String password,
+    required VaultHintsDtoV2 hints,
+    required BigInt revision,
+  }) async =>
+      const Result.error(VaultRejectedErrorV1(VaultFailureKindV1.unavailable));
+
+  const _VaultAccess();
+  @override
+  FutureDomainResult<void> waitForExportsV2({
+    required VaultHandleV1 handle,
+  }) async => const Result.success(null);
+
+  @override
+  FutureDomainResult<VaultHintsDtoV2> hintsV2({
+    required VaultHandleV1 handle,
+  }) async => const Result.success(VaultHintsDtoV2());
+  @override
+  FutureDomainResult<VaultRecoveryChallengeV2> prepareCreationV2({
+    required VaultHandleV1 handle,
+    required String password,
+  }) async =>
+      const Result.error(VaultRejectedErrorV1(VaultFailureKindV1.unavailable));
+  @override
+  FutureDomainResult<VaultRecoveryChallengeV2> prepareRecoveryV2({
+    required VaultHandleV1 handle,
+    required String phrase,
+    required String password,
+  }) async =>
+      const Result.error(VaultRejectedErrorV1(VaultFailureKindV1.unavailable));
+  @override
+  FutureDomainResult<void> confirmV2({
+    required VaultHandleV1 handle,
+    required List<String> answers,
+    required String password,
+    required VaultHintsDtoV2 hints,
+  }) async =>
+      const Result.error(VaultRejectedErrorV1(VaultFailureKindV1.unavailable));
+  @override
+  FutureDomainResult<void> exportRecoveryV2({
+    required VaultHandleV1 handle,
+    required String destination,
+  }) async =>
+      const Result.error(VaultRejectedErrorV1(VaultFailureKindV1.unavailable));
+
+  @override
+  FutureDomainResult<VaultHandleV1> openV1() async =>
+      const Result.success(_VaultHandle());
+  @override
+  FutureDomainResult<VaultAccessStateV1> statusV1({
+    required VaultHandleV1 handle,
+  }) async => const Result.success(VaultAccessStateV1.missing);
+  @override
+  FutureDomainResult<VaultRecoveryChallengeV1> prepareCreationV1({
+    required VaultHandleV1 handle,
+    required String password,
+  }) async =>
+      const Result.error(VaultRejectedErrorV1(VaultFailureKindV1.unavailable));
+  @override
+  FutureDomainResult<VaultRecoveryChallengeV1> prepareRecoveryV1({
+    required VaultHandleV1 handle,
+    required String phrase,
+    required String password,
+  }) async =>
+      const Result.error(VaultRejectedErrorV1(VaultFailureKindV1.unavailable));
+  @override
+  FutureDomainResult<void> confirmV1({
+    required VaultHandleV1 handle,
+    required List<String> answers,
+  }) async =>
+      const Result.error(VaultRejectedErrorV1(VaultFailureKindV1.unavailable));
+  @override
+  FutureDomainResult<void> unlockV1({
+    required VaultHandleV1 handle,
+    required String password,
+  }) async =>
+      const Result.error(VaultRejectedErrorV1(VaultFailureKindV1.unavailable));
+}
+
 void main() {
-  TestWidgetsFlutterBinding.ensureInitialized();
+  final binding = TestWidgetsFlutterBinding.ensureInitialized();
+  setUp(() {
+    binding.platformDispatcher.accessibilityFeaturesTestValue =
+        const FakeAccessibilityFeatures(disableAnimations: true);
+  });
+  tearDown(binding.platformDispatcher.clearAccessibilityFeaturesTestValue);
   LaunchMode.initializeAutomatically();
   late Talker talker;
   late SafeBlocObserver observer;
   late BlocObserver previousObserver;
+  late StreamController<VaultLockSignal> vaultLockEvents;
+  late Stream<VaultLockSignal> vaultEvents;
+  late Directory preferencesDirectory;
 
   setUp(() {
+    preferencesDirectory = Directory.systemTemp.createTempSync(
+      'want-pass-preferences-test-',
+    );
+    vaultLockEvents = StreamController<VaultLockSignal>.broadcast();
+    vaultEvents = vaultLockEvents.stream;
     talker = Talker(settings: TalkerSettings(useConsoleLogs: false));
     observer = SafeBlocObserver(talker: talker);
     previousObserver = Bloc.observer;
     Bloc.observer = observer;
   });
 
-  tearDown(() {
+  tearDown(() async {
     Bloc.observer = previousObserver;
+    await vaultLockEvents.close();
+    await preferencesDirectory.delete(recursive: true);
   });
+
+  Future<AppRuntime> bootstrapRuntime() => AppRuntime.bootstrap(
+    vaultAccess: const _VaultAccess(),
+    vaultLockEvents: vaultEvents,
+    preferencesDirectory: preferencesDirectory.path,
+  );
+
+  Future<VaultController> shellVault() async {
+    final controller = VaultController(
+      VaultUseCaseImpl(
+        const _VaultAccess(),
+        observer,
+        PlatformRecoveryExportService(observer),
+      ),
+      observer,
+      vaultEvents,
+    );
+    addTearDown(controller.close);
+    await controller.init();
+    return controller;
+  }
 
   Future<StartupController> start({required bool foreground}) async {
     final runtime = initPackage(
@@ -129,10 +305,15 @@ void main() {
 
   testWidgets('the local shell starts without a backend', (tester) async {
     final startup = await start(foreground: true);
-    await tester.pumpWidget(WantPassApp(startup: startup));
+    await tester.pumpWidget(
+      WantPassApp(
+        startup: startup,
+        vault: (await tester.runAsync(shellVault))!,
+      ),
+    );
     await tester.pumpAndSettle();
-    expect(find.text('Want Pass'), findsOneWidget);
-    expect(find.text('A private home for your secrets.'), findsOneWidget);
+    expect(find.text('Master password'), findsWidgets);
+    expect(find.byKey(const ValueKey('vault-create')), findsOneWidget);
     expect(startup.state, const StartupReady());
     expect(
       talker.history.single.message,
@@ -146,9 +327,14 @@ void main() {
     tester,
   ) async {
     final startup = await start(foreground: false);
-    await tester.pumpWidget(WantPassApp(startup: startup));
+    await tester.pumpWidget(
+      WantPassApp(
+        startup: startup,
+        vault: (await tester.runAsync(shellVault))!,
+      ),
+    );
     await tester.pumpAndSettle();
-    expect(find.text('Want Pass could not start.'), findsOneWidget);
+    expect(find.text('Startup unavailable'), findsOneWidget);
     expect(
       startup.state,
       const StartupFailed(StartupForegroundRequiredErrorV1()),
@@ -162,9 +348,14 @@ void main() {
       tester.platformDispatcher.localesTestValue = const [Locale('ru')];
       addTearDown(tester.platformDispatcher.clearLocalesTestValue);
       final startup = await start(foreground: true);
-      await tester.pumpWidget(WantPassApp(startup: startup));
+      await tester.pumpWidget(
+        WantPassApp(
+          startup: startup,
+          vault: (await tester.runAsync(shellVault))!,
+        ),
+      );
       await tester.pumpAndSettle();
-      expect(find.text('Личное место для ваших секретов.'), findsOneWidget);
+      expect(find.text('Мастер-пароль'), findsWidgets);
     },
   );
 
@@ -453,8 +644,8 @@ void main() {
     'runtime bootstrap reuses DI and disposes its singleton controller',
     () async {
       final oldHandler = FlutterError.onError;
-      final first = AppRuntime.bootstrap();
-      expect(identical(first, AppRuntime.bootstrap()), isTrue);
+      final first = bootstrapRuntime();
+      expect(identical(first, bootstrapRuntime()), isTrue);
       final runtime = await first;
       addTearDown(runtime.close);
       final controller = runtime.startup;
@@ -462,14 +653,14 @@ void main() {
       expect(controller.state, const StartupReady());
       await LaunchMode.withBackgroundMode(() async {
         await expectLater(
-          AppRuntime.bootstrap(),
+          bootstrapRuntime(),
           throwsA(isA<StartupConfigurationConflictErrorV1>()),
         );
       });
       await runtime.close();
       expect(controller.isClosed, isTrue);
       expect(identical(FlutterError.onError, oldHandler), isTrue);
-      final next = await AppRuntime.bootstrap();
+      final next = await bootstrapRuntime();
       addTearDown(next.close);
       expect(identical(next, runtime), isFalse);
       await next.close();
@@ -487,7 +678,7 @@ void main() {
       final oldHandler = FlutterError.onError;
       final oldObserver = Bloc.observer;
       await expectLater(
-        AppRuntime.bootstrap(),
+        bootstrapRuntime(),
         throwsA(isA<StartupConfigurationConflictErrorV1>()),
       );
       expect(identical(FlutterError.onError, oldHandler), isTrue);

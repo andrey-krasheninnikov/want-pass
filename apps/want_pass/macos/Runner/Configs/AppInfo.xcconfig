@@ -8,7 +8,7 @@
 PRODUCT_NAME = Want Pass
 
 // The application's bundle identifier
-PRODUCT_BUNDLE_IDENTIFIER = io.github.andreykrasheninnikov.wantPass
+PRODUCT_BUNDLE_IDENTIFIER = foundation.want.pass
 
 // The copyright displayed in application information
 PRODUCT_COPYRIGHT =

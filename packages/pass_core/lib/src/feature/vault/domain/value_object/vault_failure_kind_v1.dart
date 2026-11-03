@@ -1,0 +1,18 @@
+enum VaultFailureKindV1 {
+  credentials,
+  invalidPassword,
+  passwordMismatch,
+  invalidPhrase,
+  confirmation,
+  exists,
+  missing,
+  locked,
+  busy,
+  unsupported,
+  corrupt,
+  storage,
+  stale,
+  closed,
+  unavailable,
+  writeUncertain,
+}

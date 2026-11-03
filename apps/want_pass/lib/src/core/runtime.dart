@@ -1,5 +1,9 @@
 import 'dart:ui';
 
+import 'package:want_pass/src/feature/appearance/application/_barrel.dart';
+
+import 'package:path_provider/path_provider.dart';
+
 import 'package:bloc/bloc.dart';
 import 'package:flutter/widgets.dart';
 import 'package:get_it/get_it.dart';
@@ -9,9 +13,14 @@ import 'package:want_pass/src/dependencies/_barrel.dart';
 import 'package:want_pass/src/feature/startup/application/_barrel.dart';
 import 'package:want_pass/src/feature/startup/infrastructure/_barrel.dart';
 import 'package:want_pass_core/want_pass_core.dart';
+import 'package:want_pass/src/feature/vault/application/_barrel.dart';
+import 'package:want_pass/src/feature/vault/infrastructure/_barrel.dart';
 
 Future<AppRuntime>? _bootstrap;
 LaunchModeType? _bootstrapMode;
+VaultAccessService? _accessOverride;
+Stream<VaultLockSignal>? _eventsOverride;
+String? _preferencesOverride;
 
 final class AppRuntime {
   final GetIt _container;
@@ -39,12 +48,23 @@ final class AppRuntime {
 
   StartupController get startup => _container<StartupController>();
 
-  static Future<AppRuntime> bootstrap() {
+  AppearanceController get appearance => _container<AppearanceController>();
+
+  VaultController get vault => _container<VaultController>();
+
+  static Future<AppRuntime> bootstrap({
+    VaultAccessService? vaultAccess,
+    Stream<VaultLockSignal>? vaultLockEvents,
+    String? preferencesDirectory,
+  }) {
     const op = 'AppRuntime.bootstrap():';
     final mode = LaunchMode.current;
     final pending = _bootstrap;
     if (pending != null) {
-      if (_bootstrapMode != mode) {
+      if (_bootstrapMode != mode ||
+          !identical(_accessOverride, vaultAccess) ||
+          !identical(_eventsOverride, vaultLockEvents) ||
+          _preferencesOverride != preferencesDirectory) {
         return Future<AppRuntime>.error(
           const StartupConfigurationConflictErrorV1(),
         );
@@ -55,10 +75,23 @@ final class AppRuntime {
       return Future<AppRuntime>.error(const StartupForegroundRequiredErrorV1());
     }
     _bootstrapMode = mode;
-    return _bootstrap = _initialize(op);
+    _accessOverride = vaultAccess;
+    _eventsOverride = vaultLockEvents;
+    _preferencesOverride = preferencesDirectory;
+    return _bootstrap = _initialize(
+      op,
+      vaultAccess,
+      vaultLockEvents,
+      preferencesDirectory,
+    );
   }
 
-  static Future<AppRuntime> _initialize(String operation) async {
+  static Future<AppRuntime> _initialize(
+    String operation,
+    VaultAccessService? vaultAccess,
+    Stream<VaultLockSignal>? vaultLockEvents,
+    String? preferencesDirectory,
+  ) async {
     final container = GetIt.asNewInstance();
     final observer = SafeBlocObserver(talker: Talker());
     final previousObserver = Bloc.observer;
@@ -74,6 +107,23 @@ final class AppRuntime {
         core.startupAccessService,
       );
       container.registerSingleton<StartupReporter>(observer);
+      final access =
+          vaultAccess ??
+          await initializeVaultAccess(
+            directory: '${(await getApplicationSupportDirectory()).path}/vault',
+            reporter: observer,
+          );
+      final events = vaultLockEvents ?? await createVaultLockEvents(observer);
+      container.registerSingleton<VaultAccessService>(access);
+      container.registerSingleton<VaultReporter>(observer);
+      container.registerSingleton<Stream<VaultLockSignal>>(
+        events,
+        instanceName: 'vaultLockEvents',
+      );
+      container.registerSingleton<String>(
+        preferencesDirectory ?? (await getApplicationSupportDirectory()).path,
+        instanceName: 'preferencesDirectory',
+      );
       await configureDependencies(container);
       return AppRuntime._(
         container,
@@ -99,6 +149,9 @@ final class AppRuntime {
         }
         _bootstrap = null;
         _bootstrapMode = null;
+        _accessOverride = null;
+        _eventsOverride = null;
+        _preferencesOverride = null;
       }
       observer.report(
         layer: StartupDiagnosticLayer.bootstrap,
@@ -115,6 +168,7 @@ final class AppRuntime {
     _lifecycle?.dispose();
     _lifecycle = null;
     try {
+      await vault.lock();
       await _container.reset();
     } finally {
       _core.close();
@@ -124,6 +178,9 @@ final class AppRuntime {
       }
       _bootstrap = null;
       _bootstrapMode = null;
+      _accessOverride = null;
+      _eventsOverride = null;
+      _preferencesOverride = null;
     }
   }
 }

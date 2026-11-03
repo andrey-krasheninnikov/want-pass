@@ -9,7 +9,7 @@ import 'package:talker_bloc_effects/talker_bloc_effects.dart';
 import 'package:want_pass_core/want_pass_core.dart';
 
 final class SafeBlocObserver extends BlocObserver
-    implements BlocWithEffectsObserver, StartupReporter {
+    implements BlocWithEffectsObserver, StartupReporter, VaultReporter {
   final Talker _talker;
   final TalkerBlocEffectsObserver _effects;
 
@@ -25,6 +25,99 @@ final class SafeBlocObserver extends BlocObserver
           effectFilter: (_, effect) => effect is StartupDiagnosticEvent,
         ),
       );
+
+  @override
+  void reportVault({
+    required VaultDiagnosticLayer layer,
+    required String operation,
+    required VaultErrorV1 error,
+  }) {
+    final marker = switch (error) {
+      VaultRejectedErrorV1(:final kind) => kind.name,
+      VaultUnexpectedErrorV1() => 'unexpectedError',
+    };
+    final safeOperation = switch (operation) {
+      'VaultController.validatePassword():' ||
+      'RustVaultAccessService.validatePasswordV3():' ||
+      'RustVaultAccessService.unlockV3():' ||
+      'VaultUseCaseImpl.validatePasswordV3():' ||
+      'VaultUseCaseImpl.unlockV3():' ||
+      'VaultController.acknowledge():' ||
+      'VaultController.validateRecovery():' ||
+      'PlatformRecoveryExportService.selectFileV3():' ||
+      'RustVaultAccessService.validateRecoveryV3():' ||
+      'RustVaultAccessService.prepareCreationV3():' ||
+      'RustVaultAccessService.prepareRecoveryV3():' ||
+      'RustVaultAccessService.regenerateRecoveryV3():' ||
+      'RustVaultAccessService.exportRecoveryV3():' ||
+      'RustVaultAccessService.confirmV3():' ||
+      'VaultUseCaseImpl.prepareSetupV3():' ||
+      'VaultUseCaseImpl.confirmSetupV3():' ||
+      'VaultUseCaseImpl.regenerateRecoveryV3():' ||
+      'VaultUseCaseImpl.validateRecoveryV3():' ||
+      'VaultUseCaseImpl.exportRecoveryV3():' ||
+      'VaultUseCaseImpl.selectRecoveryFileV3():' ||
+      'PlatformRecoveryExportService.clearClipboardV1():' ||
+      'PlatformRecoveryExportService.copyV1():' ||
+      'PlatformRecoveryExportService.selectFileV1():' ||
+      'RustVaultAccessService.confirmV2():' ||
+      'RustVaultAccessService.exportRecoveryV2():' ||
+      'RustVaultAccessService.waitForExportsV2():' ||
+      'RustVaultAccessService.hintsV2():' ||
+      'RustVaultAccessService.prepareCreationV2():' ||
+      'RustVaultAccessService.prepareRecoveryV2():' ||
+      'VaultController._clearClipboard():' ||
+      'VaultController.chooseSetupWord():' ||
+      'VaultController.confirmSetup():' ||
+      'VaultController.copyRecovery():' ||
+      'VaultController.dismissFailure():' ||
+      'VaultController.downloadRecovery():' ||
+      'VaultController.prepareSetup():' ||
+      'VaultController.readHints():' ||
+      'VaultUseCaseImpl.clearRecoveryClipboardV1():' ||
+      'VaultUseCaseImpl.confirmSetupV2():' ||
+      'VaultUseCaseImpl.copyRecoveryV1():' ||
+      'VaultUseCaseImpl.exportRecoveryV2():' ||
+      'VaultUseCaseImpl.prepareSetupV2():' ||
+      'VaultUseCaseImpl.readHintsV2():' ||
+      'VaultUseCaseImpl.selectRecoveryFileV1():' ||
+      'RustVaultAccessService.openV1():' ||
+      'RustVaultAccessService.statusV1():' ||
+      'RustVaultAccessService.prepareCreationV1():' ||
+      'RustVaultAccessService.prepareRecoveryV1():' ||
+      'RustVaultAccessService.confirmV1():' ||
+      'RustVaultAccessService.unlockV1():' ||
+      'VaultUseCaseImpl.initializeV1():' ||
+      'VaultUseCaseImpl.prepareCreationV1():' ||
+      'VaultUseCaseImpl.prepareRecoveryV1():' ||
+      'VaultUseCaseImpl.confirmCreationV1():' ||
+      'VaultUseCaseImpl.confirmRecoveryV1():' ||
+      'VaultUseCaseImpl.unlockV1():' ||
+      'VaultUseCaseImpl.lockV1():' ||
+      'VaultUseCaseImpl.closeV1():' ||
+      'VaultController.init():' ||
+      'VaultController.prepareCreation():' ||
+      'VaultController.prepareRecovery():' ||
+      'VaultController.confirm():' ||
+      'VaultController.unlock():' ||
+      'VaultController.lock():' ||
+      'VaultController.activity():' ||
+      'VaultController._monitorLost():' ||
+      'VaultController.close():' ||
+      '_NativeVaultHandle.invalidateSync():' ||
+      '_NativeVaultHandle.close():' ||
+      'createVaultLockEvents():' => operation,
+      _ => 'unknownOperation',
+    };
+    try {
+      _talker.log(
+        '${layer.name} $safeOperation $marker',
+        logLevel: LogLevel.warning,
+      );
+    } on Object {
+      // Diagnostics cannot interrupt a vault operation.
+    }
+  }
 
   @override
   void onError(BlocBase<dynamic> bloc, Object error, StackTrace stackTrace) {
@@ -81,6 +174,33 @@ final class SafeBlocObserver extends BlocObserver
     };
     // Operation text is supplied by fixed call sites, never by an exception or user input.
     final safeOperation = switch (operation) {
+      'VaultController.validatePassword():' ||
+      'RustVaultAccessService.validatePasswordV3():' ||
+      'RustVaultAccessService.unlockV3():' ||
+      'VaultUseCaseImpl.validatePasswordV3():' ||
+      'VaultUseCaseImpl.unlockV3():' ||
+      'VaultController.acknowledge():' ||
+      'VaultController.validateRecovery():' ||
+      'PlatformRecoveryExportService.selectFileV3():' ||
+      'RustVaultAccessService.validateRecoveryV3():' ||
+      'RustVaultAccessService.prepareCreationV3():' ||
+      'RustVaultAccessService.prepareRecoveryV3():' ||
+      'RustVaultAccessService.regenerateRecoveryV3():' ||
+      'RustVaultAccessService.exportRecoveryV3():' ||
+      'RustVaultAccessService.confirmV3():' ||
+      'VaultUseCaseImpl.prepareSetupV3():' ||
+      'VaultUseCaseImpl.confirmSetupV3():' ||
+      'VaultUseCaseImpl.regenerateRecoveryV3():' ||
+      'VaultUseCaseImpl.validateRecoveryV3():' ||
+      'VaultUseCaseImpl.exportRecoveryV3():' ||
+      'VaultUseCaseImpl.selectRecoveryFileV3():' ||
+      'AppearanceController.close():' ||
+      'AppearanceController.init():' ||
+      'AppearanceController.save():' ||
+      'AppearanceUseCaseImpl.loadV1():' ||
+      'AppearanceUseCaseImpl.saveV1():' ||
+      'FileAppearancePreferencesService.loadV1():' ||
+      'FileAppearancePreferencesService.saveV1():' ||
       'StartupAccessServiceImpl.checkForegroundV1():' ||
       'StartupUseCaseImpl.initializeV1():' ||
       'StartupController.init():' ||

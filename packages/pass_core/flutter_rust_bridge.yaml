@@ -1,0 +1,12 @@
+rust_input: crate::api
+rust_root: rust/
+dart_output: lib/src/feature/vault/infrastructure/native/
+rust_output: rust/src/frb_generated.rs
+dart_entrypoint_class_name: VaultRustLib
+dart_enums_style: true
+web: false
+build_runner: false
+auto_upgrade_dependency: false
+dart_fix: false
+add_mod_to_lib: false
+deps_check: false

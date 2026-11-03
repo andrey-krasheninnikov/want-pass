@@ -7,6 +7,10 @@ environment:
   sdk: ^3.13.5
 dependencies:
   domain_error: 5.0.3
+  equatable: ^2.0.7
+  ffi: ^2.2.0
+  flutter_rust_bridge: 2.13.0
+  flutter_rust_bridge_hooks: 2.13.0
   injectable: ^3.0.0
   package_context: ^2.2.0
 dev_dependencies:

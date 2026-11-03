@@ -130,6 +130,11 @@ pub struct CardRowV1 {
     pub otp: Option<super::TotpCodeV1>,
     pub attachment: Option<AttachmentSummaryV1>,
 }
+pub struct CardPreviewV1 {
+    pub row: CardRowV1,
+    pub description: String,
+    pub protected_container: bool,
+}
 pub fn services_v1() -> Vec<String> {
     [
         "microsoft",
@@ -336,7 +341,7 @@ impl Vault {
                 .map(|g| g.id.clone())
                 .collect();
             let groups: BTreeSet<&str> = group_ids.iter().map(String::as_str).collect();
-            let card_ids = d
+            let mut matches: Vec<&StoredCard> = d
                 .cards
                 .iter()
                 .filter(|c| {
@@ -351,8 +356,19 @@ impl Vault {
                                 Zeroizing::new(f.value.to_lowercase()).contains(needle.as_str())
                             }))
                 })
-                .map(|c| c.id.clone())
                 .collect();
+            matches.sort_by_cached_key(|c| {
+                let name = c.name.to_lowercase();
+                let rank = if name == *needle {
+                    0
+                } else if name.starts_with(needle.as_str()) {
+                    1
+                } else {
+                    2
+                };
+                (rank, name, c.id.clone())
+            });
+            let card_ids = matches.into_iter().map(|c| c.id.clone()).collect();
             Ok(CardMatchesV1 {
                 revision: d.revision,
                 card_ids,
@@ -380,28 +396,31 @@ impl Vault {
                         .iter()
                         .find(|c| c.id == *id)
                         .ok_or(VaultFailure::Missing)?;
-                    Ok(CardRowV1 {
-                        id: c.id.clone(),
-                        fields: c
-                            .fields
-                            .iter()
-                            .filter(|f| !f.value.is_empty())
-                            .map(|f| f.id)
-                            .collect(),
-                        login: super::otp::field(&c.fields, FieldIdV1::Login).map(str::to_owned),
-                        otp: if super::otp::field(&c.fields, FieldIdV1::TotpSeed).is_some() {
-                            Some(super::otp::current_code(&c.fields)?)
-                        } else {
-                            None
-                        },
-                        attachment: c
-                            .attachment
-                            .as_ref()
-                            .map(StoredAttachment::summary)
-                            .transpose()?,
-                    })
+                    c.row()
                 })
                 .collect()
+        })
+    }
+    pub fn card_preview_v1(
+        &self,
+        id: String,
+        revision: u64,
+        generation: u64,
+    ) -> Result<CardPreviewV1, VaultFailure> {
+        self.read_cards(generation, |d| {
+            if d.revision != revision {
+                return Err(VaultFailure::Stale);
+            }
+            let c = d
+                .cards
+                .iter()
+                .find(|c| c.id == id)
+                .ok_or(VaultFailure::Missing)?;
+            Ok(CardPreviewV1 {
+                row: c.row()?,
+                description: c.description.clone(),
+                protected_container: super::presets::validate_fields(c.card_type, &c.fields)?,
+            })
         })
     }
     pub fn card_v1(&self, id: String, generation: u64) -> Result<CardRecordV1, VaultFailure> {
@@ -721,6 +740,31 @@ impl Vault {
             );
             DocumentV2::decode(&bytes)?;
             Ok((bytes, document.snapshot()))
+        })
+    }
+}
+
+impl StoredCard {
+    fn row(&self) -> Result<CardRowV1, VaultFailure> {
+        Ok(CardRowV1 {
+            id: self.id.clone(),
+            fields: self
+                .fields
+                .iter()
+                .filter(|f| !f.value.is_empty())
+                .map(|f| f.id)
+                .collect(),
+            login: super::otp::field(&self.fields, FieldIdV1::Login).map(str::to_owned),
+            otp: if super::otp::field(&self.fields, FieldIdV1::TotpSeed).is_some() {
+                Some(super::otp::current_code(&self.fields)?)
+            } else {
+                None
+            },
+            attachment: self
+                .attachment
+                .as_ref()
+                .map(StoredAttachment::summary)
+                .transpose()?,
         })
     }
 }

@@ -98,6 +98,9 @@ abstract class VaultRustLibApiImplPlatform
   CardPresetV1 dco_decode_card_preset_v_1(dynamic raw);
 
   @protected
+  CardPreviewV1 dco_decode_card_preview_v_1(dynamic raw);
+
+  @protected
   CardRecordV1 dco_decode_card_record_v_1(dynamic raw);
 
   @protected
@@ -325,6 +328,9 @@ abstract class VaultRustLibApiImplPlatform
 
   @protected
   CardPresetV1 sse_decode_card_preset_v_1(SseDeserializer deserializer);
+
+  @protected
+  CardPreviewV1 sse_decode_card_preview_v_1(SseDeserializer deserializer);
 
   @protected
   CardRecordV1 sse_decode_card_record_v_1(SseDeserializer deserializer);
@@ -610,6 +616,12 @@ abstract class VaultRustLibApiImplPlatform
 
   @protected
   void sse_encode_card_preset_v_1(CardPresetV1 self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_card_preview_v_1(
+    CardPreviewV1 self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_card_record_v_1(CardRecordV1 self, SseSerializer serializer);

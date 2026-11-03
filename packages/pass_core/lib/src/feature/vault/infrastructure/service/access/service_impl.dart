@@ -980,6 +980,59 @@ final class RustVaultAccessService implements VaultAccessService {
   }
 
   @override
+  FutureDomainResult<CardPreviewV1> cardPreviewV1({
+    required VaultHandleV1 handle,
+    required String id,
+    required BigInt revision,
+  }) async {
+    const op = 'RustVaultAccessService.cardPreviewV1():';
+    final result = await captureResult<CardPreviewV1>(() async {
+      final vault = (handle as _NativeVaultHandle)._vault;
+      final v = await vault.cardPreviewV1(
+        id: id,
+        revision: revision,
+        generation: vault.generation(),
+      );
+      return CardPreviewV1(
+        row: CardRowV1(
+          id: v.row.id,
+          fields: List.unmodifiable(v.row.fields.map(_fieldId)),
+          login: v.row.login,
+          otp: v.row.otp == null
+              ? null
+              : TotpCodeV1(
+                  code: v.row.otp!.code,
+                  validUntil: DateTime.fromMillisecondsSinceEpoch(
+                    v.row.otp!.validUntil.toInt() * 1000,
+                    isUtc: true,
+                  ),
+                  period: Duration(seconds: v.row.otp!.period.toInt()),
+                ),
+          attachment: v.row.attachment == null
+              ? null
+              : AttachmentV1(
+                  name: v.row.attachment!.name,
+                  size: v.row.attachment!.size,
+                ),
+        ),
+        description: v.description,
+        protectedContainer: v.protectedContainer,
+      );
+    }, mapToDomainError: _mapNativeError);
+    if (result.isError) {
+      reportVaultSafely(
+        _reporter,
+        layer: VaultDiagnosticLayer.infrastructure,
+        operation: op,
+        error: result.error is VaultErrorV1
+            ? result.error as VaultErrorV1
+            : const VaultUnexpectedErrorV1(),
+      );
+    }
+    return result;
+  }
+
+  @override
   FutureDomainResult<CardV1> cardV1({
     required VaultHandleV1 handle,
     required String id,

@@ -149,6 +149,13 @@ final class _VaultAccess implements VaultAccessService {
   }) async =>
       const Result.error(VaultRejectedErrorV1(VaultFailureKindV1.unavailable));
   @override
+  FutureDomainResult<CardPreviewV1> cardPreviewV1({
+    required VaultHandleV1 handle,
+    required String id,
+    required BigInt revision,
+  }) async =>
+      const Result.error(VaultRejectedErrorV1(VaultFailureKindV1.unavailable));
+  @override
   FutureDomainResult<CardV1> cardV1({
     required VaultHandleV1 handle,
     required String id,

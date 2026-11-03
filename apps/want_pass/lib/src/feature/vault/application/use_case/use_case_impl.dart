@@ -957,6 +957,60 @@ final class VaultUseCaseImpl implements VaultUseCase {
   }
 
   @override
+  FutureDomainResult<ReadCardPreviewResultV1> readCardPreviewV1({
+    required ReadCardPreviewParamsV1 params,
+  }) async {
+    const op = 'VaultUseCaseImpl.readCardPreviewV1():';
+    final result = await captureResult<ReadCardPreviewResultV1>(() async {
+      final value = await _access.cardPreviewV1(
+        handle: params.handle,
+        id: params.id,
+        revision: params.revision,
+      );
+      if (value.isError) throw value.error;
+      return ReadCardPreviewResultV1(preview: value.value);
+    }, mapToDomainError: (_, _) => const VaultUnexpectedErrorV1());
+    if (result.isError) {
+      reportVaultSafely(
+        _reporter,
+        layer: VaultDiagnosticLayer.application,
+        operation: op,
+        error: result.error is VaultErrorV1
+            ? result.error as VaultErrorV1
+            : const VaultUnexpectedErrorV1(),
+      );
+    }
+    return result;
+  }
+
+  @override
+  FutureDomainResult<ReadCardFieldResultV1> readCardFieldV1({
+    required ReadCardFieldParamsV1 params,
+  }) async {
+    const op = 'VaultUseCaseImpl.readCardFieldV1():';
+    final result = await captureResult<ReadCardFieldResultV1>(() async {
+      final value = await _access.copyCardFieldV1(
+        handle: params.handle,
+        id: params.id,
+        field: params.field,
+      );
+      if (value.isError) throw value.error;
+      return ReadCardFieldResultV1(value: value.value);
+    }, mapToDomainError: (_, _) => const VaultUnexpectedErrorV1());
+    if (result.isError) {
+      reportVaultSafely(
+        _reporter,
+        layer: VaultDiagnosticLayer.application,
+        operation: op,
+        error: result.error is VaultErrorV1
+            ? result.error as VaultErrorV1
+            : const VaultUnexpectedErrorV1(),
+      );
+    }
+    return result;
+  }
+
+  @override
   FutureDomainResult<ReadCardResultV1> readCardV1({
     required ReadCardParamsV1 params,
   }) async {

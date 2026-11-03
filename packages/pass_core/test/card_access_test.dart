@@ -66,6 +66,22 @@ void main() {
     )).value;
     expect(otp.code.length, 6);
     expect(otp.toString(), isNot(contains(otp.code)));
+    final preview = (await access.cardPreviewV1(
+      handle: handle,
+      id: summary.id,
+      revision: saved.value.revision,
+    )).value;
+    expect(preview.row.login, 'fixture@example.invalid');
+    expect(preview.row.fields, contains(FieldIdV1.password));
+    expect(preview.toString(), isNot(contains('fixture@example.invalid')));
+    expect(
+      (await access.cardPreviewV1(
+        handle: handle,
+        id: summary.id,
+        revision: BigInt.zero,
+      )).isError,
+      isTrue,
+    );
     final matches = await access.searchCardsV1(
       handle: handle,
       query: const CardSearchV1(

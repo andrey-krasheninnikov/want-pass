@@ -109,13 +109,18 @@ final class _CardEditor extends StatefulWidget {
   final String? initialGroupId;
   final BigInt revision;
   final VoidCallback onDone;
+  final VoidCallback? onCancel;
+  final bool embedded;
   final VoidCallback? onDelete;
   const _CardEditor({
+    super.key,
     required this.controller,
     required this.card,
     this.initialGroupId,
     required this.revision,
     required this.onDone,
+    this.onCancel,
+    this.embedded = false,
     this.onDelete,
   });
   @override
@@ -156,6 +161,8 @@ final class _CardEditorState extends State<_CardEditor> {
       _values[FieldIdV1.recoveryCodes]!.text.isNotEmpty ||
       _values[FieldIdV1.reserveLogins]!.text.isNotEmpty;
   AttachmentDraftV1? _attachment;
+  bool _dirty = false, _more = false;
+  bool get dirty => _dirty;
   @override
   void initState() {
     super.initState();
@@ -164,9 +171,17 @@ final class _CardEditorState extends State<_CardEditor> {
     }
   }
 
+  void _change(VoidCallback action) {
+    setState(() {
+      _dirty = true;
+      action();
+    });
+  }
+
   void _edited() {
     if (mounted) {
-      setState(() {});
+      _dirty = true;
+      _change(() {});
       widget.controller.activity();
     }
   }
@@ -183,7 +198,7 @@ final class _CardEditorState extends State<_CardEditor> {
     super.dispose();
   }
 
-  Future<void> _save() async {
+  Future<bool> _save() async {
     final spec = widget.controller.state.catalog!.presets.firstWhere(
       (p) => p.cardType == _type,
     );
@@ -226,6 +241,7 @@ final class _CardEditorState extends State<_CardEditor> {
       revision: widget.revision,
     );
     if (mounted && saved) widget.onDone();
+    return saved;
   }
 
   Future<void> _selectFile() async {
@@ -233,7 +249,7 @@ final class _CardEditorState extends State<_CardEditor> {
     if (mounted &&
         file != null &&
         widget.controller.state.phase == VaultPhase.unlocked) {
-      setState(() => _attachment = file);
+      _change(() => _attachment = file);
     }
   }
 
@@ -315,22 +331,18 @@ final class _CardEditorState extends State<_CardEditor> {
             ))
           Align(
             alignment: Alignment.centerRight,
-            child: IconButton(
-              tooltip: _text(
-                context,
-                'Copy saved: ${_fieldLabel(context, spec.id)}',
-                'Скопировать: ${_fieldLabel(context, spec.id)}',
-              ),
-              onPressed: busy || !_copyAllowed
-                  ? null
-                  : () => unawaited(
-                      widget.controller.copyCard(
-                        widget.card!.summary.id,
-                        field: spec.id,
-                      ),
+            child: _copyAllowed
+                ? _CopyAction(
+                    controller: widget.controller,
+                    id: widget.card!.summary.id,
+                    field: spec.id,
+                    label: _text(
+                      context,
+                      'Copy saved: ${_fieldLabel(context, spec.id)}',
+                      'Скопировать: ${_fieldLabel(context, spec.id)}',
                     ),
-              icon: const Icon(Icons.copy_outlined),
-            ),
+                  )
+                : const SizedBox.shrink(),
           ),
       ],
     );
@@ -345,7 +357,8 @@ final class _CardEditorState extends State<_CardEditor> {
       final catalog = state.catalog;
       if (catalog == null) return const SizedBox.shrink();
       final spec = catalog.presets.firstWhere((p) => p.cardType == _type);
-      return WantDialog(
+      return _EditorFrame(
+        embedded: widget.embedded,
         title: _text(
           context,
           widget.card == null ? 'New card' : 'Card',
@@ -356,7 +369,7 @@ final class _CardEditorState extends State<_CardEditor> {
             WantButton(
               key: const ValueKey('content-cancel'),
               variant: WantButtonVariant.secondary,
-              onPressed: state.busy ? null : widget.onDone,
+              onPressed: state.busy ? null : widget.onCancel ?? widget.onDone,
               child: Text(_text(context, 'Cancel', 'Отмена')),
             ),
             WantButton(
@@ -387,7 +400,7 @@ final class _CardEditorState extends State<_CardEditor> {
                       ),
                   ],
                   onChanged: (value) {
-                    if (value != null) setState(() => _type = value);
+                    if (value != null) _change(() => _type = value);
                   },
                 ),
                 if (_type != CardTypeV1.account)
@@ -406,13 +419,6 @@ final class _CardEditorState extends State<_CardEditor> {
                   enabled: !state.busy,
                   autofocus: true,
                 ),
-                WantInput(
-                  key: const ValueKey('account-description'),
-                  label: Text(_text(context, 'Description', 'Описание')),
-                  controller: _description,
-                  enabled: !state.busy,
-                  maxLines: 3,
-                ),
                 WantSelect<String>(
                   key: const ValueKey('card-service'),
                   value: _service,
@@ -426,29 +432,7 @@ final class _CardEditorState extends State<_CardEditor> {
                         label: _serviceLabel(context, service),
                       ),
                   ],
-                  onChanged: (value) => setState(() => _service = value),
-                ),
-                WantSelect<String>(
-                  key: const ValueKey('card-environment'),
-                  value: _environment?.name ?? 'none',
-                  label: Text(_text(context, 'Environment', 'Окружение')),
-                  enabled: !state.busy,
-                  options: [
-                    WantOption(
-                      value: 'none',
-                      label: _text(context, 'No environment', 'Без окружения'),
-                    ),
-                    for (final value in EnvironmentV1.values)
-                      WantOption(
-                        value: value.name,
-                        label: _environmentLabel(value),
-                      ),
-                  ],
-                  onChanged: (value) => setState(
-                    () => _environment = value == null || value == 'none'
-                        ? null
-                        : EnvironmentV1.values.byName(value),
-                  ),
+                  onChanged: (value) => _change(() => _service = value),
                 ),
                 for (final field in spec.fields)
                   if (_type != CardTypeV1.account ||
@@ -479,7 +463,7 @@ final class _CardEditorState extends State<_CardEditor> {
                     label: Text(_text(context, 'TOTP', 'TOTP')),
                     onChanged: state.busy
                         ? null
-                        : (value) => setState(() => _totp = value),
+                        : (value) => _change(() => _totp = value),
                   ),
                   WantCheckbox(
                     value: _recovery,
@@ -488,7 +472,7 @@ final class _CardEditorState extends State<_CardEditor> {
                     ),
                     onChanged: state.busy
                         ? null
-                        : (value) => setState(() => _recovery = value),
+                        : (value) => _change(() => _recovery = value),
                   ),
                   if (widget.card != null &&
                       widget.card!.fields.any(
@@ -567,31 +551,92 @@ final class _CardEditorState extends State<_CardEditor> {
                       ),
                     ),
                 ],
-                WantTypography(_text(context, 'Groups', 'Группы')),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: [
-                    for (final group in state.content!.groups)
-                      Semantics(
-                        selected: _groups.contains(group.id),
-                        child: WantButton(
-                          key: ValueKey('account-group-${group.id}'),
-                          variant: _groups.contains(group.id)
-                              ? WantButtonVariant.primary
-                              : WantButtonVariant.secondary,
-                          onPressed: state.busy
-                              ? null
-                              : () => setState(() {
-                                  if (!_groups.add(group.id)) {
-                                    _groups.remove(group.id);
-                                  }
-                                }),
-                          child: Text(group.name),
+                Semantics(
+                  expanded: _more,
+                  child: WantButton(
+                    key: const ValueKey('card-more'),
+                    variant: WantButtonVariant.ghost,
+                    onPressed: () => setState(() => _more = !_more),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            _text(
+                              context,
+                              'Details (optional)',
+                              'Дополнительно',
+                            ),
+                          ),
+                        ),
+                        Icon(
+                          _more ? Icons.expand_less : Icons.expand_more,
+                          size: 20,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                if (_more) ...[
+                  WantInput(
+                    key: const ValueKey('account-description'),
+                    label: Text(_text(context, 'Description', 'Описание')),
+                    controller: _description,
+                    enabled: !state.busy,
+                    maxLines: 3,
+                  ),
+                  WantSelect<String>(
+                    key: const ValueKey('card-environment'),
+                    value: _environment?.name ?? 'none',
+                    label: Text(_text(context, 'Environment', 'Окружение')),
+                    enabled: !state.busy,
+                    options: [
+                      WantOption(
+                        value: 'none',
+                        label: _text(
+                          context,
+                          'No environment',
+                          'Без окружения',
                         ),
                       ),
-                  ],
-                ),
+                      for (final value in EnvironmentV1.values)
+                        WantOption(
+                          value: value.name,
+                          label: _environmentLabel(value),
+                        ),
+                    ],
+                    onChanged: (value) => _change(
+                      () => _environment = value == null || value == 'none'
+                          ? null
+                          : EnvironmentV1.values.byName(value),
+                    ),
+                  ),
+                  WantTypography(_text(context, 'Groups', 'Группы')),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      for (final group in state.content!.groups)
+                        Semantics(
+                          selected: _groups.contains(group.id),
+                          child: WantButton(
+                            key: ValueKey('account-group-${group.id}'),
+                            variant: _groups.contains(group.id)
+                                ? WantButtonVariant.primary
+                                : WantButtonVariant.secondary,
+                            onPressed: state.busy
+                                ? null
+                                : () => _change(() {
+                                    _dirty = true;
+                                    if (!_groups.add(group.id)) {
+                                      _groups.remove(group.id);
+                                    }
+                                  }),
+                            child: Text(group.name),
+                          ),
+                        ),
+                    ],
+                  ),
+                ],
                 _ContentError(state.error),
                 if (widget.card != null)
                   WantButton(

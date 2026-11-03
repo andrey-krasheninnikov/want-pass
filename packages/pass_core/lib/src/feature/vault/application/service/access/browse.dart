@@ -58,3 +58,18 @@ final class CardRowV1 extends Equatable {
   @override
   String toString() => 'CardRowV1(<redacted>)';
 }
+
+final class CardPreviewV1 extends Equatable {
+  final CardRowV1 row;
+  final String description;
+  final bool protectedContainer;
+  const CardPreviewV1({
+    required this.row,
+    required this.description,
+    required this.protectedContainer,
+  });
+  @override
+  List<Object?> get props => [row, description, protectedContainer];
+  @override
+  String toString() => 'CardPreviewV1(<redacted>)';
+}

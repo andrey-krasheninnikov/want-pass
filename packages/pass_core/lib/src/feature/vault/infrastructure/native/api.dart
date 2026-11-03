@@ -14,6 +14,12 @@ abstract class Vault implements RustOpaqueInterface {
     required BigInt generation,
   });
 
+  Future<CardPreviewV1> cardPreviewV1({
+    required String id,
+    required BigInt revision,
+    required BigInt generation,
+  });
+
   Future<List<CardRowV1>> cardRowsV1({
     required List<String> ids,
     required BigInt revision,

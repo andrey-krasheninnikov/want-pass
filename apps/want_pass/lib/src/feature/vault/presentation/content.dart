@@ -1,6 +1,9 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
+import 'package:bloc_effects/bloc_effects.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:want_allure/want_allure.dart';
 import 'package:want_pass/src/feature/vault/application/_barrel.dart';
@@ -8,7 +11,8 @@ import 'package:want_pass/src/feature/vault/presentation/_barrel.dart';
 import 'package:want_pass_core/want_pass_core.dart';
 
 part 'card_editor.dart';
-part 'browse_table.dart';
+part 'workspace.dart';
+part 'preview.dart';
 
 String _text(BuildContext context, String en, String ru) =>
     Localizations.localeOf(context).languageCode == 'ru' ? ru : en;
@@ -18,128 +22,6 @@ final class VaultContentView extends StatefulWidget {
   const VaultContentView({super.key, required this.controller});
   @override
   State<VaultContentView> createState() => _VaultContentViewState();
-}
-
-final class _VaultContentViewState extends State<VaultContentView> {
-  DialogRoute<void>? _overlay;
-  bool _disposing = false;
-  void _closeDialog() {
-    final route = _overlay;
-    _overlay = null;
-    if (route?.isActive == true) route!.navigator?.removeRoute(route);
-    if (mounted && !_disposing) setState(() {});
-  }
-
-  void _show(WidgetBuilder builder) {
-    _closeDialog();
-    widget.controller.dismissFailure();
-    final route = DialogRoute<void>(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => Listener(
-        behavior: HitTestBehavior.translucent,
-        onPointerDown: (_) => widget.controller.activity(),
-        onPointerHover: (_) => widget.controller.activity(),
-        onPointerSignal: (_) => widget.controller.activity(),
-        child: builder(context),
-      ),
-    );
-    setState(() => _overlay = route);
-    unawaited(
-      Navigator.of(context).push(route).whenComplete(() {
-        if (identical(_overlay, route)) {
-          _overlay = null;
-          if (mounted && !_disposing) setState(() {});
-        }
-      }),
-    );
-  }
-
-  void _group([GroupV1? group]) {
-    final revision = widget.controller.state.content!.revision;
-    _show(
-      (context) => _GroupEditor(
-        controller: widget.controller,
-        group: group,
-        revision: revision,
-        onDone: _closeDialog,
-        onDelete: group == null ? null : () => _deleteGroup(group),
-      ),
-    );
-  }
-
-  Future<void> _account([String? id]) async {
-    final revision = widget.controller.state.content!.revision;
-    final account = id == null ? null : await widget.controller.readCard(id);
-    if (!mounted ||
-        widget.controller.state.phase != VaultPhase.unlocked ||
-        (id != null && account == null)) {
-      return;
-    }
-    _show(
-      (context) => _CardEditor(
-        controller: widget.controller,
-        card: account,
-        initialGroupId: null,
-        revision: revision,
-        onDone: _closeDialog,
-        onDelete: account == null ? null : () => _deleteAccount(account),
-      ),
-    );
-  }
-
-  void _deleteGroup(GroupV1 group) {
-    final revision = widget.controller.state.content!.revision;
-    _show(
-      (context) => _DeleteContentDialog(
-        controller: widget.controller,
-        group: true,
-        onConfirm: () =>
-            widget.controller.deleteGroup(group.id, revision: revision),
-        onDone: _closeDialog,
-      ),
-    );
-  }
-
-  void _deleteAccount(CardV1 account) {
-    final revision = widget.controller.state.content!.revision;
-    _show(
-      (context) => _DeleteContentDialog(
-        controller: widget.controller,
-        group: false,
-        onConfirm: () => widget.controller.deleteCard(
-          account.summary.id,
-          revision: revision,
-        ),
-        onDone: _closeDialog,
-      ),
-    );
-  }
-
-  @override
-  void dispose() {
-    _disposing = true;
-    _closeDialog();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) =>
-      BlocListener<VaultController, VaultState>(
-        bloc: widget.controller,
-        listenWhen: (a, b) => a.phase != b.phase,
-        listener: (context, state) {
-          if (state.phase != VaultPhase.unlocked) _closeDialog();
-        },
-        child: TickerMode(
-          enabled: _overlay == null,
-          child: _VaultBrowser(
-            controller: widget.controller,
-            onGroup: _group,
-            onCard: (id) => unawaited(_account(id)),
-          ),
-        ),
-      );
 }
 
 final class _Actions extends StatelessWidget {
@@ -175,12 +57,12 @@ final class _ContentError extends StatelessWidget {
                     (error as VaultRejectedErrorV1).kind ==
                         VaultFailureKindV1.unsupported
                 ? 'Check required fields, supported formats and size limits. Saved values are preserved.'
-                : 'The change could not be saved. Your saved data is preserved.',
+                : 'The action could not be completed. Your saved data is preserved.',
             error is VaultRejectedErrorV1 &&
                     (error as VaultRejectedErrorV1).kind ==
                         VaultFailureKindV1.unsupported
                 ? 'Проверьте обязательные поля, поддерживаемые форматы и ограничения размера. Сохранённые значения не изменены.'
-                : 'Изменение не сохранено. Сохранённые данные не потеряны.',
+                : 'Действие не выполнено. Сохранённые данные не потеряны.',
           ),
           colorRole: 'destructive',
           liveRegion: true,
@@ -192,12 +74,17 @@ final class _GroupEditor extends StatefulWidget {
   final GroupV1? group;
   final BigInt revision;
   final VoidCallback onDone;
+  final VoidCallback? onCancel;
+  final bool embedded;
   final VoidCallback? onDelete;
   const _GroupEditor({
+    super.key,
     required this.controller,
     required this.group,
     required this.revision,
     required this.onDone,
+    this.onCancel,
+    this.embedded = false,
     this.onDelete,
   });
   @override
@@ -221,7 +108,13 @@ final class _GroupEditorState extends State<_GroupEditor> {
     super.dispose();
   }
 
-  Future<void> _save() async {
+  bool get dirty =>
+      _name.text != (widget.group?.name ?? '') ||
+      _description.text != (widget.group?.description ?? '') ||
+      _icon != (widget.group?.icon ?? 'folder') ||
+      !listEquals(_logo, widget.group?.logo ?? const <int>[]);
+
+  Future<bool> _save() async {
     final saved = await widget.controller.saveGroup(
       GroupDraftV1(
         id: widget.group?.id,
@@ -233,6 +126,7 @@ final class _GroupEditorState extends State<_GroupEditor> {
       revision: widget.revision,
     );
     if (mounted && saved) widget.onDone();
+    return saved;
   }
 
   @override
@@ -240,7 +134,8 @@ final class _GroupEditorState extends State<_GroupEditor> {
     BuildContext context,
   ) => BlocBuilder<VaultController, VaultState>(
     bloc: widget.controller,
-    builder: (context, state) => WantDialog(
+    builder: (context, state) => _EditorFrame(
+      embedded: widget.embedded,
       title: _text(
         context,
         widget.group == null ? 'New group' : 'Group',
@@ -251,7 +146,7 @@ final class _GroupEditorState extends State<_GroupEditor> {
           WantButton(
             key: const ValueKey('content-cancel'),
             variant: WantButtonVariant.secondary,
-            onPressed: widget.onDone,
+            onPressed: widget.onCancel ?? widget.onDone,
             child: Text(_text(context, 'Cancel', 'Отмена')),
           ),
           WantButton(
@@ -370,7 +265,7 @@ final class _DeleteContentDialog extends StatelessWidget {
   final VaultController controller;
   final bool group;
   final Future<bool> Function() onConfirm;
-  final VoidCallback onDone;
+  final ValueChanged<bool> onDone;
   const _DeleteContentDialog({
     required this.controller,
     required this.group,
@@ -384,7 +279,7 @@ final class _DeleteContentDialog extends StatelessWidget {
     bloc: controller,
     listenWhen: (a, b) => a.phase != b.phase,
     listener: (context, state) {
-      if (state.phase != VaultPhase.unlocked && context.mounted) onDone();
+      if (state.phase != VaultPhase.unlocked && context.mounted) onDone(false);
     },
     builder: (context, state) => WantDialog(
       title: _text(
@@ -397,7 +292,7 @@ final class _DeleteContentDialog extends StatelessWidget {
           WantButton(
             key: const ValueKey('delete-cancel'),
             variant: WantButtonVariant.secondary,
-            onPressed: state.busy ? null : onDone,
+            onPressed: state.busy ? null : () => onDone(false),
             child: Text(_text(context, 'Cancel', 'Отмена')),
           ),
           WantButton(
@@ -407,7 +302,7 @@ final class _DeleteContentDialog extends StatelessWidget {
                 ? null
                 : () async {
                     final saved = await onConfirm();
-                    if (context.mounted && saved) onDone();
+                    if (context.mounted && saved) onDone(true);
                   },
             child: Text(_text(context, 'Delete', 'Удалить')),
           ),
@@ -433,4 +328,28 @@ final class _DeleteContentDialog extends StatelessWidget {
       ),
     ),
   );
+}
+
+final class _EditorFrame extends StatelessWidget {
+  final bool embedded;
+  final String title;
+  final Widget child, actions;
+  const _EditorFrame({
+    required this.embedded,
+    required this.title,
+    required this.child,
+    required this.actions,
+  });
+  @override
+  Widget build(BuildContext context) => embedded
+      ? Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          spacing: 16,
+          children: [
+            WantTypography(title, variant: WantTypographyVariant.h3),
+            child,
+            actions,
+          ],
+        )
+      : WantDialog(title: title, actions: actions, child: child);
 }

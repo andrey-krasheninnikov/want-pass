@@ -889,3 +889,82 @@ fn browsing_matches_hidden_values_and_combines_filters_without_disclosing_them()
             .is_err()
     );
 }
+
+#[test]
+fn preview_is_revision_bound_and_never_returns_concealed_values() {
+    let (_directory, vault) = create();
+    let mut input = account();
+    input.fields.push(CardValueV1 {
+        id: FieldIdV1::RecoveryCodes,
+        value: "synthetic-recovery-one".into(),
+    });
+    let saved = vault.save_card_v1(input, 0, vault.generation()).unwrap();
+    let id = saved.cards[0].id.clone();
+    let preview = vault
+        .card_preview_v1(id.clone(), saved.revision, vault.generation())
+        .unwrap();
+    assert_eq!(preview.description, "Fixture");
+    assert_eq!(
+        preview.row.login.as_deref(),
+        Some("fixture@example.invalid")
+    );
+    assert!(preview.row.fields.contains(&FieldIdV1::Password));
+    assert!(preview.row.fields.contains(&FieldIdV1::RecoveryCodes));
+    assert!(matches!(
+        vault.card_preview_v1(id.clone(), 0, vault.generation()),
+        Err(VaultFailure::Stale)
+    ));
+    vault.lock().unwrap();
+    assert!(
+        vault
+            .card_preview_v1(id, saved.revision, vault.generation())
+            .is_err()
+    );
+}
+#[test]
+fn search_orders_exact_and_prefix_names_before_other_matches() {
+    use want_pass_vault::api::CardSearchV1;
+    let (_directory, vault) = create();
+    let mut revision = 0;
+    for name in [
+        "Other account",
+        "a synthetic",
+        "Synthetic prefix",
+        "synthetic",
+    ] {
+        let mut input = account();
+        input.name = name.into();
+        input.fields[1].value = "synthetic value match".into();
+        revision = vault
+            .save_card_v1(input, revision, vault.generation())
+            .unwrap()
+            .revision;
+    }
+    let matches = vault
+        .search_cards_v1(
+            CardSearchV1 {
+                text: "SYNTHETIC".into(),
+                card_type: None,
+                service: None,
+                environment: None,
+                without_environment: false,
+            },
+            revision,
+            vault.generation(),
+        )
+        .unwrap();
+    let names: Vec<String> = matches
+        .card_ids
+        .into_iter()
+        .map(|id| vault.card_v1(id, vault.generation()).unwrap().summary.name)
+        .collect();
+    assert_eq!(
+        names,
+        [
+            "synthetic",
+            "Synthetic prefix",
+            "a synthetic",
+            "Other account"
+        ]
+    );
+}

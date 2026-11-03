@@ -13,6 +13,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:want_pass/src/core/_barrel.dart';
 import 'package:want_pass/src/feature/_common/presentation/_barrel.dart';
 import 'package:want_pass/src/feature/vault/application/_barrel.dart';
+import 'package:want_pass/src/feature/vault/presentation/_barrel.dart';
 import 'package:want_pass_core/want_pass_core.dart';
 import 'package:want_allure/want_allure.dart';
 
@@ -74,6 +75,10 @@ void main() {
       );
       await _settle(tester);
       expect(await signalWantPassFirstFrame(), isTrue);
+      final program = await ui.FragmentProgram.fromAsset(
+        'shaders/filaments.frag',
+      );
+      program.fragmentShader().dispose();
 
       if (phase == 'create') {
         await _tap(tester, 'setup-next');
@@ -145,7 +150,7 @@ void main() {
         await tester.tap(visibility);
         await _settle(tester);
         await _enter(tester, 'account-password', 'Synthetic\naccount value');
-        await _tap(tester, 'account-group-$groupId');
+        expect(runtime.vault.state.content!.groups.single.id, groupId);
         await _tap(tester, 'account-save');
         await _until(
           tester,
@@ -158,6 +163,9 @@ void main() {
           tester,
           () => runtime.vault.state.phase == VaultPhase.locked,
         );
+        await _settle(tester);
+        expect(find.byType(VaultFilaments), findsOneWidget);
+        await _captureWorkspace(tester, captureBoundary, 'locked-native');
         await _tap(tester, 'vault-padlock');
         await _settle(tester);
         await _enter(
@@ -230,6 +238,9 @@ void main() {
         'Synthetic\naccount value',
       );
       expect(account.summary.service, 'github');
+      expect(find.byType(VaultFilaments), findsNothing);
+      expect(find.byType(WantBackgroundMotion), findsNothing);
+      await _captureWorkspace(tester, captureBoundary, 'workspace-native');
       completed = true;
     } finally {
       FlutterError.onError = productErrorHandler;
@@ -325,6 +336,10 @@ Future<void> _tap(WidgetTester tester, String key) async {
   final label = key.startsWith('quiz-') ? 'quiz' : key;
   debugPrint('Native UI action: $label');
   final button = find.byKey(ValueKey(key));
+  if (key == 'group-create' && button.evaluate().isEmpty) {
+    await _tap(tester, 'groups-open');
+    await _settle(tester);
+  }
   await tester.ensureVisible(button);
   await _settle(tester);
   await tester.tap(button);
@@ -360,4 +375,24 @@ Future<void> _settle(WidgetTester tester) async {
     EnginePhase.sendSemanticsUpdate,
     const Duration(seconds: 10),
   );
+}
+
+Future<void> _captureWorkspace(
+  WidgetTester tester,
+  GlobalKey boundary,
+  String name,
+) async {
+  const directory = String.fromEnvironment('VAULT_VISUAL_DIR');
+  if (directory.isEmpty) return;
+  await _settle(tester);
+  final render =
+      boundary.currentContext!.findRenderObject()! as RenderRepaintBoundary;
+  final image = await render.toImage(pixelRatio: 1);
+  try {
+    final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
+    await File('$directory/$name.png')
+        .writeAsBytes(bytes!.buffer.asUint8List(), flush: true);
+  } finally {
+    image.dispose();
+  }
 }

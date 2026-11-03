@@ -64,6 +64,8 @@ void main() {
     await _tap(tester, 'card-service');
     await tester.tap(find.text('GitHub').last);
     await _pump(tester);
+    await tester.tap(find.text('Details (optional)'));
+    await _pump(tester);
     await _tap(tester, 'card-environment');
     await tester.ensureVisible(find.text('production').last);
     await tester.tap(find.text('production').last);
@@ -72,7 +74,12 @@ void main() {
     await _togglePassword(tester);
     await _enter(tester, 'account-password', 'fixture\npassword');
     await _togglePassword(tester);
-    await _tap(tester, 'account-group-${first.id}');
+    expect(
+      tester
+          .widget<WantButton>(find.byKey(ValueKey('account-group-${first.id}')))
+          .variant,
+      WantButtonVariant.primary,
+    );
     await _tap(tester, 'account-group-${second.id}');
     await _tap(tester, 'account-save');
     await _idle(tester, controller);
@@ -96,6 +103,7 @@ void main() {
     await _idle(tester, controller);
     expect(controller.state.content!.cards.single.groupIds, [second.id]);
     await _tap(tester, 'account-${account.id}');
+    await _tap(tester, 'card-edit');
     await _idle(tester, controller);
     expect(find.byKey(const ValueKey('account-password')), findsOneWidget);
     final field = tester.widget<EditableText>(
@@ -160,6 +168,7 @@ void main() {
       final card = fixture.controller.state.content!.cards.single;
       expect(card.cardType, CardTypeV1.pat);
       await _tap(tester, 'account-${card.id}');
+      await _tap(tester, 'card-edit');
       await _idle(tester, fixture.controller);
       expect(find.byKey(const ValueKey('card-copy-all')), findsNothing);
       final input = tester.widget<EditableText>(
@@ -247,6 +256,7 @@ void main() {
     await _tap(tester, 'group-create');
     await _enter(tester, 'group-name', 'Narrow fixture');
     await _tap(tester, 'content-cancel');
+    await _tap(tester, 'discard-changes');
     expect(fixture.controller.state.content!.groups, isEmpty);
     expect(tester.takeException(), isNull);
     await tester.pumpWidget(const SizedBox.shrink());
@@ -297,6 +307,7 @@ void main() {
       await _pump(tester);
       final id = controller.state.content!.cards.single.id;
       await _tap(tester, 'account-$id');
+      await _tap(tester, 'card-edit');
       await _idle(tester, controller);
       final toggle = find.descendant(
         of: find.byKey(const ValueKey('card-field-totpSeed')),
@@ -365,6 +376,7 @@ void main() {
         tester,
         'account-${controller.state.content!.cards.single.id}',
       );
+      await _tap(tester, 'card-edit');
       await _idle(tester, controller);
       final download = find.byKey(const ValueKey('card-file-download'));
       expect(tester.widget<WantButton>(download).onPressed, isNotNull);
@@ -422,6 +434,7 @@ void main() {
     await _pump(tester);
     final id = controller.state.content!.cards.single.id;
     await _tap(tester, 'account-$id');
+    await _tap(tester, 'card-edit');
     await _idle(tester, controller);
     for (
       var i = 0;
@@ -482,6 +495,7 @@ void main() {
     expect(fixture.controller.state.phase, VaultPhase.unlocked);
     expect(find.byKey(const ValueKey('group-name')), findsOneWidget);
     await _tap(tester, 'content-cancel');
+    await _tap(tester, 'discard-changes');
     await tester.pumpWidget(const SizedBox.shrink());
     await _closeFixture(tester, fixture);
   });
@@ -517,8 +531,60 @@ void main() {
     await tester.pumpWidget(const SizedBox.shrink());
     await _closeFixture(tester, fixture);
   });
+  testWidgets('dirty form survives resize and search requires a decision', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1280, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final fixture = (await tester.runAsync(_Fixture.create))!;
+    addTearDown(() => _closeFixture(tester, fixture));
+    await tester.pumpWidget(
+      MaterialApp(
+        builder: (context, child) =>
+            WantTheme(data: WantThemeData.dark(), child: child!),
+        home: Scaffold(body: VaultContentView(controller: fixture.controller)),
+      ),
+    );
+    await _pump(tester);
+    await _tap(tester, 'account-create');
+    await _enter(tester, 'account-name', 'Unsaved fixture');
+    tester.view.physicalSize = const Size(375, 812);
+    await _pump(tester);
+    expect(find.text('Unsaved fixture'), findsOneWidget);
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+    await tester.sendKeyEvent(LogicalKeyboardKey.keyK);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+    await _pump(tester);
+    expect(find.text('Unsaved changes'), findsOneWidget);
+    await tester.tap(find.text('Stay'));
+    await _pump(tester);
+    expect(find.text('Unsaved fixture'), findsOneWidget);
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+    await tester.sendKeyEvent(LogicalKeyboardKey.keyK);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+    await _pump(tester);
+    await _tap(tester, 'discard-changes');
+    expect(find.byKey(const ValueKey('account-name')), findsNothing);
+    final search = tester.widget<EditableText>(
+      find.descendant(
+        of: find.byKey(const ValueKey('vault-search')),
+        matching: find.byType(EditableText),
+      ),
+    );
+    expect(search.focusNode.hasFocus, isTrue);
+    expect(fixture.controller.state.content!.cards, isEmpty);
+    await _tap(tester, 'groups-open');
+    await tester.runAsync(fixture.controller.lock);
+    await _pump(tester);
+    expect(find.byKey(const ValueKey('group-filter-all')), findsNothing);
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
+
   testWidgets(
-    'table searches concealed values, filters, expands and copies separately',
+    'workspace searches concealed values, filters and copies from preview',
     (tester) async {
       String? clipboard;
       tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
@@ -605,7 +671,8 @@ void main() {
       expect(find.text('table@example.invalid'), findsOneWidget);
       expect(find.text('Hidden synthetic password'), findsNothing);
       expect(find.text('GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ'), findsNothing);
-      await _tap(tester, 'card-field-$group-$card-password');
+      await _tap(tester, 'account-$card');
+      await _tap(tester, 'preview-copy-password');
       await _idle(tester, controller);
       expect(
         (await tester.runAsync(() => Clipboard.getData(Clipboard.kTextPlain)))!
@@ -631,7 +698,7 @@ void main() {
         await _pump(tester);
       }
       expect(find.byType(LinearProgressIndicator), findsNothing);
-      expect(find.text('Synthetic team'), findsNothing);
+      expect(find.byKey(ValueKey('account-$card')), findsNothing);
       await _tap(tester, 'group-filter-none');
       await _pump(tester);
       expect(find.text('Synthetic token'), findsOneWidget);
@@ -683,36 +750,18 @@ Future<void> _idle(WidgetTester tester, VaultController controller) async {
 
 Future<void> _tap(WidgetTester tester, String key) async {
   var finder = find.byKey(ValueKey(key));
-  if (key.startsWith('account-') &&
-      ![
-        'account-create',
-        'account-save',
-        'account-group-',
-        'account-copy-all',
-      ].any(key.startsWith) &&
+  if (key.startsWith('group-') &&
+      key != 'groups-open' &&
       finder.evaluate().isEmpty) {
-    final groups = find.byWidgetPredicate(
-      (widget) =>
-          widget.key is ValueKey<String> &&
-          (widget.key! as ValueKey<String>).value.startsWith('group-filter-'),
-    );
-    if (groups.evaluate().isNotEmpty) {
-      await tester.tap(groups.first);
-      await _pump(tester);
-      for (
-        var attempt = 0;
-        attempt < 30 && finder.evaluate().isEmpty;
-        attempt++
-      ) {
-        await tester.runAsync(
-          () => Future<void>.delayed(const Duration(milliseconds: 10)),
-        );
-        await _pump(tester);
-      }
-    }
-    finder = find.byKey(ValueKey(key)).first;
+    await tester.tap(find.byKey(const ValueKey('groups-open')));
+    await _pump(tester);
+    finder = find.byKey(ValueKey(key));
+  }
+  for (var i = 0; i < 40 && finder.evaluate().isEmpty; i++) {
+    await _pump(tester);
   }
   await tester.ensureVisible(finder);
+  await tester.pump();
   await tester.tap(finder);
   await _pump(tester);
 }

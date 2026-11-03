@@ -4,7 +4,7 @@ import 'package:want_pass_core/src/feature/vault/infrastructure/_barrel.dart';
 
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `bytes`, `decode`, `mutate_cards`, `read_cards`, `snapshot`, `summary`, `summary`, `validate`
+// These functions are ignored because they are not marked as `pub`: `bytes`, `decode`, `mutate_cards`, `read_cards`, `row`, `snapshot`, `summary`, `summary`, `validate`
 // These types are ignored because they are neither used by any `pub` functions nor (for structs and enums) marked `#[frb(unignore)]`: `DocumentV2`, `StoredAttachment`, `StoredCard`
 // These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_receiver_is_total_eq`, `assert_receiver_is_total_eq`, `assert_receiver_is_total_eq`, `clone`, `clone`, `clone`, `clone`, `cmp`, `drop`, `drop`, `drop`, `eq`, `eq`, `eq`, `partial_cmp`, `zeroize`, `zeroize`, `zeroize`, `zeroize`
 
@@ -120,6 +120,31 @@ class CardMatchesV1 {
           revision == other.revision &&
           cardIds == other.cardIds &&
           groupIds == other.groupIds;
+}
+
+class CardPreviewV1 {
+  final CardRowV1 row;
+  final String description;
+  final bool protectedContainer;
+
+  const CardPreviewV1({
+    required this.row,
+    required this.description,
+    required this.protectedContainer,
+  });
+
+  @override
+  int get hashCode =>
+      row.hashCode ^ description.hashCode ^ protectedContainer.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is CardPreviewV1 &&
+          runtimeType == other.runtimeType &&
+          row == other.row &&
+          description == other.description &&
+          protectedContainer == other.protectedContainer;
 }
 
 class CardRecordV1 {

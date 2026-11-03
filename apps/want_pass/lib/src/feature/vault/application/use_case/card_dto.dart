@@ -246,3 +246,51 @@ final class CopyCardParamsV1 extends Equatable {
   @override
   String toString() => 'CopyCardParamsV1(<redacted>)';
 }
+
+final class ReadCardPreviewParamsV1 extends Equatable {
+  final VaultHandleV1 handle;
+  final String id;
+  final BigInt revision;
+  const ReadCardPreviewParamsV1({
+    required this.handle,
+    required this.id,
+    required this.revision,
+  });
+  @override
+  List<Object?> get props => [handle, id, revision];
+  @override
+  String toString() => 'ReadCardPreviewParamsV1(<redacted>)';
+}
+
+final class ReadCardPreviewResultV1 extends Equatable {
+  final CardPreviewV1 preview;
+  const ReadCardPreviewResultV1({required this.preview});
+  @override
+  List<Object?> get props => [preview];
+  @override
+  String toString() => 'ReadCardPreviewResultV1(<redacted>)';
+}
+
+final class ReadCardFieldParamsV1 extends Equatable {
+  final VaultHandleV1 handle;
+  final String id;
+  final FieldIdV1 field;
+  const ReadCardFieldParamsV1({
+    required this.handle,
+    required this.id,
+    required this.field,
+  });
+  @override
+  List<Object?> get props => [handle, id, field];
+  @override
+  String toString() => 'ReadCardFieldParamsV1(<redacted>)';
+}
+
+final class ReadCardFieldResultV1 extends Equatable {
+  final String value;
+  const ReadCardFieldResultV1({required this.value});
+  @override
+  List<Object?> get props => [value];
+  @override
+  String toString() => 'ReadCardFieldResultV1(<redacted>)';
+}

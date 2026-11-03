@@ -108,6 +108,12 @@ abstract interface class VaultUseCase {
   FutureDomainResult<ReadCardRowsResultV1> readCardRowsV1({
     required ReadCardRowsParamsV1 params,
   });
+  FutureDomainResult<ReadCardPreviewResultV1> readCardPreviewV1({
+    required ReadCardPreviewParamsV1 params,
+  });
+  FutureDomainResult<ReadCardFieldResultV1> readCardFieldV1({
+    required ReadCardFieldParamsV1 params,
+  });
   FutureDomainResult<ReadCardResultV1> readCardV1({
     required ReadCardParamsV1 params,
   });

@@ -737,6 +737,84 @@ final class VaultController extends CubitWithEffects<VaultState, VaultEffect> {
     );
   }
 
+  Future<CardPreviewV1?> readCardPreview(String id) async {
+    const op = 'VaultController.readCardPreview():';
+    if (_closing ||
+        isClosed ||
+        state.phase != VaultPhase.unlocked ||
+        state.busy ||
+        _handle == null ||
+        state.content == null ||
+        !LaunchMode.isInitialized ||
+        !LaunchMode.isForeground) {
+      return null;
+    }
+    final epoch = _epoch, revision = state.content!.revision;
+    final done = Completer<void>();
+    _browseOperations.add(done.future);
+    try {
+      final result = await _useCase.readCardPreviewV1(
+        params: ReadCardPreviewParamsV1(
+          handle: _handle!,
+          id: id,
+          revision: revision,
+        ),
+      );
+      if (_closing ||
+          isClosed ||
+          epoch != _epoch ||
+          state.content?.revision != revision ||
+          state.phase != VaultPhase.unlocked) {
+        return null;
+      }
+      if (result.isError) {
+        _fail(op, _error(result.error), clearBusy: false);
+        return null;
+      }
+      return result.value.preview;
+    } finally {
+      done.complete();
+      _browseOperations.remove(done.future);
+    }
+  }
+
+  Future<String?> revealCardField(String id, FieldIdV1 field) async {
+    const op = 'VaultController.revealCardField():';
+    if (_closing ||
+        isClosed ||
+        state.phase != VaultPhase.unlocked ||
+        state.busy ||
+        _handle == null ||
+        state.content == null ||
+        !LaunchMode.isInitialized ||
+        !LaunchMode.isForeground) {
+      return null;
+    }
+    final epoch = _epoch, revision = state.content!.revision;
+    final done = Completer<void>();
+    _browseOperations.add(done.future);
+    try {
+      final result = await _useCase.readCardFieldV1(
+        params: ReadCardFieldParamsV1(handle: _handle!, id: id, field: field),
+      );
+      if (_closing ||
+          isClosed ||
+          epoch != _epoch ||
+          state.content?.revision != revision ||
+          state.phase != VaultPhase.unlocked) {
+        return null;
+      }
+      if (result.isError) {
+        _fail(op, _error(result.error), clearBusy: false);
+        return null;
+      }
+      return result.value.value;
+    } finally {
+      done.complete();
+      _browseOperations.remove(done.future);
+    }
+  }
+
   Future<CardV1?> readCard(String id) async {
     const op = 'VaultController.readCard():';
     if (state.phase != VaultPhase.unlocked) return null;
@@ -1009,7 +1087,9 @@ final class VaultController extends CubitWithEffects<VaultState, VaultEffect> {
         const Duration(seconds: 30),
         () => unawaited(_clearClipboard()),
       );
-      emitEffect(const VaultNotice(VaultNoticeKind.copied));
+      emitEffect(
+        VaultCredentialCopiedV1(cardId: id, kind: params.kind, field: field),
+      );
       activity();
     }();
     _exportOperation = operation;

@@ -474,14 +474,14 @@ void main() {
           expect(controller.state.phase, VaultPhase.locked);
           expect(
             find.descendant(
-              of: find.byType(VaultUnlockDialog),
+              of: find.byType(VaultUnlockForm),
               matching: find.text(message),
             ),
             findsOneWidget,
           );
           final errorNode = tester.getSemantics(
             find.descendant(
-              of: find.byType(VaultUnlockDialog),
+              of: find.byType(VaultUnlockForm),
               matching: find.text(message),
             ),
           );
@@ -806,8 +806,8 @@ void main() {
   for (final pendingCopy in [false, true]) {
     testWidgets(
       pendingCopy
-          ? 'table masks expired OTP during pending copy'
-          : 'table retries an already expired row response',
+          ? 'preview masks expired OTP during pending copy'
+          : 'preview retries an already expired response',
       (tester) async {
         const id = '0123456789abcdef0123456789abcdef';
         final access = _Access()..accountCopy = 'synthetic credential';
@@ -858,12 +858,18 @@ void main() {
           ),
         );
         await tester.pump();
-        await tester.tap(find.byKey(const ValueKey('group-filter-none')));
+        await tester.pump(const Duration(milliseconds: 200));
+        await tester.pump();
+        await tester.tap(find.byKey(const ValueKey('account-$id')));
         for (var i = 0; i < 20 && access.rowReads == 0; i++) {
           await tester.pump(const Duration(milliseconds: 20));
         }
-        expect(access.rowReads, 1);
+        expect(access.rowReads, greaterThanOrEqualTo(1));
+        for (var i = 0; i < 10 && access.previewReads == 0; i++) {
+          await tester.pump(const Duration(milliseconds: 20));
+        }
         if (pendingCopy) {
+          await tester.pump();
           await tester.pump();
           expect(find.text('123456'), findsOneWidget);
           final copying = controller.copyCard(id);
@@ -924,6 +930,112 @@ void main() {
       },
     );
   }
+  testWidgets('large workspace loads safe previews and Enter never copies', (
+    tester,
+  ) async {
+    await _loadFonts(tester);
+    tester.view.physicalSize = const Size(1440, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final access = _Access()..fieldCopy = 'Synthetic selected value';
+    access.handle.exists = true;
+    access.handle.state = VaultAccessStateV1.unlocked;
+    access.snapshot = ContentSnapshotV2(
+      revision: BigInt.zero,
+      groups: const [],
+      cards: List.generate(
+        1000,
+        (i) => CardSummaryV1(
+          id: i.toRadixString(16).padLeft(32, '0'),
+          name: 'Synthetic secret ${i.toString().padLeft(4, '0')}',
+          service: 'github',
+          groupIds: const [],
+          cardType: CardTypeV1.account,
+          templateVersion: 1,
+        ),
+      ),
+    );
+    final id = access.snapshot!.cards.first.id;
+    access.rows = [
+      CardRowV1(
+        id: id,
+        fields: const [FieldIdV1.login, FieldIdV1.password],
+        login: 'fixture@example.invalid',
+      ),
+    ];
+    final events = StreamController<VaultLockSignal>.broadcast();
+    final controller = _controller(access, events.stream, _Export());
+    final boundary = GlobalKey();
+    await controller.init();
+    await controller.loadContent();
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: ThemeData(fontFamily: 'packages/want_allure/Manrope'),
+        builder: (context, child) => WantTheme(
+          data: WantThemeData.dark(),
+          reduceMotion: true,
+          child: child!,
+        ),
+        home: Scaffold(
+          body: RepaintBoundary(
+            key: boundary,
+            child: VaultContentView(controller: controller),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    final mountedRows = find
+        .byWidgetPredicate(
+          (w) =>
+              w.key is ValueKey<String> &&
+              (w.key! as ValueKey<String>).value.startsWith('account-'),
+        )
+        .evaluate()
+        .length;
+    expect(mountedRows, lessThan(40));
+    await tester.tap(find.byKey(ValueKey('account-$id')));
+    await tester.pumpAndSettle();
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    await tester.pumpAndSettle();
+    expect(access.fullCardReads, 0);
+    expect(access.fieldCopies, 0);
+    expect(access.previewReads, 1);
+    expect(find.text('Synthetic selected value'), findsNothing);
+    expect(find.byKey(const ValueKey('preview-copy-password')), findsOneWidget);
+    await _capture(tester, boundary, 'workspace-desktop-dark');
+    await tester.tap(find.bySemanticsLabel('Show Password'));
+    await tester.pumpAndSettle();
+    expect(access.fieldCopies, 1);
+    expect(access.fullCardReads, 0);
+    expect(find.text('Synthetic selected value'), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('preview-copy-password')));
+    await tester.pumpAndSettle();
+    expect(access.fieldCopies, 2);
+    expect(find.byIcon(Icons.check), findsOneWidget);
+    tester.view.physicalSize = const Size(390, 844);
+    await tester.pumpAndSettle();
+    await _capture(tester, boundary, 'workspace-narrow-dark');
+    expect(tester.takeException(), isNull);
+    final locking = controller.lock();
+    await tester.pumpAndSettle();
+    await locking;
+    expect(find.text('Synthetic selected value'), findsNothing);
+    await tester.pumpWidget(const SizedBox.shrink());
+    var closed = false;
+    final closing = controller.close().then((_) => closed = true);
+    for (var i = 0; i < 30 && !closed; i++) {
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 10)),
+      );
+      await tester.pump(const Duration(milliseconds: 20));
+    }
+    expect(closed, isTrue);
+    await closing;
+    await events.close();
+  });
+
   test('single-field copy never reads the complete card', () async {
     final access = _Access()..fieldCopy = 'fixture@example.invalid';
     access.handle.exists = true;
@@ -1491,7 +1603,7 @@ final class _Handle implements VaultHandleV1 {
 
 final class _Access implements VaultAccessService {
   String? accountCopy, fieldCopy;
-  int fullCardReads = 0, fieldCopies = 0, rowReads = 0;
+  int fullCardReads = 0, fieldCopies = 0, rowReads = 0, previewReads = 0;
   ContentSnapshotV2? snapshot;
   List<CardRowV1> rows = const [];
   Completer<DomainResult<CardMatchesV1>>? searchReply;
@@ -1557,6 +1669,29 @@ final class _Access implements VaultAccessService {
     required BigInt revision,
   }) async =>
       const Result.error(VaultRejectedErrorV1(VaultFailureKindV1.unavailable));
+  @override
+  FutureDomainResult<CardPreviewV1> cardPreviewV1({
+    required VaultHandleV1 handle,
+    required String id,
+    required BigInt revision,
+  }) async {
+    previewReads++;
+    final result = await cardRowsV1(
+      handle: handle,
+      ids: [id],
+      revision: revision,
+    );
+    if (result.isError) return Result.error(result.error);
+    final row = result.value.where((r) => r.id == id).firstOrNull;
+    return row == null
+        ? const Result.error(
+            VaultRejectedErrorV1(VaultFailureKindV1.unavailable),
+          )
+        : Result.success(
+            CardPreviewV1(row: row, description: '', protectedContainer: false),
+          );
+  }
+
   @override
   FutureDomainResult<CardV1> cardV1({
     required VaultHandleV1 handle,
@@ -2006,6 +2141,7 @@ Future<void> _loadFonts(WidgetTester tester) async {
     rootBundle.evict('assets/brand/logo.svg');
     await rootBundle.loadString('assets/brand/logo.svg');
     for (final (family, asset) in [
+      ('MaterialIcons', 'fonts/MaterialIcons-Regular.otf'),
       (
         'packages/want_allure/Days One',
         'packages/want_allure/assets/fonts/DaysOne-Regular.ttf',

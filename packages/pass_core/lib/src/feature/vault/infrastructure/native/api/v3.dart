@@ -6,6 +6,9 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
 // These functions are ignored because they are not marked as `pub`: `challenge`, `parse_phrase`, `recovery_json`
 
+Future<bool> validatePasswordV3({required String password}) =>
+    VaultRustLib.instance.api.crateApiV3ValidatePasswordV3(password: password);
+
 class RecoveryChallengeV3 {
   final List<String> words;
   final Uint32List positions;

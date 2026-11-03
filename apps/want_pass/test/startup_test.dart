@@ -108,6 +108,15 @@ final class _VaultHandle implements VaultHandleV1 {
 
 final class _VaultAccess implements VaultAccessService {
   @override
+  FutureDomainResult<bool> validatePasswordV3({
+    required String password,
+  }) async => const Result.success(true);
+  @override
+  FutureDomainResult<void> unlockV3({
+    required VaultHandleV1 handle,
+    required String password,
+  }) => unlockV1(handle: handle, password: password);
+  @override
   FutureDomainResult<void> validateRecoveryV3({
     required VaultHandleV1 handle,
     required String phrase,

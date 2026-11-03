@@ -18,9 +18,10 @@ import 'package:want_pass/src/feature/_common/presentation/_barrel.dart';
 import 'package:want_pass/src/feature/startup/application/_barrel.dart';
 import 'package:launch_mode/launch_mode.dart';
 import 'package:want_pass/src/feature/vault/application/_barrel.dart';
+import 'package:want_pass/src/feature/vault/presentation/_barrel.dart';
 import 'package:want_pass_core/want_pass_core.dart';
 
-const _password = 'Synthetic lifecycle password 2026';
+const _password = 'Synthetic lifecycle password 2026!';
 const _challenge = VaultRecoveryChallengeV1(
   words: ['one', 'two', 'three'],
   positions: [0, 1, 2],
@@ -34,6 +35,69 @@ void main() {
   });
   tearDown(binding.platformDispatcher.clearAccessibilityFeaturesTestValue);
   LaunchMode.initializeAutomatically();
+
+  test(
+    'password checks keep only the latest revision and never cross a lock',
+    () async {
+      final access = _Access();
+      access.handle.state = VaultAccessStateV1.locked;
+      final events = StreamController<VaultLockSignal>.broadcast();
+      final controller = _controller(access, events.stream);
+      await controller.init();
+      final older = Completer<DomainResult<bool>>();
+      access.passwordCheck = older;
+      final first = controller.validatePassword(_password);
+      final current = Completer<DomainResult<bool>>();
+      access.passwordCheck = current;
+      final second = controller.validatePassword('short');
+      current.complete(const Result.success(false));
+      expect(await second, isFalse);
+      older.complete(const Result.success(true));
+      expect(await first, isFalse);
+      expect(controller.state.passwordValid, isFalse);
+      final late = Completer<DomainResult<bool>>();
+      access.passwordCheck = late;
+      final pending = controller.validatePassword(_password);
+      await controller.lock();
+      late.complete(const Result.success(true));
+      expect(await pending, isFalse);
+      expect(controller.state.passwordValid, isNull);
+      await controller.close();
+      await events.close();
+    },
+  );
+
+  testWidgets(
+    'idle countdown follows the owner even with reduced motion and inactive views',
+    (tester) async {
+      var remaining = const Duration(minutes: 5);
+      await tester.pumpWidget(
+        MaterialApp(
+          home: WantTheme(
+            data: WantThemeData.dark(),
+            reduceMotion: true,
+            child: VaultIdleCountdown(remaining: () => remaining),
+          ),
+        ),
+      );
+      expect(find.text('05:00'), findsOneWidget);
+      remaining = const Duration(minutes: 4, seconds: 59);
+      await tester.pump(const Duration(seconds: 1));
+      expect(find.text('04:59'), findsOneWidget);
+      binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+      await tester.pump();
+      remaining = const Duration(minutes: 3);
+      await tester.pump(const Duration(seconds: 60));
+      expect(find.text('04:59'), findsOneWidget);
+      binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      await tester.pump();
+      expect(find.text('03:00'), findsOneWidget);
+      remaining = const Duration(minutes: 5);
+      await tester.pump(const Duration(seconds: 1));
+      expect(find.text('05:00'), findsOneWidget);
+      await tester.pumpWidget(const SizedBox.shrink());
+    },
+  );
 
   test(
     'password mismatch never reaches storage and domain errors keep identity',
@@ -163,6 +227,7 @@ void main() {
   testWidgets(
     'unlock retry submits the replacement text once after a rejected password',
     (tester) async {
+      await _loadFonts(tester);
       final access = _Access()
         ..failure = const VaultRejectedErrorV1(VaultFailureKindV1.credentials);
       access.handle.state = VaultAccessStateV1.locked;
@@ -173,27 +238,67 @@ void main() {
         await startup.init();
         await controller.init();
       });
-      await tester.pumpWidget(WantPassApp(startup: startup, vault: controller));
+      final notices = <VaultNoticeKind>[];
+      final effects = controller.effectsStream.listen((effect) {
+        if (effect is VaultNotice) notices.add(effect.kind);
+      });
+      final boundary = GlobalKey();
+      await tester.pumpWidget(
+        RepaintBoundary(
+          key: boundary,
+          child: WantPassApp(startup: startup, vault: controller),
+        ),
+      );
       await tester.pumpAndSettle();
       await _tapKey(tester, 'vault-dial');
+      expect(find.byKey(const ValueKey('vault-recovery')), findsNothing);
+      expect(find.byKey(const ValueKey('vault-show-hint')), findsNothing);
+      await _capture(tester, boundary, 'unlock-initial');
       final field = find.descendant(
         of: find.byKey(const ValueKey('unlock-password')),
         matching: find.bySubtype<EditableText>(),
       );
-      await _enter(tester, field, 'Wrong synthetic password 2026');
+      await _enter(tester, field, 'short');
+      await tester.tap(find.byKey(const ValueKey('vault-unlock')));
+      await tester.pumpAndSettle();
+      expect(access.passwords, isEmpty);
+      await _capture(tester, boundary, 'unlock-invalid');
+      expect(find.byKey(const ValueKey('vault-recovery')), findsNothing);
+      expect(find.byKey(const ValueKey('vault-show-hint')), findsNothing);
+      await _enter(tester, field, 'Wrong synthetic password 2026!');
       await tester.tap(find.byKey(const ValueKey('vault-unlock')));
       await tester.pumpAndSettle();
       expect(controller.state.error, isNotNull);
+      expect(find.byKey(const ValueKey('vault-recovery')), findsOneWidget);
+      expect(find.byKey(const ValueKey('vault-show-hint')), findsOneWidget);
+      await _capture(tester, boundary, 'unlock-rejected');
+      expect(notices, isEmpty);
       access.failure = null;
       await _enter(tester, field, _password);
-      await tester.pump();
-      expect(tester.widget<EditableText>(field).controller.text, _password);
+      await tester.pump(const Duration(milliseconds: 200));
+      await tester.pumpAndSettle();
+      final editor = tester.widget<EditableText>(field);
+      expect(editor.controller.text, _password);
+      expect(editor.focusNode.hasFocus, isTrue);
+      final focus = editor.focusNode;
+      final unlockButton = find.byKey(const ValueKey('vault-unlock'));
+      final buttonElement = tester.element(unlockButton);
+      expect(controller.state.passwordValid, isTrue);
+      await _capture(tester, boundary, 'unlock-valid');
+      expect(identical(tester.element(unlockButton), buttonElement), isTrue);
+      expect(tester.widget<EditableText>(field).focusNode, same(focus));
       await tester.tap(find.byKey(const ValueKey('vault-unlock')));
       await tester.pumpAndSettle();
       expect(controller.state.phase, VaultPhase.unlocked);
-      expect(access.passwords, ['Wrong synthetic password 2026', _password]);
+      expect(notices, [VaultNoticeKind.unlocked]);
+      expect(find.text('Access granted'), findsWidgets);
+      expect(find.text('05:00'), findsOneWidget);
+      await _capture(tester, boundary, 'unlock-granted');
+      expect(access.passwords, ['Wrong synthetic password 2026!', _password]);
       await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump(const Duration(milliseconds: 100));
       await tester.runAsync(() async {
+        await effects.cancel();
         await controller.close();
         await startup.close();
         await events.close();
@@ -264,8 +369,8 @@ void main() {
   testWidgets(
     'branded password fields remove LF while preserving spaces and Unicode',
     (tester) async {
-      const password = 'Synthetic exact\npassword 2026';
-      const acceptedPassword = 'Synthetic exactpassword 2026';
+      const password = 'Synthetic exact\npassword 2026!';
+      const acceptedPassword = 'Synthetic exactpassword 2026!';
       final semantics = tester.ensureSemantics();
       try {
         final access = _Access();
@@ -347,6 +452,7 @@ void main() {
         expect(access.passwords, [acceptedPassword]);
         expect(controller.state.phase, VaultPhase.unlocked);
         await tester.pumpWidget(const SizedBox.shrink());
+        await tester.pump(const Duration(milliseconds: 100));
         await tester.runAsync(() async {
           await controller.close();
           await startup.close();
@@ -449,6 +555,7 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(const ValueKey('vault-dial')));
       await tester.pumpAndSettle();
+      await _rejectUnlock(tester, access);
       await tester.tap(find.byKey(const ValueKey('vault-recovery')));
       await tester.pumpAndSettle();
       Finder field(String key) => find.descendant(
@@ -489,6 +596,7 @@ void main() {
       await tester.pump();
       expect(access.exports, 0);
       await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump(const Duration(milliseconds: 100));
       await tester.runAsync(() async {
         await controller.close();
         await startup.close();
@@ -669,29 +777,7 @@ void main() {
   testWidgets(
     'header appearance menus persist and fit narrow enlarged Russian layout',
     (tester) async {
-      await tester.runAsync(() async {
-        for (final (family, asset) in [
-          (
-            'packages/want_allure/Days One',
-            'packages/want_allure/assets/fonts/DaysOne-Regular.ttf',
-          ),
-          (
-            'packages/want_allure/Manrope',
-            'packages/want_allure/assets/fonts/Manrope.ttf',
-          ),
-          (
-            'packages/phosphoricons_flutter/PhosphorRegular',
-            'packages/phosphoricons_flutter/lib/fonts/Phosphor.ttf',
-          ),
-          (
-            'packages/forui_lucide/ForuiLucideIcons',
-            'packages/forui_lucide/assets/lucide.ttf',
-          ),
-        ]) {
-          final loader = FontLoader(family)..addFont(rootBundle.load(asset));
-          await loader.load();
-        }
-      });
+      await _loadFonts(tester);
 
       tester.view.devicePixelRatio = 1;
       tester.view.physicalSize = const Size(1024, 768);
@@ -751,6 +837,15 @@ void main() {
         WantThemeData.dark().color('muted-foreground'),
       );
       await _capture(tester, boundary, 'desktop-dark-en');
+      await tester.pumpAndSettle();
+      expect(find.byType(WantSvg3D), findsOneWidget);
+      expect(
+        find.descendant(
+          of: find.byType(WantSvg3D),
+          matching: find.byType(Image),
+        ),
+        findsNothing,
+      );
       await tester.tap(find.byKey(const ValueKey('appearance-language')));
       await tester.pumpAndSettle();
       await tester.tap(find.text('🇷🇺 Русский'));
@@ -796,6 +891,7 @@ void main() {
       await tester.pumpWidget(WantPassApp(startup: startup, vault: controller));
       await tester.pumpAndSettle();
       await _tapKey(tester, 'vault-dial');
+      await _rejectUnlock(tester, access);
       await _tapKey(tester, 'vault-recovery');
       expect(
         tester
@@ -1063,6 +1159,19 @@ final class _Access implements VaultAccessService {
     return const Result.success(null);
   }
 
+  Completer<DomainResult<bool>>? passwordCheck;
+  @override
+  FutureDomainResult<bool> validatePasswordV3({required String password}) =>
+      passwordCheck?.future ??
+      Future.value(
+        Result.success(password.length >= 15 && password.contains('!')),
+      );
+  @override
+  FutureDomainResult<void> unlockV3({
+    required VaultHandleV1 handle,
+    required String password,
+  }) => unlockV1(handle: handle, password: password);
+
   @override
   FutureDomainResult<void> unlockV1({
     required VaultHandleV1 handle,
@@ -1180,4 +1289,49 @@ Future<void> _tapKey(WidgetTester tester, String key) async {
   await tester.pumpAndSettle();
   await tester.tap(target);
   await tester.pumpAndSettle();
+}
+
+Future<void> _rejectUnlock(WidgetTester tester, _Access access) async {
+  final previous = access.failure;
+  access.failure = const VaultRejectedErrorV1(VaultFailureKindV1.credentials);
+  try {
+    final input = find.descendant(
+      of: find.byKey(const ValueKey('unlock-password')),
+      matching: find.bySubtype<EditableText>(),
+    );
+    await _enter(tester, input, _password);
+    await _tapKey(tester, 'vault-unlock');
+    expect(access.passwords.last, _password);
+  } finally {
+    access.failure = previous;
+  }
+}
+
+Future<void> _loadFonts(WidgetTester tester) async {
+  await tester.runAsync(() async {
+    // Load outside fake async so asset futures cannot outlive an earlier test.
+    rootBundle.evict('assets/brand/logo.svg');
+    await rootBundle.loadString('assets/brand/logo.svg');
+    for (final (family, asset) in [
+      (
+        'packages/want_allure/Days One',
+        'packages/want_allure/assets/fonts/DaysOne-Regular.ttf',
+      ),
+      (
+        'packages/want_allure/Manrope',
+        'packages/want_allure/assets/fonts/Manrope.ttf',
+      ),
+      (
+        'packages/phosphoricons_flutter/PhosphorRegular',
+        'packages/phosphoricons_flutter/lib/fonts/Phosphor.ttf',
+      ),
+      (
+        'packages/forui_lucide/ForuiLucideIcons',
+        'packages/forui_lucide/assets/lucide.ttf',
+      ),
+    ]) {
+      final loader = FontLoader(family)..addFont(rootBundle.load(asset));
+      await loader.load();
+    }
+  });
 }

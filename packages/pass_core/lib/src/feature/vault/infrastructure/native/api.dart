@@ -92,6 +92,8 @@ abstract class Vault implements RustOpaqueInterface {
 
   Future<void> unlock({required String password, required BigInt generation});
 
+  Future<void> unlockV3({required String password, required BigInt generation});
+
   Future<void> validateRecoveryV3({
     required String phrase,
     required BigInt generation,

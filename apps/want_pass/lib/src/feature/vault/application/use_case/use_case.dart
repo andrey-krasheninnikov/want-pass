@@ -12,6 +12,12 @@ abstract interface class VaultUseCase {
   FutureDomainResult<ConfirmVaultCreationResultV1> confirmCreationV1({
     required ConfirmVaultCreationParamsV1 params,
   });
+  FutureDomainResult<ValidatePasswordResultV3> validatePasswordV3({
+    required ValidatePasswordParamsV3 params,
+  });
+  FutureDomainResult<UnlockVaultResultV3> unlockV3({
+    required UnlockVaultParamsV3 params,
+  });
   FutureDomainResult<UnlockVaultResultV1> unlockV1({
     required UnlockVaultParamsV1 params,
   });

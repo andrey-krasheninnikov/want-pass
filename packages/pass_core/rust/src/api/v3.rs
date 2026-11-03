@@ -2,6 +2,11 @@ use super::*;
 use serde::de::{Error, MapAccess, Visitor};
 use std::fmt;
 
+pub fn validate_password_v3(password: String) -> bool {
+    let password = Zeroizing::new(password);
+    format::validate_password_v2(&password).is_ok()
+}
+
 pub struct RecoveryChallengeV3 {
     pub words: Vec<String>,
     pub positions: Vec<u32>,
@@ -82,6 +87,12 @@ fn challenge(value: RecoveryChallengeV2, revision: u64) -> RecoveryChallengeV3 {
 }
 
 impl Vault {
+    pub fn unlock_v3(&self, password: String, generation: u64) -> Result<(), VaultFailure> {
+        let password = Zeroizing::new(password);
+        format::validate_password_v2(&password)?;
+        self.unlock(password.to_string(), generation)
+    }
+
     pub fn validate_recovery_v3(
         &self,
         phrase: String,
@@ -177,6 +188,26 @@ impl Vault {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn password_validation_is_a_pure_strict_policy_check() {
+        use super::validate_password_v3;
+        for value in [
+            "Synthetic master password 2026!",
+            "Синтетический пароль 2026!",
+            "Aa123456789012😀",
+        ] {
+            assert!(validate_password_v3(value.to_owned()));
+        }
+        for value in [
+            "",
+            "shortA1!",
+            "legacy synthetic password",
+            "No special character 2026",
+        ] {
+            assert!(!validate_password_v3(value.to_owned()));
+        }
+    }
+
     use super::*;
     #[test]
     fn json_is_strict_and_allows_repeated_words() {

@@ -143,6 +143,53 @@ final class RustVaultAccessService implements VaultAccessService {
   }
 
   @override
+  FutureDomainResult<bool> validatePasswordV3({
+    required String password,
+  }) async {
+    const op = 'RustVaultAccessService.validatePasswordV3():';
+    final result = await captureResult<bool>(
+      () => native.validatePasswordV3(password: password),
+      mapToDomainError: _mapNativeError,
+    );
+    if (result.isError) {
+      reportVaultSafely(
+        _reporter,
+        layer: VaultDiagnosticLayer.infrastructure,
+        operation: op,
+        error: result.error is VaultErrorV1
+            ? result.error as VaultErrorV1
+            : const VaultUnexpectedErrorV1(),
+      );
+    }
+    return result;
+  }
+
+  @override
+  FutureDomainResult<void> unlockV3({
+    required VaultHandleV1 handle,
+    required String password,
+  }) async {
+    const op = 'RustVaultAccessService.unlockV3():';
+    final result = await captureResult<void>(() async {
+      await (handle as _NativeVaultHandle)._vault.unlockV3(
+        password: password,
+        generation: (handle)._vault.generation(),
+      );
+    }, mapToDomainError: _mapNativeError);
+    if (result.isError) {
+      reportVaultSafely(
+        _reporter,
+        layer: VaultDiagnosticLayer.infrastructure,
+        operation: op,
+        error: result.error is VaultErrorV1
+            ? result.error as VaultErrorV1
+            : const VaultUnexpectedErrorV1(),
+      );
+    }
+    return result;
+  }
+
+  @override
   FutureDomainResult<void> unlockV1({
     required VaultHandleV1 handle,
     required String password,

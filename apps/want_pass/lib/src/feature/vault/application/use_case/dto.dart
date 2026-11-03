@@ -387,3 +387,36 @@ final class SelectRecoveryFileParamsV3 extends Equatable {
   @override
   List<Object?> get props => [];
 }
+
+final class ValidatePasswordParamsV3 extends Equatable {
+  final String password;
+  const ValidatePasswordParamsV3({required this.password});
+  @override
+  List<Object?> get props => [password];
+  @override
+  String toString() => 'ValidatePasswordParamsV3(<redacted>)';
+}
+
+final class ValidatePasswordResultV3 extends Equatable {
+  final bool valid;
+  const ValidatePasswordResultV3({required this.valid});
+  @override
+  List<Object?> get props => [valid];
+}
+
+final class UnlockVaultParamsV3 extends Equatable {
+  final VaultHandleV1 handle;
+  final String password;
+  const UnlockVaultParamsV3({required this.handle, required this.password});
+  @override
+  List<Object?> get props => [handle, password];
+  @override
+  String toString() => 'UnlockVaultParamsV3(<redacted>)';
+}
+
+final class UnlockVaultResultV3 extends Equatable {
+  final VaultAccessStateV1 state;
+  const UnlockVaultResultV3({required this.state});
+  @override
+  List<Object?> get props => [state];
+}

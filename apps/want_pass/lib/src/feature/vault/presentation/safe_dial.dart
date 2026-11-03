@@ -1,7 +1,91 @@
 import 'dart:math' as math;
+import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:want_allure/want_allure.dart';
+
+final class VaultIdleCountdown extends StatefulWidget {
+  final Duration Function() remaining;
+  const VaultIdleCountdown({super.key, required this.remaining});
+  @override
+  State<VaultIdleCountdown> createState() => _VaultIdleCountdownState();
+}
+
+final class _VaultIdleCountdownState extends State<VaultIdleCountdown>
+    with WidgetsBindingObserver {
+  Timer? _timer;
+  bool _active = true;
+  void _sync() {
+    _timer?.cancel();
+    if (_active && TickerMode.valuesOf(context).enabled) {
+      _timer = Timer.periodic(const Duration(seconds: 1), (_) {
+        if (mounted) setState(() {});
+      });
+    }
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _active =
+        WidgetsBinding.instance.lifecycleState == null ||
+        WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed;
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _sync();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    _active = state == AppLifecycleState.resumed;
+    if (mounted) setState(_sync);
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final remaining = widget.remaining();
+    final seconds = ((remaining.inMilliseconds + 999) ~/ 1000).clamp(0, 300);
+    final label = Localizations.localeOf(context).languageCode == 'ru'
+        ? 'До блокировки'
+        : 'Until lock';
+    return Center(
+      child: SizedBox(
+        width: 160,
+        child: Column(
+          spacing: 8,
+          children: [
+            Semantics(
+              label:
+                  '$label: ${seconds ~/ 60}:${(seconds % 60).toString().padLeft(2, '0')}',
+              child: ExcludeSemantics(
+                child: WantTypography(
+                  '${(seconds ~/ 60).toString().padLeft(2, '0')}:${(seconds % 60).toString().padLeft(2, '0')}',
+                  variant: WantTypographyVariant.h3,
+                ),
+              ),
+            ),
+            WantProgress(
+              label: label,
+              value: remaining.inMilliseconds.toDouble(),
+              max: const Duration(minutes: 5).inMilliseconds.toDouble(),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
 
 final class VaultSafeDial extends StatefulWidget {
   final bool opened;

@@ -1,6 +1,7 @@
 import 'package:flutter/widgets.dart';
 import 'package:flutter/services.dart';
 import 'package:forui/forui.dart';
+import 'package:want_allure/want_allure.dart';
 
 final class VaultSecretInput extends StatefulWidget {
   final String label;
@@ -10,6 +11,7 @@ final class VaultSecretInput extends StatefulWidget {
   final bool last;
   final bool multiline;
   final Widget? postfix;
+  final bool invalid;
   final VoidCallback onSubmitted;
   const VaultSecretInput({
     super.key,
@@ -20,6 +22,7 @@ final class VaultSecretInput extends StatefulWidget {
     required this.last,
     this.multiline = false,
     this.postfix,
+    this.invalid = false,
     required this.onSubmitted,
   });
   @override
@@ -40,6 +43,7 @@ final class _VaultSecretInputState extends State<VaultSecretInput> {
     valueListenable: _obscure,
     builder: (context, obscure, _) => FTextField(
       label: Text(widget.label),
+      error: widget.invalid ? const SizedBox.shrink() : null,
       control: FTextFieldControl.managed(controller: widget.controller),
       enabled: widget.enabled,
       autofocus: widget.autofocus,
@@ -74,6 +78,30 @@ final class _VaultSecretInputState extends State<VaultSecretInput> {
                 ),
               ],
             ),
+    ),
+  );
+}
+
+final class VaultPasswordHelp extends StatelessWidget {
+  final String label, message;
+  const VaultPasswordHelp({
+    super.key,
+    required this.label,
+    required this.message,
+  });
+  @override
+  Widget build(BuildContext context) => WantPopover(
+    child: const WantIcon(WantIcons.question, size: 18),
+    triggerBuilder: (context, toggle, child) => WantButton(
+      size: WantButtonSize.icon,
+      variant: WantButtonVariant.ghost,
+      semanticsLabel: label,
+      onPressed: toggle,
+      child: child,
+    ),
+    contentBuilder: (context, close) => ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 280),
+      child: Text(message),
     ),
   );
 }

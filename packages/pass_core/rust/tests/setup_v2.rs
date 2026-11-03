@@ -8,6 +8,33 @@ const PASSWORD: &str = "Synthetic master password 2026!";
 const NEXT: &str = "Different master password 2026!";
 
 #[test]
+fn v3_unlock_is_strict_and_v1_unlock_keeps_its_contract() {
+    let temporary = tempfile::tempdir().unwrap();
+    let directory = temporary.path().join("vault");
+    let vault = Vault::open(directory.to_str().unwrap().to_owned()).unwrap();
+    let password = "legacy synthetic password";
+    let challenge = vault
+        .prepare_creation(password.to_owned(), vault.generation())
+        .unwrap();
+    let answers = challenge
+        .positions
+        .iter()
+        .map(|i| challenge.words[*i as usize].clone())
+        .collect();
+    vault.confirm(answers, vault.generation()).unwrap();
+    vault.lock().unwrap();
+    let before = fs::read(directory.join("vault.wpass")).unwrap();
+    assert_eq!(
+        vault.unlock_v3(password.to_owned(), vault.generation()),
+        Err(VaultFailure::InvalidPassword)
+    );
+    assert_eq!(fs::read(directory.join("vault.wpass")).unwrap(), before);
+    vault
+        .unlock(password.to_owned(), vault.generation())
+        .unwrap();
+}
+
+#[test]
 fn unicode_password_policy_requires_all_classes_and_one_line() {
     for value in [
         PASSWORD,
@@ -110,6 +137,10 @@ fn setup_preserves_words_and_authenticates_public_hints() {
             .is_err()
     );
     vault.unlock(NEXT.to_owned(), vault.generation()).unwrap();
+    vault.lock().unwrap();
+    vault
+        .unlock_v3(NEXT.to_owned(), vault.generation())
+        .unwrap();
     vault.lock().unwrap();
     let original = fs::read(directory.join("vault.wpass")).unwrap();
     let mut changed = original.clone();

@@ -19,6 +19,16 @@ void main() {
       expect(opened.isSuccess, isTrue);
       final handle = opened.value;
       addTearDown(handle.close);
+      expect(
+        (await access.validatePasswordV3(password: 'short')).value,
+        isFalse,
+      );
+      expect(
+        (await access.validatePasswordV3(
+          password: 'Synthetic policy password 2026!',
+        )).value,
+        isTrue,
+      );
       final prepared = await access.prepareCreationV1(
         handle: handle,
         password: 'Synthetic Dart test password 2026',
@@ -35,6 +45,13 @@ void main() {
       expect(
         (await access.statusV1(handle: handle)).value,
         VaultAccessStateV1.locked,
+      );
+      expect(
+        (await access.unlockV3(
+          handle: handle,
+          password: 'Synthetic Dart test password 2026',
+        )).error,
+        const VaultRejectedErrorV1(VaultFailureKindV1.invalidPassword),
       );
       expect(
         (await access.unlockV1(

@@ -105,6 +105,59 @@ final class VaultUseCaseImpl implements VaultUseCase {
   }
 
   @override
+  FutureDomainResult<ValidatePasswordResultV3> validatePasswordV3({
+    required ValidatePasswordParamsV3 params,
+  }) async {
+    const op = 'VaultUseCaseImpl.validatePasswordV3():';
+    final result = await captureResult<ValidatePasswordResultV3>(() async {
+      final checked = await _access.validatePasswordV3(
+        password: params.password,
+      );
+      if (checked.isError) throw checked.error;
+      return ValidatePasswordResultV3(valid: checked.value);
+    }, mapToDomainError: (error, stack) => const VaultUnexpectedErrorV1());
+    if (result.isError) {
+      reportVaultSafely(
+        _reporter,
+        layer: VaultDiagnosticLayer.application,
+        operation: op,
+        error: result.error is VaultErrorV1
+            ? result.error as VaultErrorV1
+            : const VaultUnexpectedErrorV1(),
+      );
+    }
+    return result;
+  }
+
+  @override
+  FutureDomainResult<UnlockVaultResultV3> unlockV3({
+    required UnlockVaultParamsV3 params,
+  }) async {
+    const op = 'VaultUseCaseImpl.unlockV3():';
+    final result = await captureResult<UnlockVaultResultV3>(() async {
+      final unlocked = await _access.unlockV3(
+        handle: params.handle,
+        password: params.password,
+      );
+      if (unlocked.isError) throw unlocked.error;
+      final status = await _access.statusV1(handle: params.handle);
+      if (status.isError) throw status.error;
+      return UnlockVaultResultV3(state: status.value);
+    }, mapToDomainError: (error, stack) => const VaultUnexpectedErrorV1());
+    if (result.isError) {
+      reportVaultSafely(
+        _reporter,
+        layer: VaultDiagnosticLayer.application,
+        operation: op,
+        error: result.error is VaultErrorV1
+            ? result.error as VaultErrorV1
+            : const VaultUnexpectedErrorV1(),
+      );
+    }
+    return result;
+  }
+
+  @override
   FutureDomainResult<UnlockVaultResultV1> unlockV1({
     required UnlockVaultParamsV1 params,
   }) async {

@@ -4,7 +4,7 @@ sealed class VaultEffect {
   const VaultEffect();
 }
 
-enum VaultNoticeKind { copied, exportStarted, exported, locked }
+enum VaultNoticeKind { copied, exportStarted, exported, locked, unlocked }
 
 final class VaultNotice extends VaultEffect {
   final VaultNoticeKind kind;

@@ -37,6 +37,11 @@ final class SafeBlocObserver extends BlocObserver
       VaultUnexpectedErrorV1() => 'unexpectedError',
     };
     final safeOperation = switch (operation) {
+      'VaultController.validatePassword():' ||
+      'RustVaultAccessService.validatePasswordV3():' ||
+      'RustVaultAccessService.unlockV3():' ||
+      'VaultUseCaseImpl.validatePasswordV3():' ||
+      'VaultUseCaseImpl.unlockV3():' ||
       'VaultController.acknowledge():' ||
       'VaultController.validateRecovery():' ||
       'PlatformRecoveryExportService.selectFileV3():' ||
@@ -169,6 +174,11 @@ final class SafeBlocObserver extends BlocObserver
     };
     // Operation text is supplied by fixed call sites, never by an exception or user input.
     final safeOperation = switch (operation) {
+      'VaultController.validatePassword():' ||
+      'RustVaultAccessService.validatePasswordV3():' ||
+      'RustVaultAccessService.unlockV3():' ||
+      'VaultUseCaseImpl.validatePasswordV3():' ||
+      'VaultUseCaseImpl.unlockV3():' ||
       'VaultController.acknowledge():' ||
       'VaultController.validateRecovery():' ||
       'PlatformRecoveryExportService.selectFileV3():' ||

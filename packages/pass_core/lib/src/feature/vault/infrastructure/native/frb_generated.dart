@@ -62,7 +62,7 @@ class VaultRustLib
   String get codegenVersion => '2.13.0';
 
   @override
-  int get rustContentHash => -2114557278;
+  int get rustContentHash => 1480568977;
 
   static const kDefaultExternalLibraryLoaderConfig =
       ExternalLibraryLoaderConfig(
@@ -172,6 +172,12 @@ abstract class VaultRustLibApi extends BaseApi {
     required BigInt generation,
   });
 
+  Future<void> crateApiVaultUnlockV3({
+    required Vault that,
+    required String password,
+    required BigInt generation,
+  });
+
   Future<void> crateApiVaultValidateRecoveryV3({
     required Vault that,
     required String phrase,
@@ -179,6 +185,8 @@ abstract class VaultRustLibApi extends BaseApi {
   });
 
   Future<void> crateApiVaultWaitForExportsV2({required Vault that});
+
+  Future<bool> crateApiV3ValidatePasswordV3({required String password});
 
   RustArcIncrementStrongCountFnType get rust_arc_increment_strong_count_Vault;
 
@@ -917,6 +925,45 @@ class VaultRustLibApiImpl extends VaultRustLibApiImplPlatform
   );
 
   @override
+  Future<void> crateApiVaultUnlockV3({
+    required Vault that,
+    required String password,
+    required BigInt generation,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerVault(
+            that,
+            serializer,
+          );
+          sse_encode_String(password, serializer);
+          sse_encode_u_64(generation, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 20,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_unit,
+          decodeErrorData: sse_decode_vault_failure,
+        ),
+        constMeta: kCrateApiVaultUnlockV3ConstMeta,
+        argValues: const [],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiVaultUnlockV3ConstMeta => const TaskConstMeta(
+    debugName: "Vault_unlock_v3",
+    argNames: ["that", "password", "generation"],
+  );
+
+  @override
   Future<void> crateApiVaultValidateRecoveryV3({
     required Vault that,
     required String phrase,
@@ -935,7 +982,7 @@ class VaultRustLibApiImpl extends VaultRustLibApiImplPlatform
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 20,
+            funcId: 21,
             port: port_,
           );
         },
@@ -969,7 +1016,7 @@ class VaultRustLibApiImpl extends VaultRustLibApiImplPlatform
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 21,
+            funcId: 22,
             port: port_,
           );
         },
@@ -988,6 +1035,37 @@ class VaultRustLibApiImpl extends VaultRustLibApiImplPlatform
       const TaskConstMeta(
         debugName: "Vault_wait_for_exports_v2",
         argNames: ["that"],
+      );
+
+  @override
+  Future<bool> crateApiV3ValidatePasswordV3({required String password}) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(password, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 23,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_bool,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiV3ValidatePasswordV3ConstMeta,
+        argValues: const [],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiV3ValidatePasswordV3ConstMeta =>
+      const TaskConstMeta(
+        debugName: "validate_password_v3",
+        argNames: ["password"],
       );
 
   RustArcIncrementStrongCountFnType
@@ -1029,6 +1107,12 @@ class VaultRustLibApiImpl extends VaultRustLibApiImplPlatform
   String dco_decode_String(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return raw as String;
+  }
+
+  @protected
+  bool dco_decode_bool(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw as bool;
   }
 
   @protected
@@ -1199,6 +1283,12 @@ class VaultRustLibApiImpl extends VaultRustLibApiImplPlatform
   }
 
   @protected
+  bool sse_decode_bool(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return deserializer.buffer.getUint8() != 0;
+  }
+
+  @protected
   int sse_decode_i_32(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     return deserializer.buffer.getInt32();
@@ -1338,12 +1428,6 @@ class VaultRustLibApiImpl extends VaultRustLibApiImplPlatform
   }
 
   @protected
-  bool sse_decode_bool(SseDeserializer deserializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    return deserializer.buffer.getUint8() != 0;
-  }
-
-  @protected
   void
   sse_encode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerVault(
     Vault self,
@@ -1386,6 +1470,12 @@ class VaultRustLibApiImpl extends VaultRustLibApiImplPlatform
   void sse_encode_String(String self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_list_prim_u_8_strict(utf8.encoder.convert(self), serializer);
+  }
+
+  @protected
+  void sse_encode_bool(bool self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    serializer.buffer.putUint8(self ? 1 : 0);
   }
 
   @protected
@@ -1515,12 +1605,6 @@ class VaultRustLibApiImpl extends VaultRustLibApiImplPlatform
   void sse_encode_vault_status(VaultStatus self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_i_32(self.index, serializer);
-  }
-
-  @protected
-  void sse_encode_bool(bool self, SseSerializer serializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    serializer.buffer.putUint8(self ? 1 : 0);
   }
 }
 
@@ -1687,6 +1771,15 @@ class VaultImpl extends RustOpaque implements Vault {
         password: password,
         generation: generation,
       );
+
+  Future<void> unlockV3({
+    required String password,
+    required BigInt generation,
+  }) => VaultRustLib.instance.api.crateApiVaultUnlockV3(
+    that: this,
+    password: password,
+    generation: generation,
+  );
 
   Future<void> validateRecoveryV3({
     required String phrase,

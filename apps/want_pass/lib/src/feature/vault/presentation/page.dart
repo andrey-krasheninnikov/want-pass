@@ -218,23 +218,14 @@ class _VaultPageState extends State<VaultPage> {
           ),
         ),
       );
-  Widget _requirements() => WantPopover(
-    child: const Text('?'),
-    triggerBuilder: (context, toggle, child) => _icon(
-      'password-requirements',
-      _text('Password requirements', 'Требования к паролю'),
-      child,
-      toggle,
-    ),
-    contentBuilder: (context, close) => ConstrainedBox(
-      constraints: const BoxConstraints(maxWidth: 260),
-      child: Text(
-        _text(
-          'At least 15 characters, uppercase and lowercase letters, a digit and a special character. Maximum: 1,024 UTF-8 bytes. Spaces and Unicode are allowed.',
-          'Минимум 15 символов, заглавная и строчная буквы, цифра и спецсимвол. Максимум: 1024 UTF-8 байта. Разрешены пробелы и Unicode.',
-        ),
-      ),
-    ),
+  String get _passwordRequirements => _text(
+    'At least 15 characters, uppercase and lowercase letters, an ASCII digit and a special character. Maximum: 1,024 UTF-8 bytes. Spaces and Unicode are allowed.',
+    'Минимум 15 символов, заглавная и строчная буквы, ASCII-цифра и спецсимвол. Максимум: 1024 UTF-8 байта. Разрешены пробелы и Unicode.',
+  );
+  Widget _requirements() => VaultPasswordHelp(
+    key: const ValueKey('password-requirements'),
+    label: _text('Password requirements', 'Требования к паролю'),
+    message: _passwordRequirements,
   );
   Widget _secret(
     String key,
@@ -317,9 +308,11 @@ class _VaultPageState extends State<VaultPage> {
     if (state.phase == VaultPhase.unavailable) {
       return _text('Vault unavailable', 'Сейф недоступен');
     }
-    if (state.phase == VaultPhase.unlocked) return _text('Vault', 'Сейф');
+    if (state.phase == VaultPhase.unlocked) {
+      return _text('Access granted', 'Доступ разрешен');
+    }
     if (state.phase == VaultPhase.locked && !_recovering) {
-      return _text('Unlock', 'Разблокировка');
+      return _text('Sign-in required', 'Требуется вход');
     }
     return switch (_step) {
       0 =>
@@ -404,63 +397,13 @@ class _VaultPageState extends State<VaultPage> {
   }
 
   void _showUnlock() {
-    _password.clear();
+    widget.controller.dismissFailure();
     _dialog(
-      (context) => BlocBuilder<VaultController, VaultState>(
-        bloc: widget.controller,
-        builder: (context, state) => WantDialog(
-          title: _text('Unlock', 'Разблокировка'),
-          actions: WantButton(
-            key: const ValueKey('vault-recovery'),
-            variant: WantButtonVariant.secondary,
-            onPressed: state.busy ? null : _startRecovery,
-            child: Text(_text('Recover access', 'Восстановить доступ')),
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            spacing: 12,
-            children: [
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                spacing: 8,
-                children: [
-                  Expanded(
-                    child: VaultSecretInput(
-                      key: const ValueKey('unlock-password'),
-                      label: _text('Master password', 'Мастер-пароль'),
-                      controller: _password,
-                      enabled: !state.busy,
-                      autofocus: true,
-                      last: true,
-                      onSubmitted: () =>
-                          unawaited(widget.controller.unlock(_password.text)),
-                    ),
-                  ),
-                  _icon(
-                    'vault-unlock',
-                    _text('Continue', 'Продолжить'),
-                    const WantIcon(WantIcons.arrowRight),
-                    state.busy
-                        ? null
-                        : () => unawaited(
-                            widget.controller.unlock(_password.text),
-                          ),
-                  ),
-                ],
-              ),
-              if (state.hints.password.isNotEmpty) Text(state.hints.password),
-              if (state.error case final error?)
-                WantTypography(
-                  _error(error),
-                  colorRole: 'destructive',
-                  liveRegion: true,
-                ),
-            ],
-          ),
-        ),
+      (context) => VaultUnlockDialog(
+        controller: widget.controller,
+        onRecovery: _startRecovery,
+        requirements: _passwordRequirements,
       ),
-      clearPassword: true,
     );
   }
 
@@ -486,7 +429,9 @@ class _VaultPageState extends State<VaultPage> {
         );
       case VaultNotice(:final kind):
         final success =
-            kind == VaultNoticeKind.copied || kind == VaultNoticeKind.exported;
+            kind == VaultNoticeKind.copied ||
+            kind == VaultNoticeKind.exported ||
+            kind == VaultNoticeKind.unlocked;
         showWantSnackbar(
           context: context,
           variant: success
@@ -508,6 +453,10 @@ class _VaultPageState extends State<VaultPage> {
             VaultNoticeKind.exported => _text(
               'Recovery JSON saved',
               'JSON восстановления сохранён',
+            ),
+            VaultNoticeKind.unlocked => _text(
+              'Access granted',
+              'Доступ разрешен',
             ),
             VaultNoticeKind.locked => _text(
               'Vault locked',
@@ -845,6 +794,7 @@ class _VaultPageState extends State<VaultPage> {
             child: WantBackgroundMotion(
               controller: _background,
               showPauseControl: false,
+              alternateWithLightning: true,
               pauseLabel: _text('Pause background', 'Остановить фон'),
               resumeLabel: _text('Resume background', 'Включить фон'),
               child: SafeArea(
@@ -859,13 +809,23 @@ class _VaultPageState extends State<VaultPage> {
                           Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
-                              Image.asset(
-                                Theme.of(context).brightness == Brightness.dark
-                                    ? 'assets/brand/logo-dark.png'
-                                    : 'assets/brand/logo-light.png',
+                              SizedBox(
                                 width: 48,
                                 height: 48,
-                                excludeFromSemantics: true,
+                                child: WantGlow(
+                                  borderRadius: BorderRadius.circular(24),
+                                  child: WantSvg3D.asset(
+                                    'assets/brand/logo.svg',
+                                    semanticsLabel: 'Want Pass',
+                                    glow: false,
+                                    placeholderBuilder: (_) => Image.asset(
+                                      'assets/brand/logo-dark.png',
+                                    ),
+                                    errorBuilder: (_, error) => Image.asset(
+                                      'assets/brand/logo-dark.png',
+                                    ),
+                                  ),
+                                ),
                               ),
                               if (widget.appearance case final appearance?)
                                 AppearanceControls(controller: appearance),
@@ -947,19 +907,12 @@ class _VaultPageState extends State<VaultPage> {
                                                         : _showUnlock,
                                                   ),
                                                 ),
-                                                Text(
-                                                  _text(
-                                                    'Locks after five idle minutes and when your Mac locks or sleeps.',
-                                                    'Блокируется через пять минут бездействия, при блокировке и сне Mac.',
-                                                  ),
-                                                ),
                                                 if (state.phase ==
                                                     VaultPhase.unlocked)
-                                                  Text(
-                                                    _text(
-                                                      'There are no secrets in this vault yet.',
-                                                      'В сейфе пока нет секретов.',
-                                                    ),
+                                                  VaultIdleCountdown(
+                                                    remaining: () => widget
+                                                        .controller
+                                                        .idleRemaining,
                                                   ),
                                               ],
                                             ]),

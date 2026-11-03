@@ -241,6 +241,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "1.1.5"
+  dart_earcut:
+    dependency: transitive
+    description:
+      name: dart_earcut
+      sha256: e485001bfc05dcbc437d7bfb666316182e3522d4c3f9668048e004d0eb2ce43b
+      url: "https://pub.dev"
+    source: hosted
+    version: "1.2.0"
   dart_style:
     dependency: transitive
     description:
@@ -265,6 +273,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "7.0.3"
+  ditredi:
+    dependency: transitive
+    description:
+      name: ditredi
+      sha256: "0b6c5334fa4198a3e880d1865eece06189edf91ae894087ba67d347ead5aae4e"
+      url: "https://pub.dev"
+    source: hosted
+    version: "2.0.2"
   domain_error:
     dependency: transitive
     description:
@@ -1065,6 +1081,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "1.10.2"
+  sprung:
+    dependency: transitive
+    description:
+      name: sprung
+      sha256: "54322638f5e393d2b808175f7eadbaa4836a4425456e98d93c3d676dc56ebdf1"
+      url: "https://pub.dev"
+    source: hosted
+    version: "3.0.1"
   stack_trace:
     dependency: transitive
     description:
@@ -1285,10 +1309,10 @@ packages:
     dependency: transitive
     description:
       name: want_allure
-      sha256: "64e9b5cffa12386c5724dc06530575c4affee4b51119eabb2d5a01186a389971"
+      sha256: "8546a19602c0240334d8a82bd5010f0fbdfcd3acb40b3c68d3c1bdc1ff35d3b3"
       url: "https://pub.dev"
     source: hosted
-    version: "1.1.1"
+    version: "1.2.1"
   watcher:
     dependency: transitive
     description:

@@ -119,11 +119,13 @@ void main() {
         await _enter(
           tester,
           'unlock-password',
-          'Wrong synthetic UI password 2026',
+          'Wrong synthetic UI password 2026!',
         );
         await _tap(tester, 'vault-unlock');
         await _until(tester, () => runtime.vault.state.error != null);
         expect(runtime.vault.state.phase, VaultPhase.locked);
+        expect(find.text('Synthetic password hint'), findsNothing);
+        await _tap(tester, 'vault-show-hint');
         expect(find.text('Synthetic password hint'), findsOneWidget);
         await _tap(tester, 'vault-recovery');
         await _settle(tester);

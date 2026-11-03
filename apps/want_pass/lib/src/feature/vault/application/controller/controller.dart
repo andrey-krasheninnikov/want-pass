@@ -37,6 +37,8 @@ final class VaultController extends CubitWithEffects<VaultState, VaultEffect> {
   bool _closing = false;
   bool _monitorAvailable = true;
   int _epoch = 0;
+  int _passwordEpoch = 0;
+  final _passwordOperations = <Future<bool>>{};
 
   VaultController(
     this._useCase,
@@ -469,14 +471,78 @@ final class VaultController extends CubitWithEffects<VaultState, VaultEffect> {
     }
   }
 
+  Future<bool> validatePassword(String password) {
+    const op = 'VaultController.validatePassword():';
+    final revision = ++_passwordEpoch;
+    final epoch = _epoch;
+    if (_closing || isClosed) return Future.value(false);
+    if (password.isNotEmpty &&
+        (!LaunchMode.isInitialized ||
+            !LaunchMode.isForeground ||
+            !_monitorAvailable)) {
+      _fail(
+        op,
+        const VaultRejectedErrorV1(VaultFailureKindV1.unavailable),
+        unavailable: true,
+      );
+      return Future.value(false);
+    }
+    final checking =
+        password.isNotEmpty && state.phase == VaultPhase.locked && !state.busy;
+    emit(state.copyWith(passwordValid: () => null, passwordChecking: checking));
+    if (!checking) return Future.value(false);
+    final operation = () async {
+      try {
+        final result = await _useCase.validatePasswordV3(
+          params: ValidatePasswordParamsV3(password: password),
+        );
+        if (_closing ||
+            epoch != _epoch ||
+            revision != _passwordEpoch ||
+            state.phase != VaultPhase.locked) {
+          return false;
+        }
+        if (result.isError) {
+          emit(state.copyWith(passwordChecking: false));
+          _fail(op, _error(result.error));
+          return false;
+        }
+        emit(
+          state.copyWith(
+            passwordValid: () => result.value.valid,
+            passwordChecking: false,
+          ),
+        );
+        return result.value.valid;
+      } on Object {
+        if (!_closing && epoch == _epoch && revision == _passwordEpoch) {
+          emit(state.copyWith(passwordChecking: false));
+          _fail(op, const VaultUnexpectedErrorV1());
+        }
+        return false;
+      }
+    }();
+    _passwordOperations.add(operation);
+    unawaited(
+      operation.whenComplete(() => _passwordOperations.remove(operation)),
+    );
+    return operation;
+  }
+
   Future<void> unlock(String password) {
     const op = 'VaultController.unlock():';
+    _passwordEpoch++;
     return _perform(
       op,
-      (handle) => _useCase.unlockV1(
-        params: UnlockVaultParamsV1(handle: handle, password: password),
+      (handle) => _useCase.unlockV3(
+        params: UnlockVaultParamsV3(handle: handle, password: password),
       ),
-      (value) => emit(VaultState(phase: _phase(value.state))),
+      (value) {
+        emit(VaultState(phase: _phase(value.state)));
+        if (state.phase == VaultPhase.unlocked) {
+          emitEffect(const VaultNotice(VaultNoticeKind.unlocked));
+        }
+      },
     );
   }
 
@@ -669,6 +735,7 @@ final class VaultController extends CubitWithEffects<VaultState, VaultEffect> {
       }
     }
     await _operation;
+    await Future.wait(_passwordOperations.toList());
     await _exportOperation;
     _handle = null;
   }

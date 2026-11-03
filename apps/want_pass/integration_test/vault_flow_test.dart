@@ -255,6 +255,7 @@ void main() {
 }
 
 Future<void> _enter(WidgetTester tester, String key, String value) async {
+  await _foreground(tester, key);
   final field = find.descendant(
     of: find.byKey(ValueKey(key)),
     matching: find.bySubtype<EditableText>(),
@@ -333,9 +334,18 @@ final class _Reporter implements VaultReporter {
   }) {}
 }
 
+Future<void> _foreground(WidgetTester tester, String label) async {
+  debugPrint('Native UI focus: $label');
+  await _until(
+    tester,
+    () => tester.binding.lifecycleState == AppLifecycleState.resumed,
+  );
+}
+
 Future<void> _tap(WidgetTester tester, String key) async {
   final label = key.startsWith('quiz-') ? 'quiz' : key;
   debugPrint('Native UI action: $label');
+  await _foreground(tester, label);
   final button = find.byKey(ValueKey(key));
   if (key == 'group-create' && button.evaluate().isEmpty) {
     await _tap(tester, 'groups-open');

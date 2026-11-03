@@ -531,6 +531,37 @@ void main() {
     await tester.pumpWidget(const SizedBox.shrink());
     await _closeFixture(tester, fixture);
   });
+  testWidgets('navigation waits for foreground and lock cancels it', (
+    tester,
+  ) async {
+    final fixture = (await tester.runAsync(_Fixture.create))!;
+    addTearDown(() => _closeFixture(tester, fixture));
+    await tester.pumpWidget(
+      MaterialApp(
+        builder: (context, child) =>
+            WantTheme(data: WantThemeData.light(), child: child!),
+        home: Scaffold(body: VaultContentView(controller: fixture.controller)),
+      ),
+    );
+    await _pump(tester);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+    await _tap(tester, 'account-create');
+    expect(find.byKey(const ValueKey('account-name')), findsNothing);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    await _pump(tester);
+    expect(find.byKey(const ValueKey('account-name')), findsOneWidget);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+    await _tap(tester, 'account-create');
+    await tester.runAsync(fixture.controller.lock);
+    await _pump(tester);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    await _pump(tester);
+    expect(find.byKey(const ValueKey('account-name')), findsNothing);
+    await tester.pumpWidget(const SizedBox.shrink());
+    await _closeFixture(tester, fixture);
+    await _pump(tester);
+  });
+
   testWidgets('multiline editor keeps arrow keys for the text caret', (
     tester,
   ) async {

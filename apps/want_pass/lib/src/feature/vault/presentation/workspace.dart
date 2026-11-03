@@ -26,6 +26,8 @@ final class _VaultContentViewState extends State<VaultContentView>
   int _epoch = 0;
   BigInt? _revision, _editorRevision;
   Route<dynamic>? _overlay;
+  Completer<void>? _availability;
+  int _navigation = 0;
   bool get _available =>
       mounted &&
       !_disposing &&
@@ -78,7 +80,27 @@ final class _VaultContentViewState extends State<VaultContentView>
       _wanted.addAll(_visible);
       _refresh();
       _scheduleRows();
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (_available) _releaseAvailability();
+      });
     }
+  }
+
+  void _releaseAvailability() {
+    final waiting = _availability;
+    _availability = null;
+    if (waiting != null && !waiting.isCompleted) waiting.complete();
+  }
+
+  Future<bool> _waitAvailable() async {
+    if (_available) return true;
+    if (!mounted ||
+        _disposing ||
+        widget.controller.state.phase != VaultPhase.unlocked)
+      return false;
+    final waiting = _availability ??= Completer<void>();
+    await waiting.future;
+    return _available;
   }
 
   void _closeOverlay() {
@@ -90,6 +112,8 @@ final class _VaultContentViewState extends State<VaultContentView>
   @override
   void dispose() {
     _disposing = true;
+    _navigation++;
+    _releaseAvailability();
     _epoch++;
     _debounce?.cancel();
     _rowTimer?.cancel();
@@ -290,7 +314,7 @@ final class _VaultContentViewState extends State<VaultContentView>
       _overlay = route;
       final choice = await Navigator.of(context).push(route);
       if (identical(_overlay, route)) _overlay = null;
-      if (!_available) return false;
+      if (!await _waitAvailable()) return false;
       if (choice == 'discard') return true;
       if (choice == 'save') {
         return _editingGroup
@@ -304,7 +328,11 @@ final class _VaultContentViewState extends State<VaultContentView>
   }
 
   Future<void> _navigate(VoidCallback action) async {
-    if (await _leaveEditor() && _available) {
+    final navigation = ++_navigation;
+    if (!await _waitAvailable() || navigation != _navigation) return;
+    if (await _leaveEditor() &&
+        await _waitAvailable() &&
+        navigation == _navigation) {
       widget.controller.dismissFailure();
       setState(action);
     }
@@ -374,8 +402,11 @@ final class _VaultContentViewState extends State<VaultContentView>
     });
   }
 
-  void _saved() {
-    if (!_available) return;
+  Future<void> _saved() async {
+    final editor = _editingGroup ? _groupEditor : _cardEditor;
+    if (!await _waitAvailable() ||
+        editor != (_editingGroup ? _groupEditor : _cardEditor))
+      return;
     setState(() {
       if (_editingGroup) {
         _group =
@@ -1030,6 +1061,8 @@ final class _VaultContentViewState extends State<VaultContentView>
         bloc: widget.controller,
         listener: (context, state) {
           if (state.phase != VaultPhase.unlocked) {
+            _navigation++;
+            _releaseAvailability();
             _epoch++;
             _debounce?.cancel();
             _rowTimer?.cancel();

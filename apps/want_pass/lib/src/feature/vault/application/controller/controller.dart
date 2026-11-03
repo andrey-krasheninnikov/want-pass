@@ -37,6 +37,8 @@ final class VaultController extends CubitWithEffects<VaultState, VaultEffect> {
   Future<void>? _totpOperation;
   bool _closing = false;
   bool _monitorAvailable = true;
+  final _browseOperations = <Future<void>>{};
+  int _searchEpoch = 0;
   int _epoch = 0;
   int _passwordEpoch = 0;
   final _passwordOperations = <Future<bool>>{};
@@ -836,6 +838,89 @@ final class VaultController extends CubitWithEffects<VaultState, VaultEffect> {
     return saved;
   }
 
+  Future<CardMatchesV1?> searchCards(CardSearchV1 query) async {
+    const op = 'VaultController.searchCards():';
+    if (_closing ||
+        isClosed ||
+        state.phase != VaultPhase.unlocked ||
+        state.busy ||
+        _handle == null ||
+        state.content == null ||
+        !LaunchMode.isInitialized ||
+        !LaunchMode.isForeground) {
+      return null;
+    }
+    final epoch = _epoch, search = ++_searchEpoch;
+    final revision = state.content!.revision;
+    final done = Completer<void>();
+    _browseOperations.add(done.future);
+    try {
+      final result = await _useCase.searchCardsV1(
+        params: SearchCardsParamsV1(
+          handle: _handle!,
+          query: query,
+          revision: revision,
+        ),
+      );
+      if (_closing ||
+          epoch != _epoch ||
+          search != _searchEpoch ||
+          state.content?.revision != revision ||
+          state.phase != VaultPhase.unlocked) {
+        return null;
+      }
+      if (result.isError) {
+        _fail(op, _error(result.error));
+        return null;
+      }
+      return result.value.matches;
+    } finally {
+      done.complete();
+      _browseOperations.remove(done.future);
+    }
+  }
+
+  Future<List<CardRowV1>?> readCardRows(List<String> ids) async {
+    const op = 'VaultController.readCardRows():';
+    if (_closing ||
+        isClosed ||
+        state.phase != VaultPhase.unlocked ||
+        state.busy ||
+        _handle == null ||
+        state.content == null ||
+        !LaunchMode.isInitialized ||
+        !LaunchMode.isForeground) {
+      return null;
+    }
+    final epoch = _epoch;
+    final revision = state.content!.revision;
+    final done = Completer<void>();
+    _browseOperations.add(done.future);
+    try {
+      final result = await _useCase.readCardRowsV1(
+        params: ReadCardRowsParamsV1(
+          handle: _handle!,
+          ids: List.unmodifiable(ids),
+          revision: revision,
+        ),
+      );
+      if (_closing ||
+          epoch != _epoch ||
+          state.content?.revision != revision ||
+          state.phase != VaultPhase.unlocked) {
+        return null;
+      }
+      if (result.isError) {
+        _fail(op, _error(result.error));
+        return null;
+      }
+      return result.value.rows;
+    } finally {
+      done.complete();
+      _browseOperations.remove(done.future);
+    }
+  }
+
   Future<TotpCodeV1?> readTotp(String id) async {
     const op = 'VaultController.readTotp():';
     if (_closing ||
@@ -1123,6 +1208,7 @@ final class VaultController extends CubitWithEffects<VaultState, VaultEffect> {
     }
     await _operation;
     await _totpOperation;
+    await Future.wait(_browseOperations.toList());
     await Future.wait(_passwordOperations.toList());
     await _exportOperation;
     _handle = null;

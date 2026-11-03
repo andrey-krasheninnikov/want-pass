@@ -8,6 +8,7 @@ import 'package:want_pass/src/feature/vault/presentation/_barrel.dart';
 import 'package:want_pass_core/want_pass_core.dart';
 
 part 'card_editor.dart';
+part 'browse_table.dart';
 
 String _text(BuildContext context, String en, String ru) =>
     Localizations.localeOf(context).languageCode == 'ru' ? ru : en;
@@ -20,12 +21,13 @@ final class VaultContentView extends StatefulWidget {
 }
 
 final class _VaultContentViewState extends State<VaultContentView> {
-  String _filter = 'all';
   DialogRoute<void>? _overlay;
+  bool _disposing = false;
   void _closeDialog() {
     final route = _overlay;
     _overlay = null;
     if (route?.isActive == true) route!.navigator?.removeRoute(route);
+    if (mounted && !_disposing) setState(() {});
   }
 
   void _show(WidgetBuilder builder) {
@@ -42,10 +44,13 @@ final class _VaultContentViewState extends State<VaultContentView> {
         child: builder(context),
       ),
     );
-    _overlay = route;
+    setState(() => _overlay = route);
     unawaited(
       Navigator.of(context).push(route).whenComplete(() {
-        if (identical(_overlay, route)) _overlay = null;
+        if (identical(_overlay, route)) {
+          _overlay = null;
+          if (mounted && !_disposing) setState(() {});
+        }
       }),
     );
   }
@@ -75,10 +80,7 @@ final class _VaultContentViewState extends State<VaultContentView> {
       (context) => _CardEditor(
         controller: widget.controller,
         card: account,
-        initialGroupId:
-            widget.controller.state.content!.groups.any((g) => g.id == _filter)
-            ? _filter
-            : null,
+        initialGroupId: null,
         revision: revision,
         onDone: _closeDialog,
         onDelete: account == null ? null : () => _deleteAccount(account),
@@ -116,237 +118,28 @@ final class _VaultContentViewState extends State<VaultContentView> {
 
   @override
   void dispose() {
+    _disposing = true;
     _closeDialog();
     super.dispose();
   }
 
   @override
-  Widget build(
-    BuildContext context,
-  ) => BlocConsumer<VaultController, VaultState>(
-    bloc: widget.controller,
-    listenWhen: (a, b) => a.phase != b.phase,
-    listener: (context, state) {
-      if (state.phase != VaultPhase.unlocked) _closeDialog();
-    },
-    builder: (context, state) {
-      if (state.phase != VaultPhase.unlocked) return const SizedBox.shrink();
-      final snapshot = state.content;
-      if (snapshot == null) {
-        return Center(
-          child: WantButton(
-            onPressed: state.busy
-                ? null
-                : () => unawaited(widget.controller.loadContent()),
-            child: Text(_text(context, 'Load vault', 'Загрузить сейф')),
+  Widget build(BuildContext context) =>
+      BlocListener<VaultController, VaultState>(
+        bloc: widget.controller,
+        listenWhen: (a, b) => a.phase != b.phase,
+        listener: (context, state) {
+          if (state.phase != VaultPhase.unlocked) _closeDialog();
+        },
+        child: TickerMode(
+          enabled: _overlay == null,
+          child: _VaultBrowser(
+            controller: widget.controller,
+            onGroup: _group,
+            onCard: (id) => unawaited(_account(id)),
           ),
-        );
-      }
-      final filter =
-          _filter == 'all' ||
-              _filter == 'none' ||
-              snapshot.groups.any((g) => g.id == _filter)
-          ? _filter
-          : 'all';
-      final accounts = snapshot.cards
-          .where(
-            (a) =>
-                filter == 'all' ||
-                (filter == 'none'
-                    ? a.groupIds.isEmpty
-                    : a.groupIds.contains(filter)),
-          )
-          .toList();
-      Widget groupButton(String id, String label, {GroupV1? group}) => Row(
-        children: [
-          Expanded(
-            child: WantButton(
-              key: ValueKey('group-filter-$id'),
-              variant: filter == id
-                  ? WantButtonVariant.primary
-                  : WantButtonVariant.ghost,
-              onPressed: () => setState(() => _filter = id),
-              child: Row(
-                spacing: 8,
-                children: [
-                  if (group != null)
-                    VaultGroupLogo(icon: group.icon, bytes: group.logo),
-                  Expanded(child: Text(label, overflow: TextOverflow.ellipsis)),
-                ],
-              ),
-            ),
-          ),
-          if (group != null)
-            WantTooltip(
-              message: _text(context, 'Edit group', 'Изменить группу'),
-              child: IconButton(
-                key: ValueKey('group-edit-$id'),
-                tooltip: _text(context, 'Edit group', 'Изменить группу'),
-                onPressed: state.busy ? null : () => _group(group),
-                icon: const Icon(Icons.more_horiz),
-              ),
-            ),
-        ],
+        ),
       );
-      final groups = ListView(
-        children: [
-          groupButton('all', _text(context, 'All', 'Все')),
-          groupButton('none', _text(context, 'Without a group', 'Без группы')),
-          for (final group in snapshot.groups)
-            groupButton(group.id, group.name, group: group),
-        ],
-      );
-      final cards = accounts.isEmpty
-          ? Center(
-              child: WantTypography(
-                _text(
-                  context,
-                  'Create a card for this selection',
-                  'Создайте карточку для этой подборки',
-                ),
-                colorRole: 'muted-foreground',
-              ),
-            )
-          : ListView.separated(
-              itemCount: accounts.length,
-              separatorBuilder: (_, _) => const SizedBox(height: 8),
-              itemBuilder: (context, index) {
-                final account = accounts[index];
-                return WantCard(
-                  hoverEffect: false,
-                  padding: const EdgeInsets.all(8),
-                  child: WantButton(
-                    key: ValueKey('account-${account.id}'),
-                    variant: WantButtonVariant.ghost,
-                    onPressed: state.busy
-                        ? null
-                        : () => unawaited(_account(account.id)),
-                    child: Align(
-                      alignment: Alignment.centerLeft,
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        spacing: 4,
-                        children: [
-                          Text(account.name, overflow: TextOverflow.ellipsis),
-                          Text(
-                            [
-                              _serviceLabel(context, account.service),
-                              _typeLabel(context, account.cardType),
-                              if (account.environment != null)
-                                _environmentLabel(account.environment!),
-                            ].join(' · '),
-                            overflow: TextOverflow.ellipsis,
-                            style: Theme.of(context).textTheme.bodySmall,
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                );
-              },
-            );
-      return Column(
-        spacing: 16,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Wrap(
-            spacing: 16,
-            runSpacing: 12,
-            crossAxisAlignment: WrapCrossAlignment.center,
-            children: [
-              SizedBox.square(
-                dimension: 84,
-                child: FittedBox(
-                  child: VaultSafeDial(
-                    key: const ValueKey('vault-dial'),
-                    opened: true,
-                    remaining: () => widget.controller.idleRemaining,
-                    label: _text(context, 'Lock vault', 'Заблокировать сейф'),
-                    onPressed: () =>
-                        unawaited(widget.controller.lock(notify: true)),
-                  ),
-                ),
-              ),
-              VaultIdleCountdown(
-                remaining: () => widget.controller.idleRemaining,
-              ),
-            ],
-          ),
-          _Actions(
-            children: [
-              WantButton(
-                key: const ValueKey('group-create'),
-                variant: WantButtonVariant.secondary,
-                onPressed: state.busy ? null : _group,
-                child: Text(_text(context, 'New group', 'Новая группа')),
-              ),
-              WantButton(
-                key: const ValueKey('account-create'),
-                onPressed: state.busy ? null : () => unawaited(_account()),
-                child: Text(_text(context, 'New card', 'Новая карточка')),
-              ),
-            ],
-          ),
-          Expanded(
-            child: LayoutBuilder(
-              builder: (context, constraints) => constraints.maxWidth >= 800
-                  ? Row(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      spacing: 20,
-                      children: [
-                        SizedBox(width: 240, child: groups),
-                        Expanded(child: cards),
-                      ],
-                    )
-                  : Column(
-                      spacing: 12,
-                      children: [
-                        WantSelect<String>(
-                          value: filter,
-                          label: Text(_text(context, 'Group', 'Группа')),
-                          options: [
-                            WantOption(
-                              value: 'all',
-                              label: _text(context, 'All', 'Все'),
-                            ),
-                            WantOption(
-                              value: 'none',
-                              label: _text(
-                                context,
-                                'Without a group',
-                                'Без группы',
-                              ),
-                            ),
-                            for (final group in snapshot.groups)
-                              WantOption(value: group.id, label: group.name),
-                          ],
-                          onChanged: (value) {
-                            if (value != null) setState(() => _filter = value);
-                          },
-                        ),
-                        if (snapshot.groups.any((g) => g.id == filter))
-                          WantButton(
-                            variant: WantButtonVariant.ghost,
-                            onPressed: state.busy
-                                ? null
-                                : () => _group(
-                                    snapshot.groups.firstWhere(
-                                      (g) => g.id == filter,
-                                    ),
-                                  ),
-                            child: Text(
-                              _text(context, 'Edit group', 'Изменить группу'),
-                            ),
-                          ),
-                        Expanded(child: cards),
-                      ],
-                    ),
-            ),
-          ),
-        ],
-      );
-    },
-  );
 }
 
 final class _Actions extends StatelessWidget {

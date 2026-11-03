@@ -884,6 +884,102 @@ final class RustVaultAccessService implements VaultAccessService {
   }
 
   @override
+  FutureDomainResult<CardMatchesV1> searchCardsV1({
+    required VaultHandleV1 handle,
+    required CardSearchV1 query,
+    required BigInt revision,
+  }) async {
+    const op = 'RustVaultAccessService.searchCardsV1():';
+    final result = await captureResult<CardMatchesV1>(() async {
+      final vault = (handle as _NativeVaultHandle)._vault;
+      final value = await vault.searchCardsV1(
+        query: native.CardSearchV1(
+          text: query.text,
+          cardType: query.cardType == null
+              ? null
+              : _nativeCardType(query.cardType!),
+          service: query.service,
+          environment: query.environment == null
+              ? null
+              : _nativeEnvironment(query.environment!),
+          withoutEnvironment: query.withoutEnvironment,
+        ),
+        revision: revision,
+        generation: vault.generation(),
+      );
+      return CardMatchesV1(
+        revision: value.revision,
+        cardIds: List.unmodifiable(value.cardIds),
+        groupIds: List.unmodifiable(value.groupIds),
+      );
+    }, mapToDomainError: _mapNativeError);
+    if (result.isError) {
+      reportVaultSafely(
+        _reporter,
+        layer: VaultDiagnosticLayer.infrastructure,
+        operation: op,
+        error: result.error is VaultErrorV1
+            ? result.error as VaultErrorV1
+            : const VaultUnexpectedErrorV1(),
+      );
+    }
+    return result;
+  }
+
+  @override
+  FutureDomainResult<List<CardRowV1>> cardRowsV1({
+    required VaultHandleV1 handle,
+    required List<String> ids,
+    required BigInt revision,
+  }) async {
+    const op = 'RustVaultAccessService.cardRowsV1():';
+    final result = await captureResult<List<CardRowV1>>(() async {
+      final vault = (handle as _NativeVaultHandle)._vault;
+      final values = await vault.cardRowsV1(
+        ids: ids,
+        revision: revision,
+        generation: vault.generation(),
+      );
+      return List.unmodifiable(
+        values.map(
+          (v) => CardRowV1(
+            id: v.id,
+            fields: List.unmodifiable(v.fields.map(_fieldId)),
+            login: v.login,
+            otp: v.otp == null
+                ? null
+                : TotpCodeV1(
+                    code: v.otp!.code,
+                    validUntil: DateTime.fromMillisecondsSinceEpoch(
+                      v.otp!.validUntil.toInt() * 1000,
+                      isUtc: true,
+                    ),
+                    period: Duration(seconds: v.otp!.period.toInt()),
+                  ),
+            attachment: v.attachment == null
+                ? null
+                : AttachmentV1(
+                    name: v.attachment!.name,
+                    size: v.attachment!.size,
+                  ),
+          ),
+        ),
+      );
+    }, mapToDomainError: _mapNativeError);
+    if (result.isError) {
+      reportVaultSafely(
+        _reporter,
+        layer: VaultDiagnosticLayer.infrastructure,
+        operation: op,
+        error: result.error is VaultErrorV1
+            ? result.error as VaultErrorV1
+            : const VaultUnexpectedErrorV1(),
+      );
+    }
+    return result;
+  }
+
+  @override
   FutureDomainResult<CardV1> cardV1({
     required VaultHandleV1 handle,
     required String id,

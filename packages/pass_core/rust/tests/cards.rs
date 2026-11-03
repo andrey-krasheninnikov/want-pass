@@ -749,3 +749,108 @@ fn protected_private_keys_do_not_exempt_public_material_validation() {
         saved.revision
     );
 }
+
+#[test]
+fn browsing_matches_hidden_values_and_combines_filters_without_disclosing_them() {
+    use want_pass_vault::api::{CardSearchV1, EnvironmentV1, GroupInputV1};
+    let (_directory, vault) = create();
+    let group = vault
+        .save_group_v2(
+            GroupInputV1 {
+                id: None,
+                name: "Synthetic team".into(),
+                description: String::new(),
+                icon: "folder".into(),
+                logo: vec![],
+            },
+            0,
+            vault.generation(),
+        )
+        .unwrap();
+    let mut input = account();
+    input.group_ids = vec![group.groups[0].id.clone()];
+    input.environment = Some(EnvironmentV1::Production);
+    input.fields.push(CardValueV1 {
+        id: FieldIdV1::TotpSeed,
+        value: "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ".into(),
+    });
+    let saved = vault
+        .save_card_v1(input, group.revision, vault.generation())
+        .unwrap();
+    let query = |text: &str, environment| CardSearchV1 {
+        text: text.into(),
+        card_type: Some(CardTypeV1::Account),
+        service: Some("github".into()),
+        environment,
+        without_environment: false,
+    };
+    for text in [
+        "TEAM",
+        "synthetic ACCOUNT",
+        "FIXTURE@",
+        "EXACT\nPASSWORD",
+        "GEZDGNBV",
+    ] {
+        let found = vault
+            .search_cards_v1(
+                query(text, Some(EnvironmentV1::Production)),
+                saved.revision,
+                vault.generation(),
+            )
+            .unwrap();
+        assert_eq!(found.card_ids, vec![saved.cards[0].id.clone()]);
+    }
+    assert!(
+        vault
+            .search_cards_v1(
+                query("", Some(EnvironmentV1::Stage)),
+                saved.revision,
+                vault.generation()
+            )
+            .unwrap()
+            .card_ids
+            .is_empty()
+    );
+    assert!(
+        vault
+            .search_cards_v1(query(".*", None), saved.revision, vault.generation())
+            .unwrap()
+            .card_ids
+            .is_empty()
+    );
+    let rows = vault
+        .card_rows_v1(
+            vec![saved.cards[0].id.clone()],
+            saved.revision,
+            vault.generation(),
+        )
+        .unwrap();
+    assert_eq!(rows[0].login.as_deref(), Some("fixture@example.invalid"));
+    assert!(rows[0].fields.contains(&FieldIdV1::Password));
+    assert!(rows[0].fields.contains(&FieldIdV1::TotpSeed));
+    assert_eq!(rows[0].otp.as_ref().unwrap().code.len(), 6);
+    assert!(matches!(
+        vault.card_rows_v1(vec![], 0, vault.generation()),
+        Err(VaultFailure::Stale)
+    ));
+    assert!(matches!(
+        vault.card_rows_v1(
+            vec![saved.cards[0].id.clone(); 51],
+            saved.revision,
+            vault.generation()
+        ),
+        Err(VaultFailure::Unsupported)
+    ));
+    let generation = vault.generation();
+    vault.lock().unwrap();
+    assert!(
+        vault
+            .search_cards_v1(query("password", None), saved.revision, generation)
+            .is_err()
+    );
+    assert!(
+        vault
+            .card_rows_v1(vec![saved.cards[0].id.clone()], saved.revision, generation)
+            .is_err()
+    );
+}

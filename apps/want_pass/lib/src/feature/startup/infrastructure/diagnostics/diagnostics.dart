@@ -40,6 +40,8 @@ final class SafeBlocObserver extends BlocObserver
       'PlatformCredentialFileService.selectAttachmentV1():' ||
       'PlatformCredentialFileService.selectDestinationV1():' ||
       'RustVaultAccessService.cardCatalogV1():' ||
+      'RustVaultAccessService.searchCardsV1():' ||
+      'RustVaultAccessService.cardRowsV1():' ||
       'RustVaultAccessService.cardV1():' ||
       'RustVaultAccessService.contentV2():' ||
       'RustVaultAccessService.copyAccountV1():' ||
@@ -52,6 +54,8 @@ final class SafeBlocObserver extends BlocObserver
       'VaultController.copyCard():' ||
       'VaultController.deleteCard():' ||
       'VaultController.downloadAttachment():' ||
+      'VaultController.searchCards():' ||
+      'VaultController.readCardRows():' ||
       'VaultController.readCard():' ||
       'VaultController.readTotp():' ||
       'VaultController.saveCard():' ||
@@ -61,6 +65,8 @@ final class SafeBlocObserver extends BlocObserver
       'VaultUseCaseImpl.deleteGroupV2():' ||
       'VaultUseCaseImpl.exportCardAttachmentV1():' ||
       'VaultUseCaseImpl.loadContentV2():' ||
+      'VaultUseCaseImpl.searchCardsV1():' ||
+      'VaultUseCaseImpl.readCardRowsV1():' ||
       'VaultUseCaseImpl.readCardV1():' ||
       'VaultUseCaseImpl.readTotpV1():' ||
       'VaultUseCaseImpl.saveCardV1():' ||
@@ -228,6 +234,8 @@ final class SafeBlocObserver extends BlocObserver
       'PlatformCredentialFileService.selectAttachmentV1():' ||
       'PlatformCredentialFileService.selectDestinationV1():' ||
       'RustVaultAccessService.cardCatalogV1():' ||
+      'RustVaultAccessService.searchCardsV1():' ||
+      'RustVaultAccessService.cardRowsV1():' ||
       'RustVaultAccessService.cardV1():' ||
       'RustVaultAccessService.contentV2():' ||
       'RustVaultAccessService.copyAccountV1():' ||
@@ -240,6 +248,8 @@ final class SafeBlocObserver extends BlocObserver
       'VaultController.copyCard():' ||
       'VaultController.deleteCard():' ||
       'VaultController.downloadAttachment():' ||
+      'VaultController.searchCards():' ||
+      'VaultController.readCardRows():' ||
       'VaultController.readCard():' ||
       'VaultController.readTotp():' ||
       'VaultController.saveCard():' ||
@@ -249,6 +259,8 @@ final class SafeBlocObserver extends BlocObserver
       'VaultUseCaseImpl.deleteGroupV2():' ||
       'VaultUseCaseImpl.exportCardAttachmentV1():' ||
       'VaultUseCaseImpl.loadContentV2():' ||
+      'VaultUseCaseImpl.searchCardsV1():' ||
+      'VaultUseCaseImpl.readCardRowsV1():' ||
       'VaultUseCaseImpl.readCardV1():' ||
       'VaultUseCaseImpl.readTotpV1():' ||
       'VaultUseCaseImpl.saveCardV1():' ||

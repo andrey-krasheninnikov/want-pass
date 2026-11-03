@@ -903,6 +903,60 @@ final class VaultUseCaseImpl implements VaultUseCase {
   }
 
   @override
+  FutureDomainResult<SearchCardsResultV1> searchCardsV1({
+    required SearchCardsParamsV1 params,
+  }) async {
+    const op = 'VaultUseCaseImpl.searchCardsV1():';
+    final result = await captureResult<SearchCardsResultV1>(() async {
+      final value = await _access.searchCardsV1(
+        handle: params.handle,
+        query: params.query,
+        revision: params.revision,
+      );
+      if (value.isError) throw value.error;
+      return SearchCardsResultV1(matches: value.value);
+    }, mapToDomainError: (_, _) => const VaultUnexpectedErrorV1());
+    if (result.isError) {
+      reportVaultSafely(
+        _reporter,
+        layer: VaultDiagnosticLayer.application,
+        operation: op,
+        error: result.error is VaultErrorV1
+            ? result.error as VaultErrorV1
+            : const VaultUnexpectedErrorV1(),
+      );
+    }
+    return result;
+  }
+
+  @override
+  FutureDomainResult<ReadCardRowsResultV1> readCardRowsV1({
+    required ReadCardRowsParamsV1 params,
+  }) async {
+    const op = 'VaultUseCaseImpl.readCardRowsV1():';
+    final result = await captureResult<ReadCardRowsResultV1>(() async {
+      final value = await _access.cardRowsV1(
+        handle: params.handle,
+        ids: params.ids,
+        revision: params.revision,
+      );
+      if (value.isError) throw value.error;
+      return ReadCardRowsResultV1(rows: value.value);
+    }, mapToDomainError: (_, _) => const VaultUnexpectedErrorV1());
+    if (result.isError) {
+      reportVaultSafely(
+        _reporter,
+        layer: VaultDiagnosticLayer.application,
+        operation: op,
+        error: result.error is VaultErrorV1
+            ? result.error as VaultErrorV1
+            : const VaultUnexpectedErrorV1(),
+      );
+    }
+    return result;
+  }
+
+  @override
   FutureDomainResult<ReadCardResultV1> readCardV1({
     required ReadCardParamsV1 params,
   }) async {

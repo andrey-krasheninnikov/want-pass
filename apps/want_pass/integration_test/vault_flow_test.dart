@@ -74,6 +74,7 @@ void main() {
       );
       await _settle(tester);
       expect(await signalWantPassFirstFrame(), isTrue);
+
       if (phase == 'create') {
         await _tap(tester, 'setup-next');
         await _until(
@@ -152,12 +153,12 @@ void main() {
               runtime.vault.state.content!.cards.isNotEmpty &&
               !runtime.vault.state.busy,
         );
-        await _tap(tester, 'vault-dial');
+        await _tap(tester, 'vault-padlock');
         await _until(
           tester,
           () => runtime.vault.state.phase == VaultPhase.locked,
         );
-        await _tap(tester, 'vault-dial');
+        await _tap(tester, 'vault-padlock');
         await _settle(tester);
         await _enter(
           tester,
@@ -198,7 +199,7 @@ void main() {
           () => runtime.vault.state.phase == VaultPhase.unlocked,
         );
       } else {
-        await _tap(tester, 'vault-dial');
+        await _tap(tester, 'vault-padlock');
         await _settle(tester);
         await _enter(tester, 'unlock-password', password);
         await _tap(tester, 'vault-unlock');
@@ -210,7 +211,7 @@ void main() {
           tester,
           () => runtime.vault.state.phase == VaultPhase.unlocked,
         );
-        expect(find.byKey(const ValueKey('vault-dial')), findsOneWidget);
+        expect(find.byKey(const ValueKey('vault-padlock')), findsOneWidget);
       }
       await _until(
         tester,
@@ -247,9 +248,21 @@ Future<void> _enter(WidgetTester tester, String key, String value) async {
     of: find.byKey(ValueKey(key)),
     matching: find.bySubtype<EditableText>(),
   );
-  await tester.ensureVisible(field);
+  await _until(tester, () {
+    final input = tester.widget<EditableText>(field);
+    return !input.readOnly && input.focusNode.canRequestFocus;
+  });
+  final scrollable = Scrollable.maybeOf(tester.element(field));
+  if (scrollable != null) {
+    await scrollable.position.ensureVisible(
+      tester.renderObject(field),
+      alignment: .5,
+    );
+  }
   await _settle(tester);
   await tester.tap(field);
+  tester.widget<EditableText>(field).focusNode.requestFocus();
+  await tester.pump();
   await tester.enterText(field, value);
   expect(
     tester.state<EditableTextState>(field).widget.focusNode.hasFocus,

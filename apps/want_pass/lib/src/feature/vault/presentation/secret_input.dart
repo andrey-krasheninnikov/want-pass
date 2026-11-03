@@ -15,6 +15,7 @@ final class VaultSecretInput extends StatefulWidget {
   final Widget? postfix;
   final bool invalid;
   final VoidCallback onSubmitted;
+  final ValueChanged<String>? onChanged;
   const VaultSecretInput({
     super.key,
     required this.label,
@@ -28,6 +29,7 @@ final class VaultSecretInput extends StatefulWidget {
     this.postfix,
     this.invalid = false,
     required this.onSubmitted,
+    this.onChanged,
   });
   @override
   State<VaultSecretInput> createState() => _VaultSecretInputState();
@@ -60,7 +62,10 @@ final class _VaultSecretInputState extends State<VaultSecretInput> {
             : null,
         readOnly: widget.concealed && widget.preserveLineBreaks && obscure,
         error: widget.invalid ? const SizedBox.shrink() : null,
-        control: FTextFieldControl.managed(controller: widget.controller),
+        control: FTextFieldControl.managed(
+          controller: widget.controller,
+          onChange: (value) => widget.onChanged?.call(value.text),
+        ),
         enabled: widget.enabled,
         autofocus: widget.autofocus,
         obscureText: widget.concealed && !widget.multiline && obscure,

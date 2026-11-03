@@ -1,6 +1,9 @@
 import 'package:want_pass/src/feature/vault/infrastructure/_barrel.dart';
 
 import 'dart:async';
+
+import 'package:flutter/foundation.dart';
+
 import 'dart:convert';
 
 import 'package:domain_error/domain_error.dart';
@@ -30,6 +33,9 @@ const _challenge = VaultRecoveryChallengeV1(
 
 void main() {
   final binding = TestWidgetsFlutterBinding.ensureInitialized();
+  setUpAll(() async {
+    expect(await rootBundle.loadString('assets/brand/lock.svg'), isNotEmpty);
+  });
   setUp(() {
     binding.platformDispatcher.accessibilityFeaturesTestValue =
         const FakeAccessibilityFeatures(disableAnimations: true);
@@ -68,37 +74,108 @@ void main() {
     },
   );
 
-  testWidgets(
-    'idle countdown follows the owner even with reduced motion and inactive views',
-    (tester) async {
-      var remaining = const Duration(minutes: 5);
-      await tester.pumpWidget(
-        MaterialApp(
-          home: WantTheme(
-            data: WantThemeData.dark(),
-            reduceMotion: true,
-            child: VaultIdleCountdown(remaining: () => remaining),
+  testWidgets('header padlock reflects confirmed state without a countdown', (
+    tester,
+  ) async {
+    var presses = 0;
+    Widget view(bool opened) => MaterialApp(
+      home: WantTheme(
+        data: WantThemeData.dark(),
+        reduceMotion: true,
+        child: Center(
+          child: VaultPadlock(
+            opened: opened,
+            label: opened ? 'Lock vault' : 'Unlock vault',
+            onPressed: () => presses++,
           ),
         ),
+      ),
+    );
+    await tester.pumpWidget(view(false));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byType(VaultPadlock));
+    expect(presses, 1);
+    expect(
+      tester.widget<VaultPadlock>(find.byType(VaultPadlock)).opened,
+      isFalse,
+    );
+    await tester.pumpWidget(view(true));
+    await tester.pumpAndSettle();
+    expect(
+      tester.widget<VaultPadlock>(find.byType(VaultPadlock)).opened,
+      isTrue,
+    );
+    expect(find.text('05:00'), findsNothing);
+    binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+    await tester.pump();
+    binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
+
+  testWidgets('padlock rotates its mesh on drag without locking', (
+    tester,
+  ) async {
+    final boundary = GlobalKey();
+    var presses = 0;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: WantTheme(
+          data: WantThemeData.dark(),
+          reduceMotion: true,
+          child: Center(
+            child: RepaintBoundary(
+              key: boundary,
+              child: VaultPadlock(
+                opened: false,
+                label: 'Unlock vault',
+                onPressed: () => presses++,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    Future<List<int>> pixels() async => (await tester.runAsync(() async {
+      final image =
+          await (boundary.currentContext!.findRenderObject()!
+                  as RenderRepaintBoundary)
+              .toImage();
+      try {
+        return (await image.toByteData(format: ui.ImageByteFormat.rawRgba))!
+            .buffer
+            .asUint8List()
+            .toList();
+      } finally {
+        image.dispose();
+      }
+    }))!;
+    final target = find.descendant(
+      of: find.byType(WantSvg3D),
+      matching: find.byType(GestureDetector),
+    );
+    for (var i = 0; i < 30 && target.evaluate().isEmpty; i++) {
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 10)),
       );
-      expect(find.text('05:00'), findsOneWidget);
-      remaining = const Duration(minutes: 4, seconds: 59);
-      await tester.pump(const Duration(seconds: 1));
-      expect(find.text('04:59'), findsOneWidget);
-      binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
       await tester.pump();
-      remaining = const Duration(minutes: 3);
-      await tester.pump(const Duration(seconds: 60));
-      expect(find.text('04:59'), findsOneWidget);
-      binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
-      await tester.pump();
-      expect(find.text('03:00'), findsOneWidget);
-      remaining = const Duration(minutes: 5);
-      await tester.pump(const Duration(seconds: 1));
-      expect(find.text('05:00'), findsOneWidget);
-      await tester.pumpWidget(const SizedBox.shrink());
-    },
-  );
+    }
+    expect(target, findsOneWidget);
+    final mouse = await tester.createGesture(kind: ui.PointerDeviceKind.mouse);
+    await mouse.addPointer(location: const Offset(1, 1));
+    await mouse.moveTo(tester.getCenter(find.byType(VaultPadlock)));
+    await tester.pumpAndSettle();
+    final before = await pixels();
+    await tester.drag(target, const Offset(60, 0));
+    await tester.pumpAndSettle();
+    expect(presses, 0);
+    expect(listEquals(before, await pixels()), isFalse);
+    await mouse.removePointer();
+    await tester.tap(find.byType(VaultPadlock));
+    await tester.pumpAndSettle();
+    expect(presses, 1);
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
 
   test(
     'password mismatch never reaches storage and domain errors keep identity',
@@ -253,7 +330,7 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
-      await _tapKey(tester, 'vault-dial');
+      await _tapKey(tester, 'vault-padlock');
       expect(find.byKey(const ValueKey('vault-recovery')), findsNothing);
       expect(find.byKey(const ValueKey('vault-show-hint')), findsNothing);
       await _capture(tester, boundary, 'unlock-initial');
@@ -337,16 +414,10 @@ void main() {
       await tester.pumpAndSettle();
       expect(controller.state.phase, VaultPhase.unlocked);
       expect(notices, [VaultNoticeKind.unlocked]);
-      expect(find.text('Access granted'), findsWidgets);
-      expect(find.text('05:00'), findsOneWidget);
-      final glows = find.byType(WantGlow);
-      expect(glows, findsOneWidget);
-      expect(
-        find.ancestor(of: glows, matching: find.byType(VaultSafeDial)),
-        findsOneWidget,
-      );
-      final dialSize = tester.getSize(find.byKey(const ValueKey('vault-dial')));
-      expect(dialSize.width, dialSize.height);
+      expect(find.text('Access granted'), findsNothing);
+      expect(find.text('Sign-in required'), findsNothing);
+      expect(find.text('05:00'), findsNothing);
+      expect(find.byType(VaultPadlock), findsOneWidget);
       await _capture(tester, boundary, 'unlock-granted');
       expect(access.passwords, ['Wrong synthetic password 2026!', _password]);
       await tester.pumpWidget(const SizedBox.shrink());
@@ -378,7 +449,7 @@ void main() {
           WantPassApp(startup: startup, vault: controller),
         );
         await tester.pumpAndSettle();
-        await _tapKey(tester, 'vault-dial');
+        await _tapKey(tester, 'vault-padlock');
         final field = find.descendant(
           of: find.byKey(const ValueKey('unlock-password')),
           matching: find.bySubtype<EditableText>(),
@@ -569,7 +640,7 @@ void main() {
         await controller.confirm(['one', 'two', 'three']);
         await controller.lock();
         await tester.pumpAndSettle();
-        await tester.tap(find.byKey(const ValueKey('vault-dial')));
+        await tester.tap(find.byKey(const ValueKey('vault-padlock')));
         await tester.pumpAndSettle();
         await _enter(tester, input('unlock-password'), password);
         await tester.tap(find.byKey(const ValueKey('vault-unlock')));
@@ -680,7 +751,7 @@ void main() {
       });
       await tester.pumpWidget(WantPassApp(startup: startup, vault: controller));
       await tester.pumpAndSettle();
-      await tester.tap(find.byKey(const ValueKey('vault-dial')));
+      await tester.tap(find.byKey(const ValueKey('vault-padlock')));
       await tester.pumpAndSettle();
       await _rejectUnlock(tester, access);
       await tester.tap(find.byKey(const ValueKey('vault-recovery')));
@@ -714,7 +785,7 @@ void main() {
       expect(controller.state.phase, VaultPhase.locked);
       expect(controller.state.setupChallenge, isNull);
       expect(access.handle.invalidations, 1);
-      expect(find.byKey(const ValueKey('vault-dial')), findsOneWidget);
+      expect(find.byKey(const ValueKey('vault-padlock')), findsOneWidget);
       expect(find.text('Appearance'), findsNothing);
       expect(export.clipboard, isEmpty);
       export.selection.complete(
@@ -904,7 +975,7 @@ void main() {
         await _tapKey(tester, i == 2 ? 'vault-confirm' : 'setup-next');
       }
       expect(controller.state.phase, VaultPhase.unlocked);
-      await _tapKey(tester, 'vault-dial');
+      await _tapKey(tester, 'vault-padlock');
       expect(controller.state.phase, VaultPhase.locked);
       await tester.pumpWidget(const SizedBox());
       await tester.pump(const Duration(milliseconds: 100));
@@ -1075,7 +1146,7 @@ void main() {
       });
       await tester.pumpWidget(WantPassApp(startup: startup, vault: controller));
       await tester.pumpAndSettle();
-      await _tapKey(tester, 'vault-dial');
+      await _tapKey(tester, 'vault-padlock');
       await _rejectUnlock(tester, access);
       await _tapKey(tester, 'vault-recovery');
       expect(
@@ -1244,6 +1315,20 @@ final class _Handle implements VaultHandleV1 {
 final class _Access implements VaultAccessService {
   String? accountCopy;
 
+  @override
+  FutureDomainResult<CardMatchesV1> searchCardsV1({
+    required VaultHandleV1 handle,
+    required CardSearchV1 query,
+    required BigInt revision,
+  }) async => Result.success(
+    CardMatchesV1(revision: revision, cardIds: const [], groupIds: const []),
+  );
+  @override
+  FutureDomainResult<List<CardRowV1>> cardRowsV1({
+    required VaultHandleV1 handle,
+    required List<String> ids,
+    required BigInt revision,
+  }) async => const Result.success([]);
   @override
   FutureDomainResult<CardCatalogV1> cardCatalogV1() async => Result.success(
     CardCatalogV1(

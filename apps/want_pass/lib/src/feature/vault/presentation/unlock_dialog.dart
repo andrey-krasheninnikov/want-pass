@@ -171,7 +171,7 @@ final class _VaultUnlockDialogState extends State<VaultUnlockDialog> {
               ),
             );
             return WantDialog(
-              title: _text('Sign-in required', 'Требуется вход'),
+              title: _text('Master password', 'Мастер-пароль'),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.stretch,

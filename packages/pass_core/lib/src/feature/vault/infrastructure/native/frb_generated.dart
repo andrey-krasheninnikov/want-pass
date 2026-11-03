@@ -62,7 +62,7 @@ class VaultRustLib
   String get codegenVersion => '2.13.0';
 
   @override
-  int get rustContentHash => 173454649;
+  int get rustContentHash => -141275914;
 
   static const kDefaultExternalLibraryLoaderConfig =
       ExternalLibraryLoaderConfig(
@@ -77,6 +77,13 @@ abstract class VaultRustLibApi extends BaseApi {
   Future<AccountRecordV1> crateApiVaultAccountV1({
     required Vault that,
     required String id,
+    required BigInt generation,
+  });
+
+  Future<List<CardRowV1>> crateApiVaultCardRowsV1({
+    required Vault that,
+    required List<String> ids,
+    required BigInt revision,
     required BigInt generation,
   });
 
@@ -262,6 +269,13 @@ abstract class VaultRustLibApi extends BaseApi {
     required BigInt generation,
   });
 
+  Future<CardMatchesV1> crateApiVaultSearchCardsV1({
+    required Vault that,
+    required CardSearchV1 query,
+    required BigInt revision,
+    required BigInt generation,
+  });
+
   Future<VaultStatus> crateApiVaultStatus({required Vault that});
 
   Future<void> crateApiVaultUnlock({
@@ -346,6 +360,47 @@ class VaultRustLibApiImpl extends VaultRustLibApiImplPlatform
   );
 
   @override
+  Future<List<CardRowV1>> crateApiVaultCardRowsV1({
+    required Vault that,
+    required List<String> ids,
+    required BigInt revision,
+    required BigInt generation,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerVault(
+            that,
+            serializer,
+          );
+          sse_encode_list_String(ids, serializer);
+          sse_encode_u_64(revision, serializer);
+          sse_encode_u_64(generation, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 2,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_list_card_row_v_1,
+          decodeErrorData: sse_decode_vault_failure,
+        ),
+        constMeta: kCrateApiVaultCardRowsV1ConstMeta,
+        argValues: const [],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiVaultCardRowsV1ConstMeta => const TaskConstMeta(
+    debugName: "Vault_card_rows_v1",
+    argNames: ["that", "ids", "revision", "generation"],
+  );
+
+  @override
   Future<CardRecordV1> crateApiVaultCardV1({
     required Vault that,
     required String id,
@@ -364,7 +419,7 @@ class VaultRustLibApiImpl extends VaultRustLibApiImplPlatform
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 2,
+            funcId: 3,
             port: port_,
           );
         },
@@ -397,7 +452,7 @@ class VaultRustLibApiImpl extends VaultRustLibApiImplPlatform
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 3,
+            funcId: 4,
             port: port_,
           );
         },
@@ -434,7 +489,7 @@ class VaultRustLibApiImpl extends VaultRustLibApiImplPlatform
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 4,
+            funcId: 5,
             port: port_,
           );
         },
@@ -479,7 +534,7 @@ class VaultRustLibApiImpl extends VaultRustLibApiImplPlatform
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 5,
+            funcId: 6,
             port: port_,
           );
         },
@@ -531,7 +586,7 @@ class VaultRustLibApiImpl extends VaultRustLibApiImplPlatform
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 6,
+            funcId: 7,
             port: port_,
           );
         },
@@ -575,7 +630,7 @@ class VaultRustLibApiImpl extends VaultRustLibApiImplPlatform
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 7,
+            funcId: 8,
             port: port_,
           );
         },
@@ -612,7 +667,7 @@ class VaultRustLibApiImpl extends VaultRustLibApiImplPlatform
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 8,
+            funcId: 9,
             port: port_,
           );
         },
@@ -651,7 +706,7 @@ class VaultRustLibApiImpl extends VaultRustLibApiImplPlatform
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 9,
+            funcId: 10,
             port: port_,
           );
         },
@@ -690,7 +745,7 @@ class VaultRustLibApiImpl extends VaultRustLibApiImplPlatform
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 10,
+            funcId: 11,
             port: port_,
           );
         },
@@ -731,7 +786,7 @@ class VaultRustLibApiImpl extends VaultRustLibApiImplPlatform
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 11,
+            funcId: 12,
             port: port_,
           );
         },
@@ -773,7 +828,7 @@ class VaultRustLibApiImpl extends VaultRustLibApiImplPlatform
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 12,
+            funcId: 13,
             port: port_,
           );
         },
@@ -814,7 +869,7 @@ class VaultRustLibApiImpl extends VaultRustLibApiImplPlatform
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 13,
+            funcId: 14,
             port: port_,
           );
         },
@@ -855,7 +910,7 @@ class VaultRustLibApiImpl extends VaultRustLibApiImplPlatform
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 14,
+            funcId: 15,
             port: port_,
           );
         },
@@ -898,7 +953,7 @@ class VaultRustLibApiImpl extends VaultRustLibApiImplPlatform
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 15,
+            funcId: 16,
             port: port_,
           );
         },
@@ -938,7 +993,7 @@ class VaultRustLibApiImpl extends VaultRustLibApiImplPlatform
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 16,
+            funcId: 17,
             port: port_,
           );
         },
@@ -978,7 +1033,7 @@ class VaultRustLibApiImpl extends VaultRustLibApiImplPlatform
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 17,
+            funcId: 18,
             port: port_,
           );
         },
@@ -1009,7 +1064,7 @@ class VaultRustLibApiImpl extends VaultRustLibApiImplPlatform
             that,
             serializer,
           );
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 18)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 19)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_u_64,
@@ -1038,7 +1093,7 @@ class VaultRustLibApiImpl extends VaultRustLibApiImplPlatform
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 19,
+            funcId: 20,
             port: port_,
           );
         },
@@ -1066,7 +1121,7 @@ class VaultRustLibApiImpl extends VaultRustLibApiImplPlatform
             that,
             serializer,
           );
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 20)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 21)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_unit,
@@ -1092,7 +1147,7 @@ class VaultRustLibApiImpl extends VaultRustLibApiImplPlatform
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 21,
+            funcId: 22,
             port: port_,
           );
         },
@@ -1130,7 +1185,7 @@ class VaultRustLibApiImpl extends VaultRustLibApiImplPlatform
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 22,
+            funcId: 23,
             port: port_,
           );
         },
@@ -1170,7 +1225,7 @@ class VaultRustLibApiImpl extends VaultRustLibApiImplPlatform
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 23,
+            funcId: 24,
             port: port_,
           );
         },
@@ -1210,7 +1265,7 @@ class VaultRustLibApiImpl extends VaultRustLibApiImplPlatform
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 24,
+            funcId: 25,
             port: port_,
           );
         },
@@ -1252,7 +1307,7 @@ class VaultRustLibApiImpl extends VaultRustLibApiImplPlatform
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 25,
+            funcId: 26,
             port: port_,
           );
         },
@@ -1294,7 +1349,7 @@ class VaultRustLibApiImpl extends VaultRustLibApiImplPlatform
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 26,
+            funcId: 27,
             port: port_,
           );
         },
@@ -1336,7 +1391,7 @@ class VaultRustLibApiImpl extends VaultRustLibApiImplPlatform
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 27,
+            funcId: 28,
             port: port_,
           );
         },
@@ -1374,7 +1429,7 @@ class VaultRustLibApiImpl extends VaultRustLibApiImplPlatform
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 28,
+            funcId: 29,
             port: port_,
           );
         },
@@ -1416,7 +1471,7 @@ class VaultRustLibApiImpl extends VaultRustLibApiImplPlatform
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 29,
+            funcId: 30,
             port: port_,
           );
         },
@@ -1457,7 +1512,7 @@ class VaultRustLibApiImpl extends VaultRustLibApiImplPlatform
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 30,
+            funcId: 31,
             port: port_,
           );
         },
@@ -1498,7 +1553,7 @@ class VaultRustLibApiImpl extends VaultRustLibApiImplPlatform
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 31,
+            funcId: 32,
             port: port_,
           );
         },
@@ -1539,7 +1594,7 @@ class VaultRustLibApiImpl extends VaultRustLibApiImplPlatform
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 32,
+            funcId: 33,
             port: port_,
           );
         },
@@ -1560,6 +1615,47 @@ class VaultRustLibApiImpl extends VaultRustLibApiImplPlatform
   );
 
   @override
+  Future<CardMatchesV1> crateApiVaultSearchCardsV1({
+    required Vault that,
+    required CardSearchV1 query,
+    required BigInt revision,
+    required BigInt generation,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerVault(
+            that,
+            serializer,
+          );
+          sse_encode_box_autoadd_card_search_v_1(query, serializer);
+          sse_encode_u_64(revision, serializer);
+          sse_encode_u_64(generation, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 34,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_card_matches_v_1,
+          decodeErrorData: sse_decode_vault_failure,
+        ),
+        constMeta: kCrateApiVaultSearchCardsV1ConstMeta,
+        argValues: const [],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiVaultSearchCardsV1ConstMeta => const TaskConstMeta(
+    debugName: "Vault_search_cards_v1",
+    argNames: ["that", "query", "revision", "generation"],
+  );
+
+  @override
   Future<VaultStatus> crateApiVaultStatus({required Vault that}) {
     return handler.executeNormal(
       NormalTask(
@@ -1572,7 +1668,7 @@ class VaultRustLibApiImpl extends VaultRustLibApiImplPlatform
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 33,
+            funcId: 35,
             port: port_,
           );
         },
@@ -1609,7 +1705,7 @@ class VaultRustLibApiImpl extends VaultRustLibApiImplPlatform
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 34,
+            funcId: 36,
             port: port_,
           );
         },
@@ -1648,7 +1744,7 @@ class VaultRustLibApiImpl extends VaultRustLibApiImplPlatform
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 35,
+            funcId: 37,
             port: port_,
           );
         },
@@ -1687,7 +1783,7 @@ class VaultRustLibApiImpl extends VaultRustLibApiImplPlatform
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 36,
+            funcId: 38,
             port: port_,
           );
         },
@@ -1721,7 +1817,7 @@ class VaultRustLibApiImpl extends VaultRustLibApiImplPlatform
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 37,
+            funcId: 39,
             port: port_,
           );
         },
@@ -1751,7 +1847,7 @@ class VaultRustLibApiImpl extends VaultRustLibApiImplPlatform
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 38,
+            funcId: 40,
             port: port_,
           );
         },
@@ -1778,7 +1874,7 @@ class VaultRustLibApiImpl extends VaultRustLibApiImplPlatform
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 39,
+            funcId: 41,
             port: port_,
           );
         },
@@ -1806,7 +1902,7 @@ class VaultRustLibApiImpl extends VaultRustLibApiImplPlatform
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 40,
+            funcId: 42,
             port: port_,
           );
         },
@@ -1970,6 +2066,18 @@ class VaultRustLibApiImpl extends VaultRustLibApiImplPlatform
   }
 
   @protected
+  CardSearchV1 dco_decode_box_autoadd_card_search_v_1(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return dco_decode_card_search_v_1(raw);
+  }
+
+  @protected
+  CardTypeV1 dco_decode_box_autoadd_card_type_v_1(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return dco_decode_card_type_v_1(raw);
+  }
+
+  @protected
   EnvironmentV1 dco_decode_box_autoadd_environment_v_1(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return dco_decode_environment_v_1(raw);
@@ -1979,6 +2087,12 @@ class VaultRustLibApiImpl extends VaultRustLibApiImplPlatform
   GroupInputV1 dco_decode_box_autoadd_group_input_v_1(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return dco_decode_group_input_v_1(raw);
+  }
+
+  @protected
+  TotpCodeV1 dco_decode_box_autoadd_totp_code_v_1(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return dco_decode_totp_code_v_1(raw);
   }
 
   @protected
@@ -1997,6 +2111,19 @@ class VaultRustLibApiImpl extends VaultRustLibApiImplPlatform
       cardType: dco_decode_card_type_v_1(arr[6]),
       fields: dco_decode_list_card_value_v_1(arr[7]),
       attachment: dco_decode_opt_box_autoadd_attachment_input_v_1(arr[8]),
+    );
+  }
+
+  @protected
+  CardMatchesV1 dco_decode_card_matches_v_1(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 3)
+      throw Exception('unexpected arr length: expect 3 but see ${arr.length}');
+    return CardMatchesV1(
+      revision: dco_decode_u_64(arr[0]),
+      cardIds: dco_decode_list_String(arr[1]),
+      groupIds: dco_decode_list_String(arr[2]),
     );
   }
 
@@ -2024,6 +2151,36 @@ class VaultRustLibApiImpl extends VaultRustLibApiImplPlatform
       fields: dco_decode_list_card_value_v_1(arr[2]),
       attachment: dco_decode_opt_box_autoadd_attachment_summary_v_1(arr[3]),
       protectedContainer: dco_decode_bool(arr[4]),
+    );
+  }
+
+  @protected
+  CardRowV1 dco_decode_card_row_v_1(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 5)
+      throw Exception('unexpected arr length: expect 5 but see ${arr.length}');
+    return CardRowV1(
+      id: dco_decode_String(arr[0]),
+      fields: dco_decode_list_field_id_v_1(arr[1]),
+      login: dco_decode_opt_String(arr[2]),
+      otp: dco_decode_opt_box_autoadd_totp_code_v_1(arr[3]),
+      attachment: dco_decode_opt_box_autoadd_attachment_summary_v_1(arr[4]),
+    );
+  }
+
+  @protected
+  CardSearchV1 dco_decode_card_search_v_1(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 5)
+      throw Exception('unexpected arr length: expect 5 but see ${arr.length}');
+    return CardSearchV1(
+      text: dco_decode_String(arr[0]),
+      cardType: dco_decode_opt_box_autoadd_card_type_v_1(arr[1]),
+      service: dco_decode_opt_String(arr[2]),
+      environment: dco_decode_opt_box_autoadd_environment_v_1(arr[3]),
+      withoutEnvironment: dco_decode_bool(arr[4]),
     );
   }
 
@@ -2170,6 +2327,12 @@ class VaultRustLibApiImpl extends VaultRustLibApiImplPlatform
   }
 
   @protected
+  List<CardRowV1> dco_decode_list_card_row_v_1(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return (raw as List<dynamic>).map(dco_decode_card_row_v_1).toList();
+  }
+
+  @protected
   List<CardSummaryV1> dco_decode_list_card_summary_v_1(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return (raw as List<dynamic>).map(dco_decode_card_summary_v_1).toList();
@@ -2179,6 +2342,12 @@ class VaultRustLibApiImpl extends VaultRustLibApiImplPlatform
   List<CardValueV1> dco_decode_list_card_value_v_1(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return (raw as List<dynamic>).map(dco_decode_card_value_v_1).toList();
+  }
+
+  @protected
+  List<FieldIdV1> dco_decode_list_field_id_v_1(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return (raw as List<dynamic>).map(dco_decode_field_id_v_1).toList();
   }
 
   @protected
@@ -2238,9 +2407,21 @@ class VaultRustLibApiImpl extends VaultRustLibApiImplPlatform
   }
 
   @protected
+  CardTypeV1? dco_decode_opt_box_autoadd_card_type_v_1(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw == null ? null : dco_decode_box_autoadd_card_type_v_1(raw);
+  }
+
+  @protected
   EnvironmentV1? dco_decode_opt_box_autoadd_environment_v_1(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return raw == null ? null : dco_decode_box_autoadd_environment_v_1(raw);
+  }
+
+  @protected
+  TotpCodeV1? dco_decode_opt_box_autoadd_totp_code_v_1(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw == null ? null : dco_decode_box_autoadd_totp_code_v_1(raw);
   }
 
   @protected
@@ -2501,6 +2682,22 @@ class VaultRustLibApiImpl extends VaultRustLibApiImplPlatform
   }
 
   @protected
+  CardSearchV1 sse_decode_box_autoadd_card_search_v_1(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return (sse_decode_card_search_v_1(deserializer));
+  }
+
+  @protected
+  CardTypeV1 sse_decode_box_autoadd_card_type_v_1(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return (sse_decode_card_type_v_1(deserializer));
+  }
+
+  @protected
   EnvironmentV1 sse_decode_box_autoadd_environment_v_1(
     SseDeserializer deserializer,
   ) {
@@ -2514,6 +2711,14 @@ class VaultRustLibApiImpl extends VaultRustLibApiImplPlatform
   ) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     return (sse_decode_group_input_v_1(deserializer));
+  }
+
+  @protected
+  TotpCodeV1 sse_decode_box_autoadd_totp_code_v_1(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return (sse_decode_totp_code_v_1(deserializer));
   }
 
   @protected
@@ -2546,6 +2751,19 @@ class VaultRustLibApiImpl extends VaultRustLibApiImplPlatform
   }
 
   @protected
+  CardMatchesV1 sse_decode_card_matches_v_1(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_revision = sse_decode_u_64(deserializer);
+    var var_cardIds = sse_decode_list_String(deserializer);
+    var var_groupIds = sse_decode_list_String(deserializer);
+    return CardMatchesV1(
+      revision: var_revision,
+      cardIds: var_cardIds,
+      groupIds: var_groupIds,
+    );
+  }
+
+  @protected
   CardPresetV1 sse_decode_card_preset_v_1(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var var_cardType = sse_decode_card_type_v_1(deserializer);
@@ -2569,6 +2787,44 @@ class VaultRustLibApiImpl extends VaultRustLibApiImplPlatform
       fields: var_fields,
       attachment: var_attachment,
       protectedContainer: var_protectedContainer,
+    );
+  }
+
+  @protected
+  CardRowV1 sse_decode_card_row_v_1(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_id = sse_decode_String(deserializer);
+    var var_fields = sse_decode_list_field_id_v_1(deserializer);
+    var var_login = sse_decode_opt_String(deserializer);
+    var var_otp = sse_decode_opt_box_autoadd_totp_code_v_1(deserializer);
+    var var_attachment = sse_decode_opt_box_autoadd_attachment_summary_v_1(
+      deserializer,
+    );
+    return CardRowV1(
+      id: var_id,
+      fields: var_fields,
+      login: var_login,
+      otp: var_otp,
+      attachment: var_attachment,
+    );
+  }
+
+  @protected
+  CardSearchV1 sse_decode_card_search_v_1(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_text = sse_decode_String(deserializer);
+    var var_cardType = sse_decode_opt_box_autoadd_card_type_v_1(deserializer);
+    var var_service = sse_decode_opt_String(deserializer);
+    var var_environment = sse_decode_opt_box_autoadd_environment_v_1(
+      deserializer,
+    );
+    var var_withoutEnvironment = sse_decode_bool(deserializer);
+    return CardSearchV1(
+      text: var_text,
+      cardType: var_cardType,
+      service: var_service,
+      environment: var_environment,
+      withoutEnvironment: var_withoutEnvironment,
     );
   }
 
@@ -2752,6 +3008,18 @@ class VaultRustLibApiImpl extends VaultRustLibApiImplPlatform
   }
 
   @protected
+  List<CardRowV1> sse_decode_list_card_row_v_1(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var len_ = sse_decode_i_32(deserializer);
+    var ans_ = <CardRowV1>[];
+    for (var idx_ = 0; idx_ < len_; ++idx_) {
+      ans_.add(sse_decode_card_row_v_1(deserializer));
+    }
+    return ans_;
+  }
+
+  @protected
   List<CardSummaryV1> sse_decode_list_card_summary_v_1(
     SseDeserializer deserializer,
   ) {
@@ -2775,6 +3043,18 @@ class VaultRustLibApiImpl extends VaultRustLibApiImplPlatform
     var ans_ = <CardValueV1>[];
     for (var idx_ = 0; idx_ < len_; ++idx_) {
       ans_.add(sse_decode_card_value_v_1(deserializer));
+    }
+    return ans_;
+  }
+
+  @protected
+  List<FieldIdV1> sse_decode_list_field_id_v_1(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var len_ = sse_decode_i_32(deserializer);
+    var ans_ = <FieldIdV1>[];
+    for (var idx_ = 0; idx_ < len_; ++idx_) {
+      ans_.add(sse_decode_field_id_v_1(deserializer));
     }
     return ans_;
   }
@@ -2871,6 +3151,19 @@ class VaultRustLibApiImpl extends VaultRustLibApiImplPlatform
   }
 
   @protected
+  CardTypeV1? sse_decode_opt_box_autoadd_card_type_v_1(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    if (sse_decode_bool(deserializer)) {
+      return (sse_decode_box_autoadd_card_type_v_1(deserializer));
+    } else {
+      return null;
+    }
+  }
+
+  @protected
   EnvironmentV1? sse_decode_opt_box_autoadd_environment_v_1(
     SseDeserializer deserializer,
   ) {
@@ -2878,6 +3171,19 @@ class VaultRustLibApiImpl extends VaultRustLibApiImplPlatform
 
     if (sse_decode_bool(deserializer)) {
       return (sse_decode_box_autoadd_environment_v_1(deserializer));
+    } else {
+      return null;
+    }
+  }
+
+  @protected
+  TotpCodeV1? sse_decode_opt_box_autoadd_totp_code_v_1(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    if (sse_decode_bool(deserializer)) {
+      return (sse_decode_box_autoadd_totp_code_v_1(deserializer));
     } else {
       return null;
     }
@@ -3138,6 +3444,24 @@ class VaultRustLibApiImpl extends VaultRustLibApiImplPlatform
   }
 
   @protected
+  void sse_encode_box_autoadd_card_search_v_1(
+    CardSearchV1 self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_card_search_v_1(self, serializer);
+  }
+
+  @protected
+  void sse_encode_box_autoadd_card_type_v_1(
+    CardTypeV1 self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_card_type_v_1(self, serializer);
+  }
+
+  @protected
   void sse_encode_box_autoadd_environment_v_1(
     EnvironmentV1 self,
     SseSerializer serializer,
@@ -3153,6 +3477,15 @@ class VaultRustLibApiImpl extends VaultRustLibApiImplPlatform
   ) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_group_input_v_1(self, serializer);
+  }
+
+  @protected
+  void sse_encode_box_autoadd_totp_code_v_1(
+    TotpCodeV1 self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_totp_code_v_1(self, serializer);
   }
 
   @protected
@@ -3173,6 +3506,17 @@ class VaultRustLibApiImpl extends VaultRustLibApiImplPlatform
   }
 
   @protected
+  void sse_encode_card_matches_v_1(
+    CardMatchesV1 self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_u_64(self.revision, serializer);
+    sse_encode_list_String(self.cardIds, serializer);
+    sse_encode_list_String(self.groupIds, serializer);
+  }
+
+  @protected
   void sse_encode_card_preset_v_1(CardPresetV1 self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_card_type_v_1(self.cardType, serializer);
@@ -3190,6 +3534,29 @@ class VaultRustLibApiImpl extends VaultRustLibApiImplPlatform
       serializer,
     );
     sse_encode_bool(self.protectedContainer, serializer);
+  }
+
+  @protected
+  void sse_encode_card_row_v_1(CardRowV1 self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_String(self.id, serializer);
+    sse_encode_list_field_id_v_1(self.fields, serializer);
+    sse_encode_opt_String(self.login, serializer);
+    sse_encode_opt_box_autoadd_totp_code_v_1(self.otp, serializer);
+    sse_encode_opt_box_autoadd_attachment_summary_v_1(
+      self.attachment,
+      serializer,
+    );
+  }
+
+  @protected
+  void sse_encode_card_search_v_1(CardSearchV1 self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_String(self.text, serializer);
+    sse_encode_opt_box_autoadd_card_type_v_1(self.cardType, serializer);
+    sse_encode_opt_String(self.service, serializer);
+    sse_encode_opt_box_autoadd_environment_v_1(self.environment, serializer);
+    sse_encode_bool(self.withoutEnvironment, serializer);
   }
 
   @protected
@@ -3330,6 +3697,18 @@ class VaultRustLibApiImpl extends VaultRustLibApiImplPlatform
   }
 
   @protected
+  void sse_encode_list_card_row_v_1(
+    List<CardRowV1> self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    for (final item in self) {
+      sse_encode_card_row_v_1(item, serializer);
+    }
+  }
+
+  @protected
   void sse_encode_list_card_summary_v_1(
     List<CardSummaryV1> self,
     SseSerializer serializer,
@@ -3350,6 +3729,18 @@ class VaultRustLibApiImpl extends VaultRustLibApiImplPlatform
     sse_encode_i_32(self.length, serializer);
     for (final item in self) {
       sse_encode_card_value_v_1(item, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_list_field_id_v_1(
+    List<FieldIdV1> self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    for (final item in self) {
+      sse_encode_field_id_v_1(item, serializer);
     }
   }
 
@@ -3446,6 +3837,19 @@ class VaultRustLibApiImpl extends VaultRustLibApiImplPlatform
   }
 
   @protected
+  void sse_encode_opt_box_autoadd_card_type_v_1(
+    CardTypeV1? self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    sse_encode_bool(self != null, serializer);
+    if (self != null) {
+      sse_encode_box_autoadd_card_type_v_1(self, serializer);
+    }
+  }
+
+  @protected
   void sse_encode_opt_box_autoadd_environment_v_1(
     EnvironmentV1? self,
     SseSerializer serializer,
@@ -3455,6 +3859,19 @@ class VaultRustLibApiImpl extends VaultRustLibApiImplPlatform
     sse_encode_bool(self != null, serializer);
     if (self != null) {
       sse_encode_box_autoadd_environment_v_1(self, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_opt_box_autoadd_totp_code_v_1(
+    TotpCodeV1? self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    sse_encode_bool(self != null, serializer);
+    if (self != null) {
+      sse_encode_box_autoadd_totp_code_v_1(self, serializer);
     }
   }
 
@@ -3574,6 +3991,17 @@ class VaultImpl extends RustOpaque implements Vault {
   }) => VaultRustLib.instance.api.crateApiVaultAccountV1(
     that: this,
     id: id,
+    generation: generation,
+  );
+
+  Future<List<CardRowV1>> cardRowsV1({
+    required List<String> ids,
+    required BigInt revision,
+    required BigInt generation,
+  }) => VaultRustLib.instance.api.crateApiVaultCardRowsV1(
+    that: this,
+    ids: ids,
+    revision: revision,
     generation: generation,
   );
 
@@ -3848,6 +4276,17 @@ class VaultImpl extends RustOpaque implements Vault {
   }) => VaultRustLib.instance.api.crateApiVaultSaveGroupV2(
     that: this,
     input: input,
+    revision: revision,
+    generation: generation,
+  );
+
+  Future<CardMatchesV1> searchCardsV1({
+    required CardSearchV1 query,
+    required BigInt revision,
+    required BigInt generation,
+  }) => VaultRustLib.instance.api.crateApiVaultSearchCardsV1(
+    that: this,
+    query: query,
     revision: revision,
     generation: generation,
   );

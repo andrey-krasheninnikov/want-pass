@@ -111,6 +111,25 @@ pub struct ContentSnapshotV2 {
     pub groups: Vec<GroupRecordV1>,
     pub cards: Vec<CardSummaryV1>,
 }
+pub struct CardSearchV1 {
+    pub text: String,
+    pub card_type: Option<CardTypeV1>,
+    pub service: Option<String>,
+    pub environment: Option<EnvironmentV1>,
+    pub without_environment: bool,
+}
+pub struct CardMatchesV1 {
+    pub revision: u64,
+    pub card_ids: Vec<String>,
+    pub group_ids: Vec<String>,
+}
+pub struct CardRowV1 {
+    pub id: String,
+    pub fields: Vec<FieldIdV1>,
+    pub login: Option<String>,
+    pub otp: Option<super::TotpCodeV1>,
+    pub attachment: Option<AttachmentSummaryV1>,
+}
 pub fn services_v1() -> Vec<String> {
     [
         "microsoft",
@@ -287,6 +306,103 @@ impl DocumentV2 {
 impl Vault {
     pub fn content_v2(&self, generation: u64) -> Result<ContentSnapshotV2, VaultFailure> {
         self.read_cards(generation, |d| Ok(d.snapshot()))
+    }
+    pub fn search_cards_v1(
+        &self,
+        query: CardSearchV1,
+        revision: u64,
+        generation: u64,
+    ) -> Result<CardMatchesV1, VaultFailure> {
+        let text = Zeroizing::new(query.text);
+        if text.len() > 16384
+            || text.contains('\0')
+            || (query.without_environment && query.environment.is_some())
+            || query
+                .service
+                .as_ref()
+                .is_some_and(|s| !services_v1().contains(s))
+        {
+            return Err(VaultFailure::Unsupported);
+        }
+        self.read_cards(generation, |d| {
+            if d.revision != revision {
+                return Err(VaultFailure::Stale);
+            }
+            let needle = Zeroizing::new(text.to_lowercase());
+            let group_ids: Vec<String> = d
+                .groups
+                .iter()
+                .filter(|g| g.name.to_lowercase().contains(needle.as_str()))
+                .map(|g| g.id.clone())
+                .collect();
+            let groups: BTreeSet<&str> = group_ids.iter().map(String::as_str).collect();
+            let card_ids = d
+                .cards
+                .iter()
+                .filter(|c| {
+                    query.card_type.is_none_or(|v| c.card_type == v)
+                        && query.service.as_ref().is_none_or(|v| c.service == *v)
+                        && query.environment.is_none_or(|v| c.environment == Some(v))
+                        && (!query.without_environment || c.environment.is_none())
+                        && (needle.is_empty()
+                            || c.name.to_lowercase().contains(needle.as_str())
+                            || c.group_ids.iter().any(|id| groups.contains(id.as_str()))
+                            || c.fields.iter().any(|f| {
+                                Zeroizing::new(f.value.to_lowercase()).contains(needle.as_str())
+                            }))
+                })
+                .map(|c| c.id.clone())
+                .collect();
+            Ok(CardMatchesV1 {
+                revision: d.revision,
+                card_ids,
+                group_ids,
+            })
+        })
+    }
+    pub fn card_rows_v1(
+        &self,
+        ids: Vec<String>,
+        revision: u64,
+        generation: u64,
+    ) -> Result<Vec<CardRowV1>, VaultFailure> {
+        if ids.len() > 50 || ids.iter().collect::<BTreeSet<_>>().len() != ids.len() {
+            return Err(VaultFailure::Unsupported);
+        }
+        self.read_cards(generation, |d| {
+            if d.revision != revision {
+                return Err(VaultFailure::Stale);
+            }
+            ids.iter()
+                .map(|id| {
+                    let c = d
+                        .cards
+                        .iter()
+                        .find(|c| c.id == *id)
+                        .ok_or(VaultFailure::Missing)?;
+                    Ok(CardRowV1 {
+                        id: c.id.clone(),
+                        fields: c
+                            .fields
+                            .iter()
+                            .filter(|f| !f.value.is_empty())
+                            .map(|f| f.id)
+                            .collect(),
+                        login: super::otp::field(&c.fields, FieldIdV1::Login).map(str::to_owned),
+                        otp: if super::otp::field(&c.fields, FieldIdV1::TotpSeed).is_some() {
+                            Some(super::otp::current_code(&c.fields)?)
+                        } else {
+                            None
+                        },
+                        attachment: c
+                            .attachment
+                            .as_ref()
+                            .map(StoredAttachment::summary)
+                            .transpose()?,
+                    })
+                })
+                .collect()
+        })
     }
     pub fn card_v1(&self, id: String, generation: u64) -> Result<CardRecordV1, VaultFailure> {
         self.read_cards(generation, |d| {

@@ -108,6 +108,20 @@ final class _VaultHandle implements VaultHandleV1 {
 
 final class _VaultAccess implements VaultAccessService {
   @override
+  FutureDomainResult<CardMatchesV1> searchCardsV1({
+    required VaultHandleV1 handle,
+    required CardSearchV1 query,
+    required BigInt revision,
+  }) async => Result.success(
+    CardMatchesV1(revision: revision, cardIds: const [], groupIds: const []),
+  );
+  @override
+  FutureDomainResult<List<CardRowV1>> cardRowsV1({
+    required VaultHandleV1 handle,
+    required List<String> ids,
+    required BigInt revision,
+  }) async => const Result.success([]);
+  @override
   FutureDomainResult<CardCatalogV1> cardCatalogV1() async => Result.success(
     CardCatalogV1(
       services: const ['github'],

@@ -120,6 +120,16 @@ abstract interface class VaultAccessService {
     required String id,
     required BigInt revision,
   });
+  FutureDomainResult<CardMatchesV1> searchCardsV1({
+    required VaultHandleV1 handle,
+    required CardSearchV1 query,
+    required BigInt revision,
+  });
+  FutureDomainResult<List<CardRowV1>> cardRowsV1({
+    required VaultHandleV1 handle,
+    required List<String> ids,
+    required BigInt revision,
+  });
   FutureDomainResult<CardV1> cardV1({
     required VaultHandleV1 handle,
     required String id,

@@ -102,6 +102,12 @@ abstract interface class VaultUseCase {
   FutureDomainResult<DeleteGroupResultV2> deleteGroupV2({
     required DeleteGroupParamsV2 params,
   });
+  FutureDomainResult<SearchCardsResultV1> searchCardsV1({
+    required SearchCardsParamsV1 params,
+  });
+  FutureDomainResult<ReadCardRowsResultV1> readCardRowsV1({
+    required ReadCardRowsParamsV1 params,
+  });
   FutureDomainResult<ReadCardResultV1> readCardV1({
     required ReadCardParamsV1 params,
   });

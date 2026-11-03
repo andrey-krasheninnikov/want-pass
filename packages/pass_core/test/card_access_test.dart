@@ -66,6 +66,45 @@ void main() {
     )).value;
     expect(otp.code.length, 6);
     expect(otp.toString(), isNot(contains(otp.code)));
+    final matches = await access.searchCardsV1(
+      handle: handle,
+      query: const CardSearchV1(
+        text: 'SYNTHETIC PASSWORD',
+        service: 'github',
+        environment: EnvironmentV1.production,
+      ),
+      revision: saved.value.revision,
+    );
+    expect(matches.value.cardIds, [summary.id]);
+    final rows = (await access.cardRowsV1(
+      handle: handle,
+      ids: List.unmodifiable([summary.id]),
+      revision: saved.value.revision,
+    )).value;
+    expect(
+      rows.single.fields,
+      containsAll([FieldIdV1.password, FieldIdV1.totpSeed]),
+    );
+    expect(rows.single.login, 'fixture@example.invalid');
+    expect(rows.single.otp!.code.length, 6);
+    expect(rows.single.toString(), isNot(contains(rows.single.login!)));
+    expect(() => rows.add(rows.single), throwsUnsupportedError);
+    expect(
+      () => rows.single.fields.add(FieldIdV1.value),
+      throwsUnsupportedError,
+    );
+    expect(
+      const CardSearchV1(text: 'private query').toString(),
+      isNot(contains('private query')),
+    );
+    expect(
+      (await access.cardRowsV1(
+        handle: handle,
+        ids: [summary.id],
+        revision: BigInt.zero,
+      )).isError,
+      isTrue,
+    );
     handle.invalidateSync();
     expect((await access.contentV2(handle: handle)).isError, isTrue);
     await access.unlockV3(handle: handle, password: password);

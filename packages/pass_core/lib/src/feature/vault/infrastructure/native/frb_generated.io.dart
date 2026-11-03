@@ -74,19 +74,37 @@ abstract class VaultRustLibApiImplPlatform
   CardInputV1 dco_decode_box_autoadd_card_input_v_1(dynamic raw);
 
   @protected
+  CardSearchV1 dco_decode_box_autoadd_card_search_v_1(dynamic raw);
+
+  @protected
+  CardTypeV1 dco_decode_box_autoadd_card_type_v_1(dynamic raw);
+
+  @protected
   EnvironmentV1 dco_decode_box_autoadd_environment_v_1(dynamic raw);
 
   @protected
   GroupInputV1 dco_decode_box_autoadd_group_input_v_1(dynamic raw);
 
   @protected
+  TotpCodeV1 dco_decode_box_autoadd_totp_code_v_1(dynamic raw);
+
+  @protected
   CardInputV1 dco_decode_card_input_v_1(dynamic raw);
+
+  @protected
+  CardMatchesV1 dco_decode_card_matches_v_1(dynamic raw);
 
   @protected
   CardPresetV1 dco_decode_card_preset_v_1(dynamic raw);
 
   @protected
   CardRecordV1 dco_decode_card_record_v_1(dynamic raw);
+
+  @protected
+  CardRowV1 dco_decode_card_row_v_1(dynamic raw);
+
+  @protected
+  CardSearchV1 dco_decode_card_search_v_1(dynamic raw);
 
   @protected
   CardSummaryV1 dco_decode_card_summary_v_1(dynamic raw);
@@ -131,10 +149,16 @@ abstract class VaultRustLibApiImplPlatform
   List<CardPresetV1> dco_decode_list_card_preset_v_1(dynamic raw);
 
   @protected
+  List<CardRowV1> dco_decode_list_card_row_v_1(dynamic raw);
+
+  @protected
   List<CardSummaryV1> dco_decode_list_card_summary_v_1(dynamic raw);
 
   @protected
   List<CardValueV1> dco_decode_list_card_value_v_1(dynamic raw);
+
+  @protected
+  List<FieldIdV1> dco_decode_list_field_id_v_1(dynamic raw);
 
   @protected
   List<FieldSpecV1> dco_decode_list_field_spec_v_1(dynamic raw);
@@ -165,7 +189,13 @@ abstract class VaultRustLibApiImplPlatform
   );
 
   @protected
+  CardTypeV1? dco_decode_opt_box_autoadd_card_type_v_1(dynamic raw);
+
+  @protected
   EnvironmentV1? dco_decode_opt_box_autoadd_environment_v_1(dynamic raw);
+
+  @protected
+  TotpCodeV1? dco_decode_opt_box_autoadd_totp_code_v_1(dynamic raw);
 
   @protected
   RecoveryChallenge dco_decode_recovery_challenge(dynamic raw);
@@ -267,6 +297,14 @@ abstract class VaultRustLibApiImplPlatform
   );
 
   @protected
+  CardSearchV1 sse_decode_box_autoadd_card_search_v_1(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  CardTypeV1 sse_decode_box_autoadd_card_type_v_1(SseDeserializer deserializer);
+
+  @protected
   EnvironmentV1 sse_decode_box_autoadd_environment_v_1(
     SseDeserializer deserializer,
   );
@@ -277,13 +315,25 @@ abstract class VaultRustLibApiImplPlatform
   );
 
   @protected
+  TotpCodeV1 sse_decode_box_autoadd_totp_code_v_1(SseDeserializer deserializer);
+
+  @protected
   CardInputV1 sse_decode_card_input_v_1(SseDeserializer deserializer);
+
+  @protected
+  CardMatchesV1 sse_decode_card_matches_v_1(SseDeserializer deserializer);
 
   @protected
   CardPresetV1 sse_decode_card_preset_v_1(SseDeserializer deserializer);
 
   @protected
   CardRecordV1 sse_decode_card_record_v_1(SseDeserializer deserializer);
+
+  @protected
+  CardRowV1 sse_decode_card_row_v_1(SseDeserializer deserializer);
+
+  @protected
+  CardSearchV1 sse_decode_card_search_v_1(SseDeserializer deserializer);
 
   @protected
   CardSummaryV1 sse_decode_card_summary_v_1(SseDeserializer deserializer);
@@ -336,6 +386,9 @@ abstract class VaultRustLibApiImplPlatform
   );
 
   @protected
+  List<CardRowV1> sse_decode_list_card_row_v_1(SseDeserializer deserializer);
+
+  @protected
   List<CardSummaryV1> sse_decode_list_card_summary_v_1(
     SseDeserializer deserializer,
   );
@@ -344,6 +397,9 @@ abstract class VaultRustLibApiImplPlatform
   List<CardValueV1> sse_decode_list_card_value_v_1(
     SseDeserializer deserializer,
   );
+
+  @protected
+  List<FieldIdV1> sse_decode_list_field_id_v_1(SseDeserializer deserializer);
 
   @protected
   List<FieldSpecV1> sse_decode_list_field_spec_v_1(
@@ -378,7 +434,17 @@ abstract class VaultRustLibApiImplPlatform
   );
 
   @protected
+  CardTypeV1? sse_decode_opt_box_autoadd_card_type_v_1(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   EnvironmentV1? sse_decode_opt_box_autoadd_environment_v_1(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  TotpCodeV1? sse_decode_opt_box_autoadd_totp_code_v_1(
     SseDeserializer deserializer,
   );
 
@@ -504,6 +570,18 @@ abstract class VaultRustLibApiImplPlatform
   );
 
   @protected
+  void sse_encode_box_autoadd_card_search_v_1(
+    CardSearchV1 self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_box_autoadd_card_type_v_1(
+    CardTypeV1 self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_box_autoadd_environment_v_1(
     EnvironmentV1 self,
     SseSerializer serializer,
@@ -516,13 +594,31 @@ abstract class VaultRustLibApiImplPlatform
   );
 
   @protected
+  void sse_encode_box_autoadd_totp_code_v_1(
+    TotpCodeV1 self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_card_input_v_1(CardInputV1 self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_card_matches_v_1(
+    CardMatchesV1 self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_card_preset_v_1(CardPresetV1 self, SseSerializer serializer);
 
   @protected
   void sse_encode_card_record_v_1(CardRecordV1 self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_card_row_v_1(CardRowV1 self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_card_search_v_1(CardSearchV1 self, SseSerializer serializer);
 
   @protected
   void sse_encode_card_summary_v_1(
@@ -585,6 +681,12 @@ abstract class VaultRustLibApiImplPlatform
   );
 
   @protected
+  void sse_encode_list_card_row_v_1(
+    List<CardRowV1> self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_list_card_summary_v_1(
     List<CardSummaryV1> self,
     SseSerializer serializer,
@@ -593,6 +695,12 @@ abstract class VaultRustLibApiImplPlatform
   @protected
   void sse_encode_list_card_value_v_1(
     List<CardValueV1> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_list_field_id_v_1(
+    List<FieldIdV1> self,
     SseSerializer serializer,
   );
 
@@ -642,8 +750,20 @@ abstract class VaultRustLibApiImplPlatform
   );
 
   @protected
+  void sse_encode_opt_box_autoadd_card_type_v_1(
+    CardTypeV1? self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_opt_box_autoadd_environment_v_1(
     EnvironmentV1? self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_opt_box_autoadd_totp_code_v_1(
+    TotpCodeV1? self,
     SseSerializer serializer,
   );
 

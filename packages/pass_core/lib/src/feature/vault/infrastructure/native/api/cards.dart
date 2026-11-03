@@ -98,6 +98,30 @@ class CardInputV1 {
           attachment == other.attachment;
 }
 
+class CardMatchesV1 {
+  final BigInt revision;
+  final List<String> cardIds;
+  final List<String> groupIds;
+
+  const CardMatchesV1({
+    required this.revision,
+    required this.cardIds,
+    required this.groupIds,
+  });
+
+  @override
+  int get hashCode => revision.hashCode ^ cardIds.hashCode ^ groupIds.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is CardMatchesV1 &&
+          runtimeType == other.runtimeType &&
+          revision == other.revision &&
+          cardIds == other.cardIds &&
+          groupIds == other.groupIds;
+}
+
 class CardRecordV1 {
   final CardSummaryV1 summary;
   final String description;
@@ -131,6 +155,76 @@ class CardRecordV1 {
           fields == other.fields &&
           attachment == other.attachment &&
           protectedContainer == other.protectedContainer;
+}
+
+class CardRowV1 {
+  final String id;
+  final List<FieldIdV1> fields;
+  final String? login;
+  final TotpCodeV1? otp;
+  final AttachmentSummaryV1? attachment;
+
+  const CardRowV1({
+    required this.id,
+    required this.fields,
+    this.login,
+    this.otp,
+    this.attachment,
+  });
+
+  @override
+  int get hashCode =>
+      id.hashCode ^
+      fields.hashCode ^
+      login.hashCode ^
+      otp.hashCode ^
+      attachment.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is CardRowV1 &&
+          runtimeType == other.runtimeType &&
+          id == other.id &&
+          fields == other.fields &&
+          login == other.login &&
+          otp == other.otp &&
+          attachment == other.attachment;
+}
+
+class CardSearchV1 {
+  final String text;
+  final CardTypeV1? cardType;
+  final String? service;
+  final EnvironmentV1? environment;
+  final bool withoutEnvironment;
+
+  const CardSearchV1({
+    required this.text,
+    this.cardType,
+    this.service,
+    this.environment,
+    required this.withoutEnvironment,
+  });
+
+  @override
+  int get hashCode =>
+      text.hashCode ^
+      cardType.hashCode ^
+      service.hashCode ^
+      environment.hashCode ^
+      withoutEnvironment.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is CardSearchV1 &&
+          runtimeType == other.runtimeType &&
+          text == other.text &&
+          cardType == other.cardType &&
+          service == other.service &&
+          environment == other.environment &&
+          withoutEnvironment == other.withoutEnvironment;
 }
 
 class CardSummaryV1 {

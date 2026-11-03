@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:want_allure/want_allure.dart';
 import 'package:want_pass/src/feature/vault/application/_barrel.dart';
+import 'package:want_pass/src/feature/vault/presentation/_barrel.dart';
 import 'package:want_pass_core/want_pass_core.dart';
 
 class VaultPage extends StatefulWidget {
@@ -96,39 +97,14 @@ class _VaultPageState extends State<VaultPage> {
     VaultState state, {
     bool autofocus = false,
     bool last = false,
-  }) => KeyedSubtree(
+  }) => VaultSecretInput(
     key: ValueKey(key),
-    // WantInput does not expose the controls that disable keyboard learning.
-    child: TextField(
-      controller: controller,
-      decoration: InputDecoration(
-        labelText: label,
-        labelStyle: TextStyle(
-          color: WantTheme.of(context).color('muted-foreground'),
-        ),
-        enabledBorder: OutlineInputBorder(
-          borderSide: BorderSide(color: WantTheme.of(context).color('border')),
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderSide: BorderSide(color: WantTheme.of(context).color('primary')),
-        ),
-      ),
-      style: TextStyle(color: WantTheme.of(context).color('foreground')),
-      cursorColor: WantTheme.of(context).color('primary'),
-      obscureText: true,
-      autofocus: autofocus,
-      enabled: !state.busy,
-      autocorrect: false,
-      enableSuggestions: false,
-      enableIMEPersonalizedLearning: false,
-      stylusHandwritingEnabled: false,
-      autofillHints: const [],
-      smartDashesType: SmartDashesType.disabled,
-      smartQuotesType: SmartQuotesType.disabled,
-      keyboardType: TextInputType.visiblePassword,
-      textInputAction: last ? TextInputAction.done : TextInputAction.next,
-      onSubmitted: last ? (_) => _submit(state) : null,
-    ),
+    label: label,
+    controller: controller,
+    enabled: !state.busy,
+    autofocus: autofocus,
+    last: last,
+    onSubmitted: () => _submit(state),
   );
 
   String _error(VaultErrorV1 error) => switch (error) {

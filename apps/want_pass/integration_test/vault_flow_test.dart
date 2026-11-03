@@ -10,8 +10,8 @@ import 'package:want_pass/src/feature/_common/presentation/_barrel.dart';
 import 'package:want_pass/src/feature/vault/application/_barrel.dart';
 import 'package:want_pass_core/want_pass_core.dart';
 
-const password = 'Synthetic native UI password 2026';
-const nextPassword = 'Synthetic recovered UI password 2026';
+const password = 'Synthetic native UI\npassword 2026';
+const nextPassword = 'Synthetic recovered UI\npassword 2026';
 
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
@@ -142,10 +142,16 @@ void main() {
 Future<void> _enter(WidgetTester tester, String key, String value) async {
   final field = find.descendant(
     of: find.byKey(ValueKey(key)),
-    matching: find.byType(EditableText),
+    matching: find.bySubtype<EditableText>(),
   );
   await tester.ensureVisible(field);
-  await tester.enterText(field, value);
+  await tester.tap(field);
+  await tester.pump();
+  expect(
+    tester.state<EditableTextState>(field).widget.focusNode.hasFocus,
+    isTrue,
+  );
+  tester.testTextInput.enterText(value);
   await tester.pump();
   expect(tester.widget<EditableText>(field).controller.text, value);
 }

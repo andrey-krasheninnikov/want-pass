@@ -22,6 +22,7 @@ final class VaultController extends Cubit<VaultState> {
   Future<void>? _closeFuture;
   Future<void>? _operation;
   bool _closing = false;
+  bool _monitorAvailable = true;
   int _epoch = 0;
 
   VaultController(
@@ -63,7 +64,9 @@ final class VaultController extends Cubit<VaultState> {
       onError: (Object _, StackTrace _) => unawaited(_monitorLost()),
       onDone: () => unawaited(_monitorLost()),
     );
-    emit(VaultState(phase: _phase(result.value.state)));
+    if (_monitorAvailable) {
+      emit(VaultState(phase: _phase(result.value.state)));
+    }
   }
 
   Future<void> prepareCreation({
@@ -154,7 +157,13 @@ final class VaultController extends Cubit<VaultState> {
     FutureDomainResult<T> Function(VaultHandleV1) run,
     void Function(T) success,
   ) async {
-    if (_closing || isClosed || state.busy || _handle == null) return;
+    if (_closing ||
+        isClosed ||
+        !_monitorAvailable ||
+        state.busy ||
+        _handle == null) {
+      return;
+    }
     if (!LaunchMode.isInitialized || !LaunchMode.isForeground) {
       _fail(
         operation,
@@ -190,21 +199,30 @@ final class VaultController extends Cubit<VaultState> {
   Future<void> lock() async {
     const op = 'VaultController.lock():';
     if (_closing || isClosed || _handle == null) return;
-    _epoch++;
+    final epoch = ++_epoch;
     _idle?.cancel();
     emit(const VaultState(phase: VaultPhase.loading, busy: true));
     try {
       final result = await _useCase.lockV1(
         params: LockVaultParamsV1(handle: _handle!),
       );
-      if (_closing) return;
+      if (_closing || epoch != _epoch) return;
       if (result.isError) {
         _fail(op, _error(result.error), unavailable: true);
       } else {
-        emit(VaultState(phase: _phase(result.value.state)));
+        emit(
+          VaultState(
+            phase: _monitorAvailable
+                ? _phase(result.value.state)
+                : VaultPhase.unavailable,
+            error: _monitorAvailable
+                ? null
+                : const VaultRejectedErrorV1(VaultFailureKindV1.unavailable),
+          ),
+        );
       }
     } on Object {
-      if (!_closing) {
+      if (!_closing && epoch == _epoch) {
         _fail(op, const VaultUnexpectedErrorV1(), unavailable: true);
       }
     }
@@ -232,7 +250,8 @@ final class VaultController extends Cubit<VaultState> {
 
   Future<void> _monitorLost() async {
     const op = 'VaultController._monitorLost():';
-    if (_closing || isClosed) return;
+    if (_closing || isClosed || !_monitorAvailable) return;
+    _monitorAvailable = false;
     await lock();
     if (!_closing) {
       _fail(

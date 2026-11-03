@@ -2,22 +2,30 @@ import 'dart:async';
 
 import 'package:domain_error/domain_error.dart';
 import 'package:equatable/equatable.dart';
-import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:bloc_effects/bloc_effects.dart';
 import 'package:injectable/injectable.dart';
 import 'package:launch_mode/launch_mode.dart';
 import 'package:want_pass/src/feature/vault/application/_barrel.dart';
 import 'package:want_pass_core/want_pass_core.dart';
 
 part 'state.dart';
+part 'effect.dart';
 
 @singleton
-final class VaultController extends Cubit<VaultState> {
+final class VaultController extends CubitWithEffects<VaultState, VaultEffect> {
   final VaultUseCase _useCase;
   final VaultReporter _reporter;
   final Stream<VaultLockSignal> _lockEvents;
   VaultHandleV1? _handle;
   StreamSubscription<VaultLockSignal>? _subscription;
   Timer? _idle;
+  final _idleClock = Stopwatch();
+  Duration get idleRemaining => Duration(
+    microseconds:
+        (const Duration(minutes: 5).inMicroseconds -
+                _idleClock.elapsedMicroseconds)
+            .clamp(0, const Duration(minutes: 5).inMicroseconds),
+  );
   Timer? _clipboardExpiry;
   String? _clipboardContent;
   Future<void>? _exportOperation;
@@ -154,8 +162,8 @@ final class VaultController extends Cubit<VaultState> {
     const op = 'VaultController.prepareSetup():';
     return _perform(
       op,
-      (handle) => _useCase.prepareSetupV2(
-        params: PrepareVaultSetupParamsV2(
+      (handle) => _useCase.prepareSetupV3(
+        params: PrepareVaultSetupParamsV3(
           handle: handle,
           password: password,
           confirmation: confirmation,
@@ -168,6 +176,11 @@ final class VaultController extends Cubit<VaultState> {
           setupChallenge: value.challenge,
           hints: state.hints,
           recovering: phrase != null,
+          passwordSaved: state.passwordSaved,
+          phraseSaved:
+              state.setupChallenge == value.challenge && state.phraseSaved,
+          lossAccepted:
+              state.setupChallenge == value.challenge && state.lossAccepted,
           setupAnswers: state.setupChallenge == value.challenge
               ? state.setupAnswers
               : const [null, null, null],
@@ -185,12 +198,23 @@ final class VaultController extends Cubit<VaultState> {
     required VaultHintsDtoV2 hints,
   }) {
     const op = 'VaultController.confirmSetup():';
+    if (!state.passwordSaved ||
+        !state.phraseSaved ||
+        !state.lossAccepted ||
+        !state.quizPassed.every((v) => v) ||
+        state.setupChallenge == null) {
+      return Future.value();
+    }
     return _perform(
       op,
-      (handle) => _useCase.confirmSetupV2(
-        params: ConfirmVaultSetupParamsV2(
+      (handle) => _useCase.confirmSetupV3(
+        params: ConfirmVaultSetupParamsV3(
           handle: handle,
           answers: List.unmodifiable(answers),
+          revision: state.setupChallenge!.revision,
+          passwordSaved: state.passwordSaved,
+          phraseSaved: state.phraseSaved,
+          lossAccepted: state.lossAccepted,
           password: password,
           hints: hints,
         ),
@@ -224,7 +248,45 @@ final class VaultController extends Cubit<VaultState> {
     emit(state.copyWith(error: () => null));
   }
 
-  void chooseSetupWord(int index, String word) {
+  void acknowledge({bool? password, bool? phrase, bool? loss}) {
+    const op = 'VaultController.acknowledge():';
+    if (_closing || isClosed || state.busy) return;
+    if (!LaunchMode.isInitialized || !LaunchMode.isForeground) {
+      reportVaultSafely(
+        _reporter,
+        layer: VaultDiagnosticLayer.controller,
+        operation: op,
+        error: const VaultRejectedErrorV1(VaultFailureKindV1.unavailable),
+      );
+      return;
+    }
+    emit(
+      state.copyWith(
+        passwordSaved: password,
+        phraseSaved: phrase,
+        lossAccepted: loss,
+      ),
+    );
+  }
+
+  Future<bool> validateRecovery(String phrase) async {
+    const op = 'VaultController.validateRecovery():';
+    if (phrase.trim().isEmpty || state.busy) return false;
+    var accepted = false;
+    await _perform(
+      op,
+      (handle) => _useCase.validateRecoveryV3(
+        params: ValidateVaultRecoveryParamsV3(handle: handle, phrase: phrase),
+      ),
+      (_) {
+        accepted = true;
+        emit(state.copyWith(busy: false));
+      },
+    );
+    return accepted;
+  }
+
+  Future<void> chooseSetupWord(int index, String word) async {
     const op = 'VaultController.chooseSetupWord():';
     final challenge = state.setupChallenge;
     if (_closing ||
@@ -235,24 +297,52 @@ final class VaultController extends Cubit<VaultState> {
         !challenge.choices[index].contains(word)) {
       return;
     }
-    final answers = [...state.setupAnswers]..[index] = word;
-    final passed = [...state.quizPassed]
-      ..[index] = word == challenge.words[challenge.positions[index]];
-    if (!passed[index]) {
-      reportVaultSafely(
-        _reporter,
-        layer: VaultDiagnosticLayer.controller,
-        operation: op,
-        error: const VaultRejectedErrorV1(VaultFailureKindV1.confirmation),
+    if (word != challenge.words[challenge.positions[index]]) {
+      final epoch = ++_epoch;
+      if (_fileSelectionCancelled?.isCompleted == false) {
+        _fileSelectionCancelled!.complete();
+      }
+      emit(
+        VaultState(
+          phase: VaultPhase.confirmation,
+          busy: true,
+          recovering: state.recovering,
+          hints: state.hints,
+          passwordSaved: state.passwordSaved,
+        ),
       );
+      emitEffect(const VaultRecoveryReset());
+      await _clearClipboard();
+      if (_closing || epoch != _epoch) return;
+      // The native scenario invalidates the old revision before draining admitted exports.
+      emit(state.copyWith(busy: false));
+      await _perform(
+        op,
+        (handle) => _useCase.regenerateRecoveryV3(
+          params: RegenerateVaultRecoveryParamsV3(handle: handle),
+        ),
+        (value) {
+          emit(
+            VaultState(
+              phase: VaultPhase.confirmation,
+              setupChallenge: value.challenge,
+              recovering: state.recovering,
+              hints: state.hints,
+              passwordSaved: state.passwordSaved,
+            ),
+          );
+          emitEffect(const VaultRecoveryRegenerated());
+        },
+      );
+      return;
     }
+    final answers = [...state.setupAnswers]..[index] = word;
+    final passed = [...state.quizPassed]..[index] = true;
     emit(
       state.copyWith(
         setupAnswers: List.unmodifiable(answers),
         quizPassed: List.unmodifiable(passed),
-        error: () => passed[index]
-            ? null
-            : const VaultRejectedErrorV1(VaultFailureKindV1.confirmation),
+        error: () => null,
       ),
     );
     activity();
@@ -273,8 +363,8 @@ final class VaultController extends Cubit<VaultState> {
     final operation = () async {
       final selected =
           await Future.any<DomainResult<SelectRecoveryFileResultV1>?>([
-            _useCase.selectRecoveryFileV1(
-              params: const SelectRecoveryFileParamsV1(),
+            _useCase.selectRecoveryFileV3(
+              params: const SelectRecoveryFileParamsV3(),
             ),
             cancelled.future.then((_) => null),
           ]);
@@ -285,14 +375,20 @@ final class VaultController extends Cubit<VaultState> {
       }
       final destination = selected.value.destination;
       if (destination == null) return;
-      final result = await _useCase.exportRecoveryV2(
-        params: ExportRecoveryParamsV2(
+      emitEffect(const VaultNotice(VaultNoticeKind.exportStarted));
+      final result = await _useCase.exportRecoveryV3(
+        params: ExportRecoveryParamsV3(
           handle: _handle!,
           destination: destination,
+          revision: state.setupChallenge!.revision,
         ),
       );
-      if (!_closing && epoch == _epoch && result.isError) {
-        _fail(op, _error(result.error));
+      if (!_closing && epoch == _epoch) {
+        if (result.isError) {
+          _fail(op, _error(result.error));
+        } else {
+          emitEffect(const VaultNotice(VaultNoticeKind.exported));
+        }
       }
     }();
     _exportOperation = operation;
@@ -313,7 +409,7 @@ final class VaultController extends Cubit<VaultState> {
       return;
     }
     final epoch = _epoch;
-    final phrase = state.setupChallenge!.words.join(' ');
+    final phrase = state.setupChallenge!.json;
     final operation = () async {
       await _clearClipboard();
       if (_closing || epoch != _epoch) return;
@@ -331,6 +427,7 @@ final class VaultController extends Cubit<VaultState> {
         return;
       }
       _clipboardContent = phrase;
+      emitEffect(const VaultNotice(VaultNoticeKind.copied));
       _clipboardExpiry = Timer(
         const Duration(seconds: 60),
         () => unawaited(_clearClipboard()),
@@ -427,7 +524,7 @@ final class VaultController extends Cubit<VaultState> {
     if (identical(_operation, future)) _operation = null;
   }
 
-  Future<void> lock() async {
+  Future<void> lock({bool notify = false}) async {
     const op = 'VaultController.lock():';
     if (_closing || isClosed || _handle == null) return;
     final epoch = ++_epoch;
@@ -436,6 +533,7 @@ final class VaultController extends Cubit<VaultState> {
     }
     unawaited(_clearClipboard());
     _idle?.cancel();
+    _idleClock.stop();
     emit(const VaultState(phase: VaultPhase.loading, busy: true));
     try {
       final result = await _useCase.lockV1(
@@ -455,6 +553,9 @@ final class VaultController extends Cubit<VaultState> {
                 : const VaultRejectedErrorV1(VaultFailureKindV1.unavailable),
           ),
         );
+      }
+      if (notify && !_closing && epoch == _epoch && state.error == null) {
+        emitEffect(const VaultNotice(VaultNoticeKind.locked));
       }
     } on Object {
       if (!_closing && epoch == _epoch) {
@@ -479,6 +580,9 @@ final class VaultController extends Cubit<VaultState> {
     if (state.phase == VaultPhase.unlocked ||
         state.phase == VaultPhase.confirmation ||
         state.busy) {
+      _idleClock
+        ..reset()
+        ..start();
       _idle = Timer(const Duration(minutes: 5), () => unawaited(lock()));
     }
   }
@@ -521,6 +625,7 @@ final class VaultController extends Cubit<VaultState> {
       _closing = true;
       _epoch++;
       _idle?.cancel();
+      _idleClock.stop();
       _clipboardExpiry?.cancel();
       if (_fileSelectionCancelled?.isCompleted == false) {
         _fileSelectionCancelled!.complete();

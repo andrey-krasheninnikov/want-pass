@@ -15,9 +15,10 @@ final class VaultState extends Equatable {
   final VaultPhase phase;
   final bool busy;
   final bool recovering;
+  final bool passwordSaved, phraseSaved, lossAccepted;
   final VaultRecoveryChallengeV1? challenge;
   final VaultErrorV1? error;
-  final VaultRecoveryChallengeV2? setupChallenge;
+  final VaultRecoveryChallengeV3? setupChallenge;
   final VaultHintsDtoV2 hints;
   final List<String?> setupAnswers;
   final List<bool> quizPassed;
@@ -25,6 +26,9 @@ final class VaultState extends Equatable {
     required this.phase,
     this.busy = false,
     this.recovering = false,
+    this.passwordSaved = false,
+    this.phraseSaved = false,
+    this.lossAccepted = false,
     this.challenge,
     this.error,
     this.setupChallenge,
@@ -34,6 +38,9 @@ final class VaultState extends Equatable {
   });
   VaultState copyWith({
     bool? busy,
+    bool? passwordSaved,
+    bool? phraseSaved,
+    bool? lossAccepted,
     VaultErrorV1? Function()? error,
     VaultHintsDtoV2? hints,
     List<String?>? setupAnswers,
@@ -42,6 +49,9 @@ final class VaultState extends Equatable {
     phase: phase,
     busy: busy ?? this.busy,
     recovering: recovering,
+    passwordSaved: passwordSaved ?? this.passwordSaved,
+    phraseSaved: phraseSaved ?? this.phraseSaved,
+    lossAccepted: lossAccepted ?? this.lossAccepted,
     challenge: challenge,
     setupChallenge: setupChallenge,
     hints: hints ?? this.hints,
@@ -54,6 +64,9 @@ final class VaultState extends Equatable {
     phase,
     busy,
     recovering,
+    passwordSaved,
+    phraseSaved,
+    lossAccepted,
     challenge,
     setupChallenge,
     hints,

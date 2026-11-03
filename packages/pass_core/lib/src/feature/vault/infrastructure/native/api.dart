@@ -24,9 +24,22 @@ abstract class Vault implements RustOpaqueInterface {
     required BigInt generation,
   });
 
+  Future<void> confirmV3({
+    required List<String> answers,
+    required String password,
+    required String passwordHint,
+    required String recoveryHint,
+    required BigInt revision,
+  });
+
   Future<void> exportRecoveryV2({
     required String destination,
     required BigInt generation,
+  });
+
+  Future<void> exportRecoveryV3({
+    required String destination,
+    required BigInt revision,
   });
 
   BigInt generation();
@@ -48,6 +61,11 @@ abstract class Vault implements RustOpaqueInterface {
     required BigInt generation,
   });
 
+  Future<RecoveryChallengeV3> prepareCreationV3({
+    required String password,
+    required BigInt generation,
+  });
+
   Future<RecoveryChallenge> prepareRecovery({
     required String phrase,
     required String password,
@@ -60,9 +78,24 @@ abstract class Vault implements RustOpaqueInterface {
     required BigInt generation,
   });
 
+  Future<RecoveryChallengeV3> prepareRecoveryV3({
+    required String phrase,
+    required String password,
+    required BigInt generation,
+  });
+
+  Future<RecoveryChallengeV3> regenerateRecoveryV3({
+    required BigInt generation,
+  });
+
   Future<VaultStatus> status();
 
   Future<void> unlock({required String password, required BigInt generation});
+
+  Future<void> validateRecoveryV3({
+    required String phrase,
+    required BigInt generation,
+  });
 
   Future<void> waitForExportsV2();
 }

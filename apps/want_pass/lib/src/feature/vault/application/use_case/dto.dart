@@ -274,3 +274,116 @@ final class RecoveryExportResultV1 extends Equatable {
   @override
   List<Object?> get props => [];
 }
+
+final class PrepareVaultSetupParamsV3 extends Equatable {
+  final VaultHandleV1 handle;
+  final String password, confirmation;
+  final String? phrase;
+  const PrepareVaultSetupParamsV3({
+    required this.handle,
+    required this.password,
+    required this.confirmation,
+    this.phrase,
+  });
+  @override
+  List<Object?> get props => [handle, password, confirmation, phrase];
+  @override
+  String toString() => 'PrepareVaultSetupParamsV3(<redacted>)';
+}
+
+final class PrepareVaultSetupResultV3 extends Equatable {
+  final VaultRecoveryChallengeV3 challenge;
+  const PrepareVaultSetupResultV3({required this.challenge});
+  @override
+  List<Object?> get props => [challenge];
+  @override
+  String toString() => 'PrepareVaultSetupResultV3(<redacted>)';
+}
+
+final class ConfirmVaultSetupParamsV3 extends Equatable {
+  final VaultHandleV1 handle;
+  final List<String> answers;
+  final String password;
+  final BigInt revision;
+  final bool passwordSaved, phraseSaved, lossAccepted;
+  final VaultHintsDtoV2 hints;
+  const ConfirmVaultSetupParamsV3({
+    required this.handle,
+    required this.answers,
+    required this.password,
+    required this.revision,
+    required this.passwordSaved,
+    required this.phraseSaved,
+    required this.lossAccepted,
+    required this.hints,
+  });
+  @override
+  List<Object?> get props => [
+    handle,
+    answers,
+    password,
+    hints,
+    revision,
+    passwordSaved,
+    phraseSaved,
+    lossAccepted,
+  ];
+  @override
+  String toString() => 'ConfirmVaultSetupParamsV3(<redacted>)';
+}
+
+final class ConfirmVaultSetupResultV3 extends Equatable {
+  final VaultAccessStateV1 state;
+  const ConfirmVaultSetupResultV3({required this.state});
+  @override
+  List<Object?> get props => [state];
+}
+
+final class RegenerateVaultRecoveryParamsV3 extends Equatable {
+  final VaultHandleV1 handle;
+  const RegenerateVaultRecoveryParamsV3({required this.handle});
+  @override
+  List<Object?> get props => [handle];
+  @override
+  String toString() => 'RegenerateVaultRecoveryParamsV3(<redacted>)';
+}
+
+final class ValidateVaultRecoveryParamsV3 extends Equatable {
+  final VaultHandleV1 handle;
+  final String phrase;
+  const ValidateVaultRecoveryParamsV3({
+    required this.handle,
+    required this.phrase,
+  });
+  @override
+  List<Object?> get props => [handle, phrase];
+  @override
+  String toString() => 'ValidateVaultRecoveryParamsV3(<redacted>)';
+}
+
+final class ExportRecoveryParamsV3 extends Equatable {
+  final VaultHandleV1 handle;
+  final String destination;
+  final BigInt revision;
+  const ExportRecoveryParamsV3({
+    required this.handle,
+    required this.destination,
+    required this.revision,
+  });
+  @override
+  List<Object?> get props => [handle, destination, revision];
+  @override
+  String toString() => 'ExportRecoveryParamsV3(<redacted>)';
+}
+
+final class ValidateVaultRecoveryResultV3 extends Equatable {
+  const ValidateVaultRecoveryResultV3();
+  @override
+  List<Object?> get props => [];
+}
+
+final class SelectRecoveryFileParamsV3 extends Equatable {
+  const SelectRecoveryFileParamsV3();
+  @override
+  List<Object?> get props => [];
+}

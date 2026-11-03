@@ -33,6 +33,29 @@ final class PlatformRecoveryExportService implements RecoveryExportService {
   }
 
   @override
+  FutureDomainResult<String?> selectFileV3() async {
+    const op = 'PlatformRecoveryExportService.selectFileV3():';
+    final result = await captureResult<String?>(
+      () async => (await getSaveLocation(
+        suggestedName: 'want-pass-recovery.json',
+        acceptedTypeGroups: [
+          const XTypeGroup(label: 'JSON', extensions: ['json']),
+        ],
+      ))?.path,
+      mapToDomainError: (_, _) => const VaultUnexpectedErrorV1(),
+    );
+    if (result.isError) {
+      reportVaultSafely(
+        _reporter,
+        layer: VaultDiagnosticLayer.infrastructure,
+        operation: op,
+        error: const VaultUnexpectedErrorV1(),
+      );
+    }
+    return result;
+  }
+
+  @override
   FutureDomainResult<void> copyV1(String phrase) async {
     const op = 'PlatformRecoveryExportService.copyV1():';
     final result = await captureResult<void>(

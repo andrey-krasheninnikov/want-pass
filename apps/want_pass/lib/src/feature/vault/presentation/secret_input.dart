@@ -8,6 +8,8 @@ final class VaultSecretInput extends StatefulWidget {
   final bool enabled;
   final bool autofocus;
   final bool last;
+  final bool multiline;
+  final Widget? postfix;
   final VoidCallback onSubmitted;
   const VaultSecretInput({
     super.key,
@@ -16,6 +18,8 @@ final class VaultSecretInput extends StatefulWidget {
     required this.enabled,
     required this.autofocus,
     required this.last,
+    this.multiline = false,
+    this.postfix,
     required this.onSubmitted,
   });
   @override
@@ -39,8 +43,11 @@ final class _VaultSecretInputState extends State<VaultSecretInput> {
       control: FTextFieldControl.managed(controller: widget.controller),
       enabled: widget.enabled,
       autofocus: widget.autofocus,
-      obscureText: obscure,
-      keyboardType: TextInputType.visiblePassword,
+      obscureText: !widget.multiline && obscure,
+      maxLines: widget.multiline ? 4 : 1,
+      keyboardType: widget.multiline
+          ? TextInputType.multiline
+          : TextInputType.visiblePassword,
       autocorrect: false,
       enableSuggestions: false,
       enableIMEPersonalizedLearning: false,
@@ -53,13 +60,20 @@ final class _VaultSecretInputState extends State<VaultSecretInput> {
           ? TextInputAction.done
           : TextInputAction.next,
       onSubmit: widget.last ? (_) => widget.onSubmitted() : null,
-      suffixBuilder: (context, style, variants) =>
-          FTextField.defaultObscureIconBuilder(
-            context,
-            style,
-            _obscure,
-            variants,
-          ),
+      suffixBuilder: widget.multiline
+          ? null
+          : (context, style, variants) => Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                ?widget.postfix,
+                FTextField.defaultObscureIconBuilder(
+                  context,
+                  style,
+                  _obscure,
+                  variants,
+                ),
+              ],
+            ),
     ),
   );
 }

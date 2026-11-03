@@ -412,4 +412,170 @@ final class VaultUseCaseImpl implements VaultUseCase {
     }
     return result;
   }
+
+  @override
+  FutureDomainResult<PrepareVaultSetupResultV3> prepareSetupV3({
+    required PrepareVaultSetupParamsV3 params,
+  }) async {
+    const op = 'VaultUseCaseImpl.prepareSetupV3():';
+    final result = await captureResult<PrepareVaultSetupResultV3>(() async {
+      if (params.password != params.confirmation) {
+        throw const VaultRejectedErrorV1(VaultFailureKindV1.passwordMismatch);
+      }
+      final prepared = params.phrase == null
+          ? await _access.prepareCreationV3(
+              handle: params.handle,
+              password: params.password,
+            )
+          : await _access.prepareRecoveryV3(
+              handle: params.handle,
+              phrase: params.phrase!,
+              password: params.password,
+            );
+      if (prepared.isError) throw prepared.error;
+      return PrepareVaultSetupResultV3(challenge: prepared.value);
+    }, mapToDomainError: (_, _) => const VaultUnexpectedErrorV1());
+    if (result.isError) {
+      reportVaultSafely(
+        _reporter,
+        layer: VaultDiagnosticLayer.application,
+        operation: op,
+        error: result.error is VaultErrorV1
+            ? result.error as VaultErrorV1
+            : const VaultUnexpectedErrorV1(),
+      );
+    }
+    return result;
+  }
+
+  @override
+  FutureDomainResult<ConfirmVaultSetupResultV3> confirmSetupV3({
+    required ConfirmVaultSetupParamsV3 params,
+  }) async {
+    const op = 'VaultUseCaseImpl.confirmSetupV3():';
+    final result = await captureResult<ConfirmVaultSetupResultV3>(() async {
+      if (!params.passwordSaved ||
+          !params.phraseSaved ||
+          !params.lossAccepted) {
+        throw const VaultRejectedErrorV1(VaultFailureKindV1.confirmation);
+      }
+      final result = await _access.confirmV3(
+        handle: params.handle,
+        answers: params.answers,
+        password: params.password,
+        hints: params.hints,
+        revision: params.revision,
+      );
+      if (result.isError) throw result.error;
+      final status = await _access.statusV1(handle: params.handle);
+      if (status.isError) throw status.error;
+      return ConfirmVaultSetupResultV3(state: status.value);
+    }, mapToDomainError: (_, _) => const VaultUnexpectedErrorV1());
+    if (result.isError) {
+      reportVaultSafely(
+        _reporter,
+        layer: VaultDiagnosticLayer.application,
+        operation: op,
+        error: result.error is VaultErrorV1
+            ? result.error as VaultErrorV1
+            : const VaultUnexpectedErrorV1(),
+      );
+    }
+    return result;
+  }
+
+  @override
+  FutureDomainResult<RecoveryExportResultV1> exportRecoveryV3({
+    required ExportRecoveryParamsV3 params,
+  }) async {
+    const op = 'VaultUseCaseImpl.exportRecoveryV3():';
+    final result = await captureResult<RecoveryExportResultV1>(() async {
+      final result = await _access.exportRecoveryV3(
+        handle: params.handle,
+        destination: params.destination,
+        revision: params.revision,
+      );
+      if (result.isError) throw result.error;
+      return const RecoveryExportResultV1();
+    }, mapToDomainError: (_, _) => const VaultUnexpectedErrorV1());
+    if (result.isError) {
+      reportVaultSafely(
+        _reporter,
+        layer: VaultDiagnosticLayer.application,
+        operation: op,
+        error: const VaultUnexpectedErrorV1(),
+      );
+    }
+    return result;
+  }
+
+  @override
+  FutureDomainResult<SelectRecoveryFileResultV1> selectRecoveryFileV3({
+    required SelectRecoveryFileParamsV3 params,
+  }) async {
+    const op = 'VaultUseCaseImpl.selectRecoveryFileV3():';
+    final result = await captureResult<SelectRecoveryFileResultV1>(() async {
+      final result = await _export.selectFileV3();
+      if (result.isError) throw result.error;
+      return SelectRecoveryFileResultV1(destination: result.value);
+    }, mapToDomainError: (_, _) => const VaultUnexpectedErrorV1());
+    if (result.isError) {
+      reportVaultSafely(
+        _reporter,
+        layer: VaultDiagnosticLayer.application,
+        operation: op,
+        error: const VaultUnexpectedErrorV1(),
+      );
+    }
+    return result;
+  }
+
+  @override
+  FutureDomainResult<PrepareVaultSetupResultV3> regenerateRecoveryV3({
+    required RegenerateVaultRecoveryParamsV3 params,
+  }) async {
+    const op = 'VaultUseCaseImpl.regenerateRecoveryV3():';
+    final result = await captureResult<PrepareVaultSetupResultV3>(() async {
+      final outcome = await _access.regenerateRecoveryV3(handle: params.handle);
+      if (outcome.isError) throw outcome.error;
+      return PrepareVaultSetupResultV3(challenge: outcome.value);
+    }, mapToDomainError: (_, _) => const VaultUnexpectedErrorV1());
+    if (result.isError) {
+      reportVaultSafely(
+        _reporter,
+        layer: VaultDiagnosticLayer.application,
+        operation: op,
+        error: result.error is VaultErrorV1
+            ? result.error as VaultErrorV1
+            : const VaultUnexpectedErrorV1(),
+      );
+    }
+    return result;
+  }
+
+  @override
+  FutureDomainResult<ValidateVaultRecoveryResultV3> validateRecoveryV3({
+    required ValidateVaultRecoveryParamsV3 params,
+  }) async {
+    const op = 'VaultUseCaseImpl.validateRecoveryV3():';
+    final result = await captureResult<ValidateVaultRecoveryResultV3>(() async {
+      final outcome = await _access.validateRecoveryV3(
+        handle: params.handle,
+        phrase: params.phrase,
+      );
+      if (outcome.isError) throw outcome.error;
+      return const ValidateVaultRecoveryResultV3();
+    }, mapToDomainError: (_, _) => const VaultUnexpectedErrorV1());
+    if (result.isError) {
+      reportVaultSafely(
+        _reporter,
+        layer: VaultDiagnosticLayer.application,
+        operation: op,
+        error: result.error is VaultErrorV1
+            ? result.error as VaultErrorV1
+            : const VaultUnexpectedErrorV1(),
+      );
+    }
+    return result;
+  }
 }

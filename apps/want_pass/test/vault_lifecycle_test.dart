@@ -1,10 +1,12 @@
 import 'package:want_pass/src/feature/vault/infrastructure/_barrel.dart';
 
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:domain_error/domain_error.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter/material.dart';
+import 'package:want_allure/want_allure.dart';
 
 import 'dart:io';
 import 'dart:ui' as ui;
@@ -173,8 +175,9 @@ void main() {
       });
       await tester.pumpWidget(WantPassApp(startup: startup, vault: controller));
       await tester.pumpAndSettle();
+      await _tapKey(tester, 'vault-dial');
       final field = find.descendant(
-        of: find.byKey(const ValueKey('master-password')),
+        of: find.byKey(const ValueKey('unlock-password')),
         matching: find.bySubtype<EditableText>(),
       );
       await _enter(tester, field, 'Wrong synthetic password 2026');
@@ -336,7 +339,9 @@ void main() {
         await controller.confirm(['one', 'two', 'three']);
         await controller.lock();
         await tester.pumpAndSettle();
-        await _enter(tester, input('master-password'), password);
+        await tester.tap(find.byKey(const ValueKey('vault-dial')));
+        await tester.pumpAndSettle();
+        await _enter(tester, input('unlock-password'), password);
         await tester.tap(find.byKey(const ValueKey('vault-unlock')));
         await tester.pumpAndSettle();
         expect(access.passwords, [acceptedPassword]);
@@ -411,13 +416,14 @@ void main() {
     await controller.init();
     await controller.prepareSetup(password: _password, confirmation: _password);
     await controller.copyRecovery();
+    final copied = export.clipboard;
     export.clearing = Completer<void>();
     await controller.lock();
     var closed = false;
     final closing = controller.close().then((_) => closed = true);
     await Future<void>.delayed(Duration.zero);
     expect(closed, isFalse);
-    expect(export.clipboard, 'one two three');
+    expect(export.clipboard, copied);
     export.clearing!.complete();
     await closing;
     expect(export.clipboard, isEmpty);
@@ -441,9 +447,9 @@ void main() {
       });
       await tester.pumpWidget(WantPassApp(startup: startup, vault: controller));
       await tester.pumpAndSettle();
-      await tester.tap(find.text('Forgot password?'));
+      await tester.tap(find.byKey(const ValueKey('vault-dial')));
       await tester.pumpAndSettle();
-      await tester.tap(find.byKey(const ValueKey('start-recovery')));
+      await tester.tap(find.byKey(const ValueKey('vault-recovery')));
       await tester.pumpAndSettle();
       Finder field(String key) => find.descendant(
         of: find.byKey(ValueKey(key)),
@@ -474,7 +480,7 @@ void main() {
       expect(controller.state.phase, VaultPhase.locked);
       expect(controller.state.setupChallenge, isNull);
       expect(access.handle.invalidations, 1);
-      expect(find.byKey(const ValueKey('vault-unlock')), findsOneWidget);
+      expect(find.byKey(const ValueKey('vault-dial')), findsOneWidget);
       expect(find.text('Appearance'), findsNothing);
       expect(export.clipboard, isEmpty);
       export.selection.complete(
@@ -501,9 +507,9 @@ void main() {
     await tester.runAsync(controller.init);
     await controller.prepareSetup(password: _password, confirmation: _password);
     await controller.copyRecovery();
-    expect(export.clipboard, 'one two three');
+    expect(export.clipboard, controller.state.setupChallenge!.json);
     await tester.pump(const Duration(seconds: 59));
-    expect(export.clipboard, 'one two three');
+    expect(export.clipboard, controller.state.setupChallenge!.json);
     export.clipboard = 'other application';
     await tester.pump(const Duration(seconds: 1));
     expect(export.clipboard, 'other application');
@@ -517,7 +523,7 @@ void main() {
     });
   });
   testWidgets(
-    'setup keeps its phrase on Back and validates three separate chips',
+    'setup gates acknowledgments, preserves Back and replaces a failed quiz',
     (tester) async {
       final access = _Access();
       final events = StreamController<VaultLockSignal>.broadcast();
@@ -535,45 +541,72 @@ void main() {
       );
       await _enter(tester, field('master-password'), _password);
       await _enter(tester, field('password-confirmation'), _password);
-      await tester.tap(find.byKey(const ValueKey('vault-create')));
-      await tester.pumpAndSettle();
+      await _tapKey(tester, 'vault-create');
       final first = controller.state.setupChallenge;
-      await tester.tap(find.byKey(const ValueKey('setup-back')));
-      await tester.pumpAndSettle();
+      expect(find.text('Password hint'), findsOneWidget);
+      expect(
+        tester
+            .widget<WantButton>(find.byKey(const ValueKey('setup-next')))
+            .onPressed,
+        isNull,
+      );
+      await _tapKey(tester, 'password-saved');
+      await _tapKey(tester, 'setup-back');
       expect(
         tester.widget<EditableText>(field('master-password')).controller.text,
         _password,
       );
-      await tester.tap(find.byKey(const ValueKey('vault-create')));
-      await tester.pumpAndSettle();
+      await _tapKey(tester, 'vault-create');
       expect(controller.state.setupChallenge, first);
-      await tester.tap(find.byKey(const ValueKey('recovery-qr')));
-      await tester.pumpAndSettle();
-      expect(find.text('Recovery QR'), findsOneWidget);
+      expect(controller.state.passwordSaved, isTrue);
+      await _tapKey(tester, 'setup-next');
+      await _tapKey(tester, 'recovery-qr');
+      expect(find.text('Recovery QR'), findsNothing);
+      expect(find.byKey(const ValueKey('recovery-qr-image')), findsOneWidget);
       await controller.lock();
       await tester.pumpAndSettle();
-      expect(find.text('Recovery QR'), findsNothing);
+      expect(find.byKey(const ValueKey('recovery-qr-image')), findsNothing);
+      expect(controller.state.setupChallenge, isNull);
       await _enter(tester, field('master-password'), _password);
       await _enter(tester, field('password-confirmation'), _password);
-      await tester.tap(find.byKey(const ValueKey('vault-create')));
+      await _tapKey(tester, 'vault-create');
+      await _tapKey(tester, 'password-saved');
+      await _tapKey(tester, 'setup-next');
+      await _tapKey(tester, 'recovery-qr');
+      await _tapKey(tester, 'qr-saved');
+      expect(controller.state.phraseSaved, isTrue);
+      expect(controller.state.lossAccepted, isFalse);
+      await _tapKey(tester, 'setup-next');
+      expect(
+        tester
+            .widget<WantButton>(find.byKey(const ValueKey('setup-next')))
+            .onPressed,
+        isNull,
+      );
+      await _tapKey(tester, 'recovery-loss-accepted');
+      await _tapKey(tester, 'setup-next');
+      await _tapKey(tester, 'quiz-0-wrong-one');
+      expect(controller.state.setupChallenge!.revision, isNot(first!.revision));
+      expect(controller.state.passwordSaved, isTrue);
+      expect(controller.state.phraseSaved, isFalse);
+      expect(controller.state.lossAccepted, isFalse);
+      expect(controller.state.quizPassed, everyElement(isFalse));
+      expect(find.text('Save the new phrase'), findsOneWidget);
+      await tester.tap(find.text('Continue').last);
       await tester.pumpAndSettle();
-      await tester.tap(find.byKey(const ValueKey('setup-next')));
-      await tester.pumpAndSettle();
-      await tester.tap(find.byKey(const ValueKey('quiz-0-wrong-one')));
-      await tester.pumpAndSettle();
-      expect(controller.state.quizPassed[0], isFalse);
+      await _tapKey(tester, 'setup-next');
+      await _tapKey(tester, 'phrase-saved');
+      await _tapKey(tester, 'recovery-loss-accepted');
+      await _tapKey(tester, 'setup-next');
       for (var i = 0; i < 3; i++) {
-        final word = ['one', 'two', 'three'][i];
-        await tester.tap(find.byKey(ValueKey('quiz-$i-$word')));
-        await tester.pumpAndSettle();
-        expect(controller.state.quizPassed[i], isTrue);
-        await tester.tap(
-          find.byKey(ValueKey(i == 2 ? 'vault-confirm' : 'setup-next')),
-        );
-        await tester.pumpAndSettle();
+        await _tapKey(tester, 'quiz-$i-${['one', 'two', 'three'][i]}');
+        await _tapKey(tester, i == 2 ? 'vault-confirm' : 'setup-next');
       }
       expect(controller.state.phase, VaultPhase.unlocked);
-      await tester.pumpWidget(const SizedBox.shrink());
+      await _tapKey(tester, 'vault-dial');
+      expect(controller.state.phase, VaultPhase.locked);
+      await tester.pumpWidget(const SizedBox());
+      await tester.pump(const Duration(milliseconds: 100));
       await tester.runAsync(() async {
         await controller.close();
         await startup.close();
@@ -581,6 +614,43 @@ void main() {
       });
     },
   );
+
+  test('all quiz failures clear acknowledgments and a failed regeneration blocks confirmation', () async {
+    for (var index = 0; index < 3; index++) {
+      final access = _Access();
+      final events = StreamController<VaultLockSignal>.broadcast();
+      final controller = _controller(access, events.stream);
+      await controller.init();
+      await controller.prepareSetup(
+        password: _password,
+        confirmation: _password,
+      );
+      controller.acknowledge(password: true, phrase: true, loss: true);
+      for (var i = 0; i < index; i++) {
+        await controller.chooseSetupWord(i, ['one', 'two', 'three'][i]);
+      }
+      final old = controller.state.setupChallenge!;
+      await controller.chooseSetupWord(index, 'wrong-one');
+      expect(controller.state.setupChallenge!.revision, isNot(old.revision));
+      expect(controller.state.passwordSaved, isTrue);
+      expect(controller.state.phraseSaved, isFalse);
+      expect(controller.state.quizPassed, everyElement(isFalse));
+      access.regenerationFailure = const VaultRejectedErrorV1(
+        VaultFailureKindV1.unavailable,
+      );
+      await controller.chooseSetupWord(0, 'wrong-one');
+      expect(controller.state.setupChallenge, isNull);
+      expect(controller.state.error, isNotNull);
+      await controller.confirmSetup(
+        answers: const ['one', 'two', 'three'],
+        password: _password,
+        hints: const VaultHintsDtoV2(),
+      );
+      expect(access.handle.exists, isFalse);
+      await controller.close();
+      await events.close();
+    }
+  });
 
   testWidgets(
     'header appearance menus persist and fit narrow enlarged Russian layout',
@@ -650,6 +720,22 @@ void main() {
       await tester.tap(find.text('Dark'));
       await tester.pumpAndSettle();
       expect(appearance.state.settings.theme, AppearanceThemeV1.dark);
+      final segmentWidth = tester
+          .getSize(find.byKey(const ValueKey('setup-segment-0')))
+          .width;
+      for (var step = 1; step < 8; step++) {
+        expect(
+          tester.getSize(find.byKey(ValueKey('setup-segment-$step'))).width,
+          closeTo(segmentWidth, .01),
+        );
+      }
+      final future = tester.widget<AnimatedContainer>(
+        find.byKey(const ValueKey('setup-segment-7')),
+      );
+      expect(
+        (future.decoration! as BoxDecoration).color,
+        WantThemeData.dark().color('muted-foreground'),
+      );
       await _capture(tester, boundary, 'desktop-dark-en');
       await tester.tap(find.byKey(const ValueKey('appearance-language')));
       await tester.pumpAndSettle();
@@ -680,6 +766,63 @@ void main() {
       expect(preferences.saved.configured, isTrue);
     },
   );
+  testWidgets(
+    'recovery blocks empty input, waits for authentication and submits once',
+    (tester) async {
+      final access = _Access();
+      access.handle.exists = true;
+      access.handle.state = VaultAccessStateV1.locked;
+      final events = StreamController<VaultLockSignal>.broadcast();
+      final controller = _controller(access, events.stream);
+      final startup = StartupController(_Startup(), const _Reporter());
+      await tester.runAsync(() async {
+        await startup.init();
+        await controller.init();
+      });
+      await tester.pumpWidget(WantPassApp(startup: startup, vault: controller));
+      await tester.pumpAndSettle();
+      await _tapKey(tester, 'vault-dial');
+      await _tapKey(tester, 'vault-recovery');
+      expect(
+        tester
+            .widget<WantButton>(find.byKey(const ValueKey('setup-next')))
+            .onPressed,
+        isNull,
+      );
+      final field = find.descendant(
+        of: find.byKey(const ValueKey('recovery-phrase')),
+        matching: find.bySubtype<EditableText>(),
+      );
+      const input = '{\n"1":"one",\n"2":"two"\n}';
+      await _enter(tester, field, input);
+      expect(tester.widget<EditableText>(field).controller.text, input);
+      access.validation = Completer<DomainResult<void>>();
+      await tester.tap(find.byKey(const ValueKey('setup-next')));
+      await tester.tap(find.byKey(const ValueKey('setup-next')));
+      await tester.pump();
+      expect(access.validations, 1);
+      expect(controller.state.busy, isTrue);
+      expect(find.text('Recovery phrase'), findsOneWidget);
+      access.validation!.complete(
+        const Result.error(
+          VaultRejectedErrorV1(VaultFailureKindV1.invalidPhrase),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('Recovery phrase'), findsOneWidget);
+      access.validation = null;
+      access.validationFailure = null;
+      await _tapKey(tester, 'setup-next');
+      expect(find.text('New master password'), findsOneWidget);
+      await tester.pumpWidget(const SizedBox());
+      await tester.runAsync(() async {
+        await controller.close();
+        await startup.close();
+        await events.close();
+      });
+    },
+  );
+
   test('background initialization does not open the vault', () async {
     final access = _Access();
     await LaunchMode.withBackgroundMode(() async {
@@ -725,6 +868,83 @@ final class _Handle implements VaultHandleV1 {
 }
 
 final class _Access implements VaultAccessService {
+  BigInt revision = BigInt.zero;
+  VaultErrorV1? regenerationFailure;
+  VaultErrorV1? validationFailure;
+  Completer<DomainResult<void>>? validation;
+  int validations = 0;
+  @override
+  FutureDomainResult<void> validateRecoveryV3({
+    required VaultHandleV1 handle,
+    required String phrase,
+  }) {
+    validations++;
+    return validation?.future ??
+        Future.value(
+          validationFailure == null
+              ? const Result.success(null)
+              : Result.error(validationFailure!),
+        );
+  }
+
+  @override
+  FutureDomainResult<VaultRecoveryChallengeV3> prepareCreationV3({
+    required VaultHandleV1 handle,
+    required String password,
+  }) async {
+    final result = await prepareCreationV2(handle: handle, password: password);
+    if (result.isError) return Result.error(result.error);
+    final v = result.value;
+    return Result.success(
+      VaultRecoveryChallengeV3(
+        words: v.words,
+        positions: v.positions,
+        choices: v.choices,
+        json: jsonEncode({
+          for (var i = 0; i < v.words.length; i++) '${i + 1}': v.words[i],
+        }),
+        revision: revision,
+      ),
+    );
+  }
+
+  @override
+  FutureDomainResult<VaultRecoveryChallengeV3> prepareRecoveryV3({
+    required VaultHandleV1 handle,
+    required String phrase,
+    required String password,
+  }) => prepareCreationV3(handle: handle, password: password);
+  @override
+  FutureDomainResult<VaultRecoveryChallengeV3> regenerateRecoveryV3({
+    required VaultHandleV1 handle,
+  }) {
+    revision += BigInt.one;
+    if (regenerationFailure case final error?) {
+      return Future.value(Result.error(error));
+    }
+    return prepareCreationV3(handle: handle, password: _password);
+  }
+
+  @override
+  FutureDomainResult<void> confirmV3({
+    required VaultHandleV1 handle,
+    required List<String> answers,
+    required String password,
+    required VaultHintsDtoV2 hints,
+    required BigInt revision,
+  }) => confirmV2(
+    handle: handle,
+    answers: answers,
+    password: password,
+    hints: hints,
+  );
+  @override
+  FutureDomainResult<void> exportRecoveryV3({
+    required VaultHandleV1 handle,
+    required String destination,
+    required BigInt revision,
+  }) => exportRecoveryV2(handle: handle, destination: destination);
+
   Completer<DomainResult<void>>? draining;
   @override
   FutureDomainResult<void> waitForExportsV2({required VaultHandleV1 handle}) =>
@@ -886,6 +1106,8 @@ final class _Export implements RecoveryExportService {
   @override
   FutureDomainResult<String?> selectFileV1() => selection.future;
   @override
+  FutureDomainResult<String?> selectFileV3() => selection.future;
+  @override
   FutureDomainResult<void> copyV1(String phrase) async {
     clipboard = phrase;
     return const Result.success(null);
@@ -936,4 +1158,12 @@ Future<void> _capture(WidgetTester tester, GlobalKey key, String name) async {
       image.dispose();
     }
   });
+}
+
+Future<void> _tapKey(WidgetTester tester, String key) async {
+  final target = find.byKey(ValueKey(key));
+  await tester.ensureVisible(target);
+  await tester.pumpAndSettle();
+  await tester.tap(target);
+  await tester.pumpAndSettle();
 }

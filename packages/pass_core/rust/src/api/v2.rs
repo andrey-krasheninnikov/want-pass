@@ -12,11 +12,11 @@ pub struct VaultHintsV2 {
 }
 
 pub(super) struct DraftV2 {
-    opened: Opened,
+    pub(super) opened: Opened,
     entropy: Zeroizing<[u8; 32]>,
     positions: Vec<u32>,
     choices: Vec<Vec<String>>,
-    expected: Option<[u8; 32]>,
+    pub(super) expected: Option<[u8; 32]>,
     candidate: Option<Prepared>,
     input_digest: Option<Zeroizing<[u8; 32]>>,
 }
@@ -32,7 +32,7 @@ fn index(limit: usize) -> Result<usize, VaultFailure> {
 }
 
 impl DraftV2 {
-    fn new(
+    pub(super) fn new(
         document: &[u8],
         id: Option<[u8; 16]>,
         expected: Option<[u8; 32]>,
@@ -89,7 +89,7 @@ impl DraftV2 {
             input_digest: None,
         })
     }
-    fn challenge(&self) -> Result<RecoveryChallengeV2, VaultFailure> {
+    pub(super) fn challenge(&self) -> Result<RecoveryChallengeV2, VaultFailure> {
         Ok(RecoveryChallengeV2 {
             words: format::words(self.entropy.as_ref())?,
             positions: self.positions.clone(),
@@ -104,12 +104,13 @@ impl Vault {
         destination: String,
         generation: u64,
     ) -> Result<(), VaultFailure> {
-        self.export_recovery_with_hook(destination, generation, || {}, || {})
+        self.export_recovery_with_hook(destination, generation, false, || {}, || {})
     }
-    fn export_recovery_with_hook(
+    pub(super) fn export_recovery_with_hook(
         &self,
         destination: String,
         generation: u64,
+        json: bool,
         before_publish: impl FnOnce(),
         after_admission: impl FnOnce(),
     ) -> Result<(), VaultFailure> {
@@ -144,13 +145,17 @@ impl Vault {
             .into_iter()
             .map(Zeroizing::new)
             .collect::<Vec<_>>();
-        let phrase = Zeroizing::new(
-            words
-                .iter()
-                .map(|v| v.as_str())
-                .collect::<Vec<_>>()
-                .join(" "),
-        );
+        let phrase = if json {
+            super::v3::recovery_json(&words.iter().map(|w| w.to_string()).collect::<Vec<_>>())
+        } else {
+            Zeroizing::new(
+                words
+                    .iter()
+                    .map(|v| v.as_str())
+                    .collect::<Vec<_>>()
+                    .join(" "),
+            )
+        };
         let mut file =
             tempfile::NamedTempFile::new_in(parent).map_err(|_| VaultFailure::Storage)?;
         file.write_all(phrase.as_bytes())
@@ -377,6 +382,7 @@ mod tests {
             worker_vault.export_recovery_with_hook(
                 path,
                 generation,
+                false,
                 || {},
                 || {
                     ready_tx.send(()).unwrap();
@@ -434,6 +440,7 @@ mod tests {
             worker_vault.export_recovery_with_hook(
                 path,
                 generation,
+                false,
                 || {
                     ready_tx.send(()).unwrap();
                     resume_rx.recv().unwrap();

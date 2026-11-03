@@ -1,4 +1,5 @@
 pub(crate) mod v2;
+pub(crate) mod v3;
 use crate::{
     format::{self, Opened, Prepared},
     storage::{Store, digest},

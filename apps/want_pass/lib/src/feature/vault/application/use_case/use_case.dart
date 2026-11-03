@@ -48,4 +48,22 @@ abstract interface class VaultUseCase {
   FutureDomainResult<RecoveryExportResultV1> clearRecoveryClipboardV1({
     required RecoveryClipboardParamsV1 params,
   });
+  FutureDomainResult<PrepareVaultSetupResultV3> prepareSetupV3({
+    required PrepareVaultSetupParamsV3 params,
+  });
+  FutureDomainResult<ConfirmVaultSetupResultV3> confirmSetupV3({
+    required ConfirmVaultSetupParamsV3 params,
+  });
+  FutureDomainResult<PrepareVaultSetupResultV3> regenerateRecoveryV3({
+    required RegenerateVaultRecoveryParamsV3 params,
+  });
+  FutureDomainResult<ValidateVaultRecoveryResultV3> validateRecoveryV3({
+    required ValidateVaultRecoveryParamsV3 params,
+  });
+  FutureDomainResult<RecoveryExportResultV1> exportRecoveryV3({
+    required ExportRecoveryParamsV3 params,
+  });
+  FutureDomainResult<SelectRecoveryFileResultV1> selectRecoveryFileV3({
+    required SelectRecoveryFileParamsV3 params,
+  });
 }

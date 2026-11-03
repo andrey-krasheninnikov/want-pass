@@ -1285,10 +1285,10 @@ packages:
     dependency: transitive
     description:
       name: want_allure
-      sha256: "3c714b4a958cc10901bd6242607731db2c42933ffb4ee2702f8627a3086c7aea"
+      sha256: "64e9b5cffa12386c5724dc06530575c4affee4b51119eabb2d5a01186a389971"
       url: "https://pub.dev"
     source: hosted
-    version: "1.1.0"
+    version: "1.1.1"
   watcher:
     dependency: transitive
     description:

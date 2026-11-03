@@ -37,3 +37,22 @@ final class VaultHintsDtoV2 extends Equatable {
   @override
   String toString() => 'VaultHintsDtoV2(<redacted>)';
 }
+
+final class VaultRecoveryChallengeV3 extends Equatable {
+  final String json;
+  final BigInt revision;
+  final List<String> words;
+  final List<int> positions;
+  final List<List<String>> choices;
+  const VaultRecoveryChallengeV3({
+    required this.json,
+    required this.revision,
+    required this.words,
+    required this.positions,
+    required this.choices,
+  });
+  @override
+  List<Object?> get props => [words, positions, choices, json, revision];
+  @override
+  String toString() => 'VaultRecoveryChallengeV3(<redacted>)';
+}

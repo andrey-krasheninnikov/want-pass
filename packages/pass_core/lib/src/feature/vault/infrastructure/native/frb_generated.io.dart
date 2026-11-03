@@ -63,6 +63,9 @@ abstract class VaultRustLibApiImplPlatform
   RecoveryChallengeV2 dco_decode_recovery_challenge_v_2(dynamic raw);
 
   @protected
+  RecoveryChallengeV3 dco_decode_recovery_challenge_v_3(dynamic raw);
+
+  @protected
   int dco_decode_u_32(dynamic raw);
 
   @protected
@@ -127,6 +130,11 @@ abstract class VaultRustLibApiImplPlatform
 
   @protected
   RecoveryChallengeV2 sse_decode_recovery_challenge_v_2(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  RecoveryChallengeV3 sse_decode_recovery_challenge_v_3(
     SseDeserializer deserializer,
   );
 
@@ -214,6 +222,12 @@ abstract class VaultRustLibApiImplPlatform
   @protected
   void sse_encode_recovery_challenge_v_2(
     RecoveryChallengeV2 self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_recovery_challenge_v_3(
+    RecoveryChallengeV3 self,
     SseSerializer serializer,
   );
 

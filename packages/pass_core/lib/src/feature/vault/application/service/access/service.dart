@@ -46,4 +46,32 @@ abstract interface class VaultAccessService {
     required VaultHandleV1 handle,
     required String destination,
   });
+  FutureDomainResult<void> validateRecoveryV3({
+    required VaultHandleV1 handle,
+    required String phrase,
+  });
+  FutureDomainResult<VaultRecoveryChallengeV3> prepareCreationV3({
+    required VaultHandleV1 handle,
+    required String password,
+  });
+  FutureDomainResult<VaultRecoveryChallengeV3> prepareRecoveryV3({
+    required VaultHandleV1 handle,
+    required String phrase,
+    required String password,
+  });
+  FutureDomainResult<VaultRecoveryChallengeV3> regenerateRecoveryV3({
+    required VaultHandleV1 handle,
+  });
+  FutureDomainResult<void> exportRecoveryV3({
+    required VaultHandleV1 handle,
+    required String destination,
+    required BigInt revision,
+  });
+  FutureDomainResult<void> confirmV3({
+    required VaultHandleV1 handle,
+    required List<String> answers,
+    required String password,
+    required VaultHintsDtoV2 hints,
+    required BigInt revision,
+  });
 }

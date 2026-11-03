@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:bloc_effects/bloc_effects.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -25,24 +26,36 @@ class _VaultPageState extends State<VaultPage> {
   final _phrase = TextEditingController();
   final _passwordHint = TextEditingController();
   final _recoveryHint = TextEditingController();
-  late final PageController _pages;
   final _background = WantBackgroundController();
   final _headingFocus = FocusNode();
-  int _step = 1;
-  int _navigationEpoch = 0;
-  bool _recovering = false, _showHint = false;
-  DialogRoute<void>? _qr;
+  late final PageController _pages;
+  late bool _includeAppearance;
+  int _step = 1, _navigationEpoch = 0;
+  bool _recovering = false, _advancing = false;
+  DialogRoute<void>? _overlay;
+  int get _firstStep => _recovering || _includeAppearance ? 0 : 1;
+  String _text(String en, String ru) =>
+      Localizations.localeOf(context).languageCode == 'ru' ? ru : en;
+
   @override
   void initState() {
     super.initState();
-    _step = widget.appearance?.state.settings.configured == false ? 0 : 1;
+    _includeAppearance = widget.appearance?.state.settings.configured == false;
+    _step = _firstStep;
     _pages = PageController(initialPage: _step);
+    _password.addListener(_passwordChanged);
+    _phrase.addListener(_phraseChanged);
     HardwareKeyboard.instance.addHandler(_keyboard);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted && widget.controller.state.phase == VaultPhase.locked) {
         unawaited(widget.controller.readHints());
       }
     });
+  }
+
+  void _passwordChanged() => widget.controller.acknowledge(password: false);
+  void _phraseChanged() {
+    if (mounted) setState(() {});
   }
 
   bool _keyboard(KeyEvent event) {
@@ -55,13 +68,14 @@ class _VaultPageState extends State<VaultPage> {
     return false;
   }
 
-  void _hideQr() {
-    final route = _qr;
-    _qr = null;
+  void _hideOverlay() {
+    final route = _overlay;
+    _overlay = null;
     if (route != null && route.isActive) route.navigator?.removeRoute(route);
   }
 
   void _clear() {
+    _hideOverlay();
     for (final field in [
       _password,
       _confirmation,
@@ -71,12 +85,13 @@ class _VaultPageState extends State<VaultPage> {
     ]) {
       field.clear();
     }
-    _hideQr();
   }
 
   @override
   void dispose() {
     HardwareKeyboard.instance.removeHandler(_keyboard);
+    _password.removeListener(_passwordChanged);
+    _phrase.removeListener(_phraseChanged);
     _clear();
     for (final field in [
       _password,
@@ -93,12 +108,10 @@ class _VaultPageState extends State<VaultPage> {
     super.dispose();
   }
 
-  String _text(String en, String ru) =>
-      Localizations.localeOf(context).languageCode == 'ru' ? ru : en;
   void _go(int step) {
     _navigationEpoch++;
     widget.controller.dismissFailure();
-    _hideQr();
+    _hideOverlay();
     FocusScope.of(context).unfocus();
     setState(() => _step = step);
     if (_pages.hasClients) {
@@ -117,83 +130,132 @@ class _VaultPageState extends State<VaultPage> {
     _headingFocus.requestFocus();
   }
 
-  Future<void> _next(VaultState state) async {
-    if (state.busy || widget.appearance?.state.busy == true) return;
-    final navigationEpoch = _navigationEpoch;
-    if (_step == 0) {
-      final appearance = widget.appearance;
-      if (!_recovering && appearance != null) {
-        final current = appearance.state.settings;
-        await appearance.save(
-          AppearanceSettingsV1(
-            theme: current.theme,
-            language:
-                current.language ??
-                (Localizations.localeOf(context).languageCode == 'ru'
-                    ? AppearanceLanguageV1.ru
-                    : AppearanceLanguageV1.en),
-            configured: true,
+  bool _canAdvance(VaultState state) =>
+      !state.busy &&
+      !_advancing &&
+      widget.appearance?.state.busy != true &&
+      switch (_step) {
+        0 => !_recovering || _phrase.text.trim().isNotEmpty,
+        2 => state.passwordSaved,
+        3 => state.setupChallenge != null,
+        4 => state.phraseSaved && state.lossAccepted,
+        >= 5 => state.setupChallenge != null && state.quizPassed[_step - 5],
+        _ => true,
+      };
+  Future<void> _next() async {
+    final state = widget.controller.state;
+    if (!_canAdvance(state)) return;
+    final epoch = _navigationEpoch;
+    setState(() => _advancing = true);
+    try {
+      if (_step == 0) {
+        if (_recovering) {
+          if (!await widget.controller.validateRecovery(_phrase.text)) return;
+        } else if (widget.appearance case final appearance?) {
+          final current = appearance.state.settings;
+          await appearance.save(
+            AppearanceSettingsV1(
+              theme: current.theme,
+              language:
+                  current.language ??
+                  (Localizations.localeOf(context).languageCode == 'ru'
+                      ? AppearanceLanguageV1.ru
+                      : AppearanceLanguageV1.en),
+              configured: true,
+            ),
+          );
+          if (appearance.state.failed) return;
+        }
+        if (mounted && epoch == _navigationEpoch) _go(1);
+      } else if (_step == 1) {
+        await widget.controller.prepareSetup(
+          password: _password.text,
+          confirmation: _confirmation.text,
+          phrase: _recovering ? _phrase.text : null,
+        );
+        if (mounted &&
+            epoch == _navigationEpoch &&
+            widget.controller.state.setupChallenge != null &&
+            widget.controller.state.error == null) {
+          _go(2);
+        }
+      } else if (_step < 7) {
+        _go(_step + 1);
+      } else {
+        await widget.controller.confirmSetup(
+          answers: state.setupAnswers.cast<String>(),
+          password: _password.text,
+          hints: VaultHintsDtoV2(
+            password: _passwordHint.text,
+            recovery: _recoveryHint.text,
           ),
         );
-        if (!mounted ||
-            navigationEpoch != _navigationEpoch ||
-            appearance.state.failed) {
-          return;
-        }
       }
-      if (mounted) _go(1);
-    } else if (_step == 1) {
-      await widget.controller.prepareSetup(
-        password: _password.text,
-        confirmation: _confirmation.text,
-        phrase: _recovering ? _phrase.text : null,
-      );
-      if (mounted &&
-          navigationEpoch == _navigationEpoch &&
-          widget.controller.state.setupChallenge != null &&
-          widget.controller.state.error == null) {
-        _go(2);
-      }
-    } else if (_step == 2) {
-      _go(3);
-    } else if (_step < 5 && state.quizPassed[_step - 3]) {
-      _go(_step + 1);
-    } else if (_step == 5 && state.quizPassed.every((v) => v)) {
-      await widget.controller.confirmSetup(
-        answers: state.setupAnswers.cast<String>(),
-        password: _password.text,
-        hints: VaultHintsDtoV2(
-          password: _passwordHint.text,
-          recovery: _recoveryHint.text,
-        ),
-      );
+    } finally {
+      if (mounted) setState(() => _advancing = false);
     }
   }
 
+  Widget _icon(String key, String label, Widget icon, VoidCallback? action) =>
+      WantTooltip(
+        message: label,
+        child: Semantics(
+          label: label,
+          button: true,
+          child: WantButton(
+            key: ValueKey(key),
+            variant: WantButtonVariant.secondary,
+            onPressed: action,
+            child: ExcludeSemantics(child: icon),
+          ),
+        ),
+      );
+  Widget _requirements() => WantPopover(
+    child: const Text('?'),
+    triggerBuilder: (context, toggle, child) => _icon(
+      'password-requirements',
+      _text('Password requirements', 'Требования к паролю'),
+      child,
+      toggle,
+    ),
+    contentBuilder: (context, close) => ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 260),
+      child: Text(
+        _text(
+          'At least 15 characters, uppercase and lowercase letters, a digit and a special character. Maximum: 1,024 UTF-8 bytes. Spaces and Unicode are allowed.',
+          'Минимум 15 символов, заглавная и строчная буквы, цифра и спецсимвол. Максимум: 1024 UTF-8 байта. Разрешены пробелы и Unicode.',
+        ),
+      ),
+    ),
+  );
   Widget _secret(
     String key,
     String label,
-    TextEditingController controller,
+    TextEditingController field,
     VaultState state, {
     bool last = false,
+    bool multiline = false,
+    Widget? postfix,
   }) => VaultSecretInput(
     key: ValueKey(key),
     label: label,
-    controller: controller,
-    enabled: !state.busy,
+    controller: field,
+    enabled: !state.busy && !_advancing,
     autofocus: false,
     last: last,
-    onSubmitted: () => unawaited(_next(state)),
+    multiline: multiline,
+    postfix: postfix,
+    onSubmitted: () => unawaited(_next()),
   );
   Widget _hint(
     String key,
     String label,
-    TextEditingController controller,
+    TextEditingController field,
     VaultState state,
   ) => WantInput(
     key: ValueKey(key),
     label: Text(label),
-    controller: controller,
+    controller: field,
     enabled: !state.busy,
     inputFormatters: [
       TextInputFormatter.withFunction((old, next) {
@@ -206,16 +268,30 @@ class _VaultPageState extends State<VaultPage> {
       }),
     ],
   );
-  Widget _row(List<Widget> buttons) => LayoutBuilder(
-    builder: (context, size) => size.maxWidth < 420
+  Widget _check(
+    String key,
+    String label,
+    bool value,
+    ValueChanged<bool> changed,
+    VaultState state,
+  ) => WantCheckbox(
+    key: ValueKey(key),
+    value: value,
+    enabled: !state.busy,
+    label: Text(label),
+    onChanged: changed,
+  );
+  Widget _row(List<Widget> children) => LayoutBuilder(
+    builder: (context, size) =>
+        size.maxWidth < 300 || MediaQuery.textScalerOf(context).scale(16) > 24
         ? Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             spacing: 8,
-            children: buttons,
+            children: children,
           )
         : Row(
-            spacing: 12,
-            children: [for (final button in buttons) Expanded(child: button)],
+            spacing: 8,
+            children: [for (final child in children) Expanded(child: child)],
           ),
   );
   Widget _slide(List<Widget> children) => SingleChildScrollView(
@@ -246,58 +322,736 @@ class _VaultPageState extends State<VaultPage> {
         _recovering
             ? _text('New master password', 'Новый мастер-пароль')
             : _text('Master password', 'Мастер-пароль'),
-      2 => _text('Save recovery phrase', 'Сохраните фразу'),
-      _ => _text('Check ${_step - 2} of 3', 'Проверка ${_step - 2} из 3'),
+      2 => _text('Password hint', 'Подсказка к паролю'),
+      3 => _text('Save recovery phrase', 'Сохраните фразу'),
+      4 => _text('Phrase location', 'Где хранится фраза'),
+      _ => _text('Check ${_step - 4} of 3', 'Проверка ${_step - 4} из 3'),
     };
+  }
+
+  void _dialog(WidgetBuilder builder, {bool clearPassword = false}) {
+    if (_overlay != null) return;
+    final route = DialogRoute<void>(context: context, builder: builder);
+    _overlay = route;
+    unawaited(
+      Navigator.of(context).push(route).whenComplete(() {
+        if (identical(_overlay, route)) {
+          _overlay = null;
+          if (clearPassword) _password.clear();
+        }
+      }),
+    );
   }
 
   void _showQr(VaultState state) {
     final challenge = state.setupChallenge;
-    if (state.busy || challenge == null || _qr != null) return;
-    final route = DialogRoute<void>(
-      context: context,
-      builder: (context) => WantDialog(
+    if (state.busy || challenge == null) return;
+    _dialog(
+      (context) => WantDialog(
         title: _text('Recovery QR', 'QR восстановления'),
+        showTitle: false,
+        constraints: const BoxConstraints(minWidth: 280, maxWidth: 320),
         actions: WantButton(
-          onPressed: _hideQr,
-          child: Text(_text('Close', 'Закрыть')),
+          key: const ValueKey('qr-saved'),
+          onPressed: () {
+            widget.controller.acknowledge(phrase: true);
+            _hideOverlay();
+          },
+          child: Text(_text('I saved it', 'Я сохранил')),
         ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          spacing: 16,
-          children: [
-            Text(
-              _text(
-                'Anyone with this code can open your vault. Keep it private.',
-                'Этот код даёт доступ к сейфу. Храните его в тайне.',
+        child: LayoutBuilder(
+          builder: (context, size) => ExcludeSemantics(
+            child: QrImageView(
+              key: const ValueKey('recovery-qr-image'),
+              data: challenge.json,
+              size: size.maxWidth.clamp(0, 256),
+              padding: const EdgeInsets.all(16),
+              backgroundColor: Colors.white,
+              eyeStyle: QrEyeStyle(
+                eyeShape: QrEyeShape.square,
+                color: WantTheme.of(context).color('primary'),
+              ),
+              dataModuleStyle: const QrDataModuleStyle(
+                dataModuleShape: QrDataModuleShape.square,
+                color: Color(0xff141414),
               ),
             ),
-            ExcludeSemantics(
-              child: QrImageView(
-                data: challenge.words.join(' '),
-                size: 260,
-                backgroundColor: Colors.white,
-                eyeStyle: const QrEyeStyle(
-                  eyeShape: QrEyeShape.square,
-                  color: Colors.black,
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _startRecovery() {
+    _hideOverlay();
+    _password.clear();
+    widget.controller.dismissFailure();
+    setState(() {
+      _recovering = true;
+      _step = 0;
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && _pages.hasClients) _pages.jumpToPage(0);
+    });
+  }
+
+  void _showUnlock() {
+    _password.clear();
+    _dialog(
+      (context) => BlocBuilder<VaultController, VaultState>(
+        bloc: widget.controller,
+        builder: (context, state) => WantDialog(
+          title: _text('Unlock', 'Разблокировка'),
+          actions: WantButton(
+            key: const ValueKey('vault-recovery'),
+            variant: WantButtonVariant.secondary,
+            onPressed: state.busy ? null : _startRecovery,
+            child: Text(_text('Recover access', 'Восстановить доступ')),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            spacing: 12,
+            children: [
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                spacing: 8,
+                children: [
+                  Expanded(
+                    child: VaultSecretInput(
+                      key: const ValueKey('unlock-password'),
+                      label: _text('Master password', 'Мастер-пароль'),
+                      controller: _password,
+                      enabled: !state.busy,
+                      autofocus: true,
+                      last: true,
+                      onSubmitted: () =>
+                          unawaited(widget.controller.unlock(_password.text)),
+                    ),
+                  ),
+                  _icon(
+                    'vault-unlock',
+                    _text('Continue', 'Продолжить'),
+                    const WantIcon(WantIcons.arrowRight),
+                    state.busy
+                        ? null
+                        : () => unawaited(
+                            widget.controller.unlock(_password.text),
+                          ),
+                  ),
+                ],
+              ),
+              if (state.hints.password.isNotEmpty) Text(state.hints.password),
+              if (state.error case final error?)
+                WantTypography(
+                  _error(error),
+                  colorRole: 'destructive',
+                  liveRegion: true,
                 ),
-                dataModuleStyle: const QrDataModuleStyle(
-                  dataModuleShape: QrDataModuleShape.square,
-                  color: Colors.black,
+            ],
+          ),
+        ),
+      ),
+      clearPassword: true,
+    );
+  }
+
+  void _effect(BuildContext context, VaultEffect effect) {
+    switch (effect) {
+      case VaultRecoveryReset():
+        _go(3);
+      case VaultRecoveryRegenerated():
+        _dialog(
+          (context) => WantDialog(
+            title: _text('Save the new phrase', 'Сохраните новую фразу'),
+            actions: WantButton(
+              onPressed: _hideOverlay,
+              child: Text(_text('Continue', 'Продолжить')),
+            ),
+            child: Text(
+              _text(
+                'One word was incorrect. A new phrase has been created. Save it again and repeat all three checks. The previous phrase is no longer valid for this setup.',
+                'Одно из слов указано неверно. Создана новая фраза. Сохраните её заново и пройдите все три проверки. Прежняя фраза больше не подходит для этой настройки.',
+              ),
+            ),
+          ),
+        );
+      case VaultNotice(:final kind):
+        final success =
+            kind == VaultNoticeKind.copied || kind == VaultNoticeKind.exported;
+        showWantSnackbar(
+          context: context,
+          variant: success
+              ? WantSnackbarVariant.success
+              : WantSnackbarVariant.info,
+          variantLabel: success
+              ? _text('Success', 'Готово')
+              : _text('Info', 'Информация'),
+          closeLabel: _text('Close', 'Закрыть'),
+          title: Text(switch (kind) {
+            VaultNoticeKind.copied => _text(
+              'Recovery JSON copied',
+              'JSON восстановления скопирован',
+            ),
+            VaultNoticeKind.exportStarted => _text(
+              'Saving recovery JSON…',
+              'Сохраняем JSON восстановления…',
+            ),
+            VaultNoticeKind.exported => _text(
+              'Recovery JSON saved',
+              'JSON восстановления сохранён',
+            ),
+            VaultNoticeKind.locked => _text(
+              'Vault locked',
+              'Сейф заблокирован',
+            ),
+          }),
+        );
+    }
+  }
+
+  Widget _progress() {
+    final total = 8 - _firstStep;
+    final theme = WantTheme.of(context);
+    return Column(
+      spacing: 8,
+      children: [
+        Row(
+          spacing: 4,
+          children: [
+            for (var i = _firstStep; i < 8; i++)
+              Expanded(
+                child: Semantics(
+                  label: _text(
+                    'Step ${i - _firstStep + 1} of $total',
+                    'Шаг ${i - _firstStep + 1} из $total',
+                  ),
+                  selected: i == _step,
+                  child: AnimatedContainer(
+                    key: ValueKey('setup-segment-$i'),
+                    height: 6,
+                    duration: WantTheme.reducedMotionOf(context)
+                        ? Duration.zero
+                        : const Duration(milliseconds: 180),
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(12),
+                      color: i == _step
+                          ? theme.color('primary')
+                          : i < _step
+                          ? Color.alphaBlend(
+                              theme.color('primary').withValues(alpha: .92),
+                              theme.color('card'),
+                            )
+                          : theme.color('muted-foreground'),
+                    ),
+                  ),
                 ),
+              ),
+          ],
+        ),
+        WantAnimatedText(
+          '${_step - _firstStep + 1} / $total',
+          key: const ValueKey('setup-counter'),
+          liveRegion: true,
+        ),
+      ],
+    );
+  }
+
+  List<Widget> _slides(VaultState state) {
+    final challenge = state.setupChallenge;
+    final uncertain =
+        state.error is VaultRejectedErrorV1 &&
+        (state.error as VaultRejectedErrorV1).kind ==
+            VaultFailureKindV1.writeUncertain;
+    final hintWarning = WantTypography(
+      _text(
+        'Hints are stored openly. Do not include your password or recovery words.',
+        'Подсказки хранятся открыто. Не указывайте пароль или слова восстановления.',
+      ),
+      colorRole: 'muted-foreground',
+    );
+    return [
+      _slide(
+        _recovering
+            ? [
+                Text(
+                  _text(
+                    'Use the existing vault file and its 24 recovery words or numbered JSON. Recovery replaces its password and phrase after confirmation.',
+                    'Нужны текущий файл сейфа и его 24 слова или JSON с номерами слов. Восстановление заменит пароль и фразу после подтверждения.',
+                  ),
+                ),
+                if (state.hints.recovery.isNotEmpty) Text(state.hints.recovery),
+                _secret(
+                  'recovery-phrase',
+                  _text(
+                    'Recovery phrase or JSON',
+                    'Фраза восстановления или JSON',
+                  ),
+                  _phrase,
+                  state,
+                  multiline: true,
+                ),
+              ]
+            : [
+                Text(
+                  _text(
+                    'Choose your language and theme. You can change them above later.',
+                    'Выберите язык и тему. Позже их можно изменить вверху.',
+                  ),
+                ),
+              ],
+      ),
+      _slide([
+        _secret(
+          'master-password',
+          _text('Master password', 'Мастер-пароль'),
+          _password,
+          state,
+          postfix: _requirements(),
+        ),
+        _secret(
+          'password-confirmation',
+          _text('Confirm password', 'Повторите пароль'),
+          _confirmation,
+          state,
+          last: true,
+        ),
+      ]),
+      _slide([
+        _hint(
+          'password-hint',
+          _text(
+            'Password hint (optional)',
+            'Подсказка к паролю (необязательно)',
+          ),
+          _passwordHint,
+          state,
+        ),
+        hintWarning,
+        _check(
+          'password-saved',
+          _text(
+            'I saved my password in a safe place',
+            'Я сохранил пароль в надёжном месте',
+          ),
+          state.passwordSaved,
+          (v) => widget.controller.acknowledge(password: v),
+          state,
+        ),
+      ]),
+      _slide([
+        Text(
+          _text(
+            'These 24 words grant access to this vault. They cannot restore a deleted vault file.',
+            'Эти 24 слова дают доступ к сейфу. Они не восстанавливают удалённый файл сейфа.',
+          ),
+        ),
+        if (challenge != null)
+          Wrap(
+            spacing: 12,
+            runSpacing: 12,
+            children: [
+              for (var i = 0; i < challenge.words.length; i++)
+                SizedBox(
+                  width: 130,
+                  child: Row(
+                    spacing: 8,
+                    children: [
+                      WantTypography(
+                        '${i + 1}',
+                        variant: WantTypographyVariant.caption,
+                        colorRole: 'muted-foreground',
+                      ),
+                      Text(
+                        challenge.words[i],
+                        textDirection: TextDirection.ltr,
+                      ),
+                    ],
+                  ),
+                ),
+            ],
+          ),
+        Row(
+          spacing: 8,
+          children: [
+            const WantIcon(WantIcons.download),
+            WantTypography(
+              _text('Save', 'Сохранить'),
+              variant: WantTypographyVariant.h4,
+            ),
+          ],
+        ),
+        Row(
+          spacing: 8,
+          children: [
+            Expanded(
+              child: _icon(
+                'recovery-copy',
+                _text('Copy JSON', 'Скопировать JSON'),
+                const Icon(Icons.content_copy),
+                state.busy || challenge == null
+                    ? null
+                    : () => unawaited(widget.controller.copyRecovery()),
+              ),
+            ),
+            Expanded(
+              child: _icon(
+                'recovery-download',
+                _text('Download JSON', 'Скачать JSON'),
+                const WantIcon(WantIcons.file),
+                state.busy || challenge == null
+                    ? null
+                    : () => unawaited(widget.controller.downloadRecovery()),
+              ),
+            ),
+            Expanded(
+              child: _icon(
+                'recovery-qr',
+                _text('Show QR', 'Показать QR'),
+                const Icon(Icons.qr_code),
+                state.busy || challenge == null ? null : () => _showQr(state),
               ),
             ),
           ],
         ),
-      ),
-    );
-    _qr = route;
-    unawaited(
-      Navigator.of(context).push(route).whenComplete(() {
-        if (identical(_qr, route)) _qr = null;
-      }),
-    );
+        WantTypography(
+          _text(
+            'JSON, clipboard and QR contain the same numbered words in plain text. Clipboard clears after 60 seconds if unchanged.',
+            'JSON, буфер обмена и QR содержат одинаковые пронумерованные слова открытым текстом. Буфер очищается через 60 секунд, если не изменён.',
+          ),
+          colorRole: 'muted-foreground',
+        ),
+      ]),
+      _slide([
+        _hint(
+          'recovery-hint',
+          _text(
+            'Where you keep the phrase (optional)',
+            'Где хранится фраза (необязательно)',
+          ),
+          _recoveryHint,
+          state,
+        ),
+        hintWarning,
+        _check(
+          'phrase-saved',
+          _text(
+            'I saved the phrase in a safe place',
+            'Я сохранил фразу в надёжном месте',
+          ),
+          state.phraseSaved,
+          (v) => widget.controller.acknowledge(phrase: v),
+          state,
+        ),
+        _check(
+          'recovery-loss-accepted',
+          _text(
+            'I understand that if I lose the phrase and forget my master password, I cannot recover this vault',
+            'Я понимаю, что при утрате фразы и забытом мастер-пароле не смогу восстановить доступ к сейфу',
+          ),
+          state.lossAccepted,
+          (v) => widget.controller.acknowledge(loss: v),
+          state,
+        ),
+      ]),
+      for (var i = 0; i < 3; i++)
+        _slide([
+          if (challenge != null) ...[
+            WantTypography(
+              _text(
+                'Choose word ${challenge.positions[i] + 1}',
+                'Выберите слово № ${challenge.positions[i] + 1}',
+              ),
+            ),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                for (final option in challenge.choices[i])
+                  Semantics(
+                    selected: state.setupAnswers[i] == option,
+                    inMutuallyExclusiveGroup: true,
+                    child: WantButton(
+                      key: ValueKey('quiz-$i-$option'),
+                      variant: state.setupAnswers[i] == option
+                          ? WantButtonVariant.primary
+                          : WantButtonVariant.secondary,
+                      onPressed: state.busy || uncertain
+                          ? null
+                          : () => unawaited(
+                              widget.controller.chooseSetupWord(i, option),
+                            ),
+                      child: Text(option, textDirection: TextDirection.ltr),
+                    ),
+                  ),
+              ],
+            ),
+          ],
+        ]),
+    ];
   }
+
+  @override
+  Widget build(
+    BuildContext context,
+  ) => BlocEffectListener<VaultController, VaultEffect>(
+    effector: widget.controller,
+    listener: _effect,
+    child: BlocConsumer<VaultController, VaultState>(
+      bloc: widget.controller,
+      listenWhen: (a, b) => a.phase != b.phase,
+      listener: (context, state) {
+        if (state.phase != VaultPhase.confirmation) {
+          _navigationEpoch++;
+          _clear();
+          setState(() {
+            _recovering = false;
+            _includeAppearance =
+                widget.appearance?.state.settings.configured == false;
+            _step = _firstStep;
+          });
+          if (_pages.hasClients) _pages.jumpToPage(_step);
+          if (state.phase == VaultPhase.locked) {
+            unawaited(widget.controller.readHints());
+          }
+        }
+      },
+      builder: (context, state) {
+        final setup =
+            state.phase == VaultPhase.missing ||
+            state.phase == VaultPhase.confirmation ||
+            _recovering;
+        final uncertain =
+            state.error is VaultRejectedErrorV1 &&
+            (state.error as VaultRejectedErrorV1).kind ==
+                VaultFailureKindV1.writeUncertain;
+        return Listener(
+          onPointerDown: (_) => widget.controller.activity(),
+          onPointerHover: (_) => widget.controller.activity(),
+          onPointerSignal: (_) => widget.controller.activity(),
+          child: Material(
+            color: WantTheme.of(context).color('background'),
+            textStyle: WantTheme.of(context).forui.typography.body.sm
+                .copyWith(fontSize: 16, height: 1.7),
+            child: WantBackgroundMotion(
+              controller: _background,
+              showPauseControl: false,
+              pauseLabel: _text('Pause background', 'Остановить фон'),
+              resumeLabel: _text('Resume background', 'Включить фон'),
+              child: SafeArea(
+                child: Center(
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 720),
+                    child: Padding(
+                      padding: const EdgeInsets.all(20),
+                      child: Column(
+                        spacing: 16,
+                        children: [
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Image.asset(
+                                Theme.of(context).brightness == Brightness.dark
+                                    ? 'assets/brand/logo-dark.png'
+                                    : 'assets/brand/logo-light.png',
+                                width: 48,
+                                height: 48,
+                                excludeFromSemantics: true,
+                              ),
+                              if (widget.appearance case final appearance?)
+                                AppearanceControls(controller: appearance),
+                            ],
+                          ),
+                          Expanded(
+                            child: LayoutBuilder(
+                              builder: (context, constraints) => WantCard(
+                                padding: EdgeInsets.zero,
+                                child: SizedBox(
+                                  height: constraints.maxHeight,
+                                  child: Padding(
+                                    padding: const EdgeInsets.all(24),
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.stretch,
+                                      spacing: 12,
+                                      children: [
+                                        if (setup) _progress(),
+                                        Focus(
+                                          focusNode: _headingFocus,
+                                          child: Semantics(
+                                            header: true,
+                                            child: WantTypography(
+                                              _title(state),
+                                              variant: WantTypographyVariant.h2,
+                                            ),
+                                          ),
+                                        ),
+                                        if (setup)
+                                          Expanded(
+                                            child: PageView(
+                                              controller: _pages,
+                                              physics:
+                                                  const NeverScrollableScrollPhysics(),
+                                              children: _slides(state),
+                                            ),
+                                          )
+                                        else
+                                          Expanded(
+                                            child: _slide([
+                                              if (state.phase ==
+                                                      VaultPhase.unlocked ||
+                                                  state.phase ==
+                                                      VaultPhase.locked) ...[
+                                                Center(
+                                                  child: VaultSafeDial(
+                                                    key: const ValueKey(
+                                                      'vault-dial',
+                                                    ),
+                                                    opened:
+                                                        state.phase ==
+                                                        VaultPhase.unlocked,
+                                                    remaining: () => widget
+                                                        .controller
+                                                        .idleRemaining,
+                                                    label:
+                                                        state.phase ==
+                                                            VaultPhase.unlocked
+                                                        ? _text(
+                                                            'Lock vault',
+                                                            'Заблокировать сейф',
+                                                          )
+                                                        : _text(
+                                                            'Unlock vault',
+                                                            'Разблокировать сейф',
+                                                          ),
+                                                    onPressed: state.busy
+                                                        ? null
+                                                        : state.phase ==
+                                                              VaultPhase
+                                                                  .unlocked
+                                                        ? () => unawaited(
+                                                            widget.controller
+                                                                .lock(
+                                                                  notify: true,
+                                                                ),
+                                                          )
+                                                        : _showUnlock,
+                                                  ),
+                                                ),
+                                                Text(
+                                                  _text(
+                                                    'Locks after five idle minutes and when your Mac locks or sleeps.',
+                                                    'Блокируется через пять минут бездействия, при блокировке и сне Mac.',
+                                                  ),
+                                                ),
+                                                if (state.phase ==
+                                                    VaultPhase.unlocked)
+                                                  Text(
+                                                    _text(
+                                                      'There are no secrets in this vault yet.',
+                                                      'В сейфе пока нет секретов.',
+                                                    ),
+                                                  ),
+                                              ],
+                                            ]),
+                                          ),
+                                        if (state.error case final error?)
+                                          WantTypography(
+                                            _error(error),
+                                            colorRole: 'destructive',
+                                            liveRegion: true,
+                                          ),
+                                        if (state.busy)
+                                          WantTypography(
+                                            _text(
+                                              'Working…',
+                                              'Выполняем операцию…',
+                                            ),
+                                            liveRegion: true,
+                                          ),
+                                        if (setup)
+                                          _row([
+                                            if (_step > _firstStep)
+                                              WantButton(
+                                                key: const ValueKey(
+                                                  'setup-back',
+                                                ),
+                                                variant:
+                                                    WantButtonVariant.secondary,
+                                                onPressed:
+                                                    state.busy ||
+                                                        _advancing ||
+                                                        uncertain
+                                                    ? null
+                                                    : () => _go(_step - 1),
+                                                child: Text(
+                                                  _text('Back', 'Назад'),
+                                                ),
+                                              ),
+                                            if (_step == 0 && _recovering)
+                                              WantButton(
+                                                variant:
+                                                    WantButtonVariant.secondary,
+                                                onPressed:
+                                                    state.busy || _advancing
+                                                    ? null
+                                                    : () => unawaited(
+                                                        widget.controller
+                                                            .lock(),
+                                                      ),
+                                                child: Text(
+                                                  _text(
+                                                    'Back to unlock',
+                                                    'К разблокировке',
+                                                  ),
+                                                ),
+                                              ),
+                                            WantButton(
+                                              key: ValueKey(
+                                                _step == 1
+                                                    ? (_recovering
+                                                          ? 'vault-recover'
+                                                          : 'vault-create')
+                                                    : _step == 7
+                                                    ? 'vault-confirm'
+                                                    : 'setup-next',
+                                              ),
+                                              onPressed: _canAdvance(state)
+                                                  ? () => unawaited(_next())
+                                                  : null,
+                                              child: Text(
+                                                _step == 7
+                                                    ? _text(
+                                                        'Finish',
+                                                        'Завершить',
+                                                      )
+                                                    : _text(
+                                                        'Continue',
+                                                        'Далее',
+                                                      ),
+                                              ),
+                                            ),
+                                          ]),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+      },
+    ),
+  );
 
   String _error(VaultErrorV1 error) => switch (error) {
     VaultRejectedErrorV1(kind: VaultFailureKindV1.invalidPassword) => _text(
@@ -341,645 +1095,4 @@ class _VaultPageState extends State<VaultPage> {
       'Сейф недоступен. Перезапустите Want Pass и повторите попытку. Файл не сброшен.',
     ),
   };
-
-  @override
-  Widget build(
-    BuildContext context,
-  ) => BlocConsumer<VaultController, VaultState>(
-    bloc: widget.controller,
-    listenWhen: (a, b) => a.phase != b.phase,
-    listener: (context, state) {
-      if (state.phase != VaultPhase.confirmation) {
-        _navigationEpoch++;
-        _clear();
-        setState(() {
-          _recovering = false;
-          _showHint = false;
-          _step = widget.appearance?.state.settings.configured == false ? 0 : 1;
-        });
-        if (_pages.hasClients) _pages.jumpToPage(_step);
-        if (state.phase == VaultPhase.locked) {
-          unawaited(widget.controller.readHints());
-        }
-      }
-    },
-    builder: (context, state) {
-      final setup =
-          state.phase == VaultPhase.missing ||
-          state.phase == VaultPhase.confirmation ||
-          _recovering;
-      final challenge = state.setupChallenge;
-      final uncertain =
-          state.error is VaultRejectedErrorV1 &&
-          (state.error as VaultRejectedErrorV1).kind ==
-              VaultFailureKindV1.writeUncertain;
-      final nextEnabled =
-          !state.busy &&
-          widget.appearance?.state.busy != true &&
-          (_step < 3 || state.quizPassed[_step - 3]);
-      final appearance = widget.appearance;
-      return Listener(
-        onPointerDown: (_) => widget.controller.activity(),
-        onPointerHover: (_) => widget.controller.activity(),
-        onPointerSignal: (_) => widget.controller.activity(),
-        child: Material(
-          color: WantTheme.of(context).color('background'),
-          textStyle: WantTheme.of(context).forui.typography.body.sm
-              .copyWith(fontSize: 16, height: 1.7),
-          child: WantBackgroundMotion(
-            controller: _background,
-            pauseLabel: _text('Pause background', 'Остановить фон'),
-            resumeLabel: _text('Resume background', 'Включить фон'),
-            child: SafeArea(
-              child: Center(
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 720),
-                  child: Padding(
-                    padding: const EdgeInsets.all(20),
-                    child: Column(
-                      spacing: 16,
-                      children: [
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Image.asset(
-                              Theme.of(context).brightness == Brightness.dark
-                                  ? 'assets/brand/logo-dark.png'
-                                  : 'assets/brand/logo-light.png',
-                              width: 48,
-                              height: 48,
-                              excludeFromSemantics: true,
-                            ),
-                            if (appearance != null)
-                              AppearanceControls(controller: appearance),
-                          ],
-                        ),
-                        Expanded(
-                          child: LayoutBuilder(
-                            builder: (context, constraints) => WantCard(
-                              padding: EdgeInsets.zero,
-                              child: SizedBox(
-                                height: constraints.maxHeight,
-                                child: Padding(
-                                  padding: const EdgeInsets.all(24),
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.stretch,
-                                    spacing: 12,
-                                    children: [
-                                      if (setup)
-                                        Row(
-                                          mainAxisAlignment:
-                                              MainAxisAlignment.spaceBetween,
-                                          children: [
-                                            for (var i = 0; i < 6; i++)
-                                              Semantics(
-                                                label: _text(
-                                                  'Step ${i + 1} of 6',
-                                                  'Шаг ${i + 1} из 6',
-                                                ),
-                                                selected: i == _step,
-                                                child: AnimatedContainer(
-                                                  duration:
-                                                      WantTheme.reducedMotionOf(
-                                                        context,
-                                                      )
-                                                      ? Duration.zero
-                                                      : const Duration(
-                                                          milliseconds: 180,
-                                                        ),
-                                                  width: i == _step ? 36 : 16,
-                                                  height: 6,
-                                                  decoration: BoxDecoration(
-                                                    color: WantTheme.of(context)
-                                                        .color(
-                                                          i <= _step
-                                                              ? 'primary'
-                                                              : 'muted',
-                                                        ),
-                                                    borderRadius:
-                                                        BorderRadius.circular(
-                                                          12,
-                                                        ),
-                                                  ),
-                                                ),
-                                              ),
-                                          ],
-                                        ),
-                                      Focus(
-                                        focusNode: _headingFocus,
-                                        child: Semantics(
-                                          header: true,
-                                          child: WantTypography(
-                                            _title(state),
-                                            variant: WantTypographyVariant.h2,
-                                          ),
-                                        ),
-                                      ),
-                                      if (setup)
-                                        Expanded(
-                                          child: PageView(
-                                            controller: _pages,
-                                            physics:
-                                                const NeverScrollableScrollPhysics(),
-                                            children: [
-                                              _slide(
-                                                _recovering
-                                                    ? [
-                                                        WantTypography(
-                                                          _text(
-                                                            'Use the existing vault file and its 24 words. Recovery replaces its password and phrase after confirmation.',
-                                                            'Нужны текущий файл сейфа и его 24 слова. После подтверждения восстановление заменит пароль и фразу.',
-                                                          ),
-                                                        ),
-                                                        if (state
-                                                            .hints
-                                                            .recovery
-                                                            .isNotEmpty)
-                                                          Text(
-                                                            state
-                                                                .hints
-                                                                .recovery,
-                                                          ),
-                                                        _secret(
-                                                          'recovery-phrase',
-                                                          _text(
-                                                            'Recovery phrase',
-                                                            'Фраза восстановления',
-                                                          ),
-                                                          _phrase,
-                                                          state,
-                                                          last: true,
-                                                        ),
-                                                      ]
-                                                    : [
-                                                        WantTypography(
-                                                          _text(
-                                                            'Choose your language and theme. You can change them above later.',
-                                                            'Выберите язык и тему. Позже их можно изменить вверху.',
-                                                          ),
-                                                        ),
-                                                        if (appearance
-                                                                ?.state
-                                                                .failed ==
-                                                            true)
-                                                          Text(
-                                                            _text(
-                                                              'Could not save appearance. Try again.',
-                                                              'Не удалось сохранить оформление. Повторите попытку.',
-                                                            ),
-                                                          ),
-                                                      ],
-                                              ),
-                                              _slide([
-                                                _secret(
-                                                  'master-password',
-                                                  _text(
-                                                    'Master password',
-                                                    'Мастер-пароль',
-                                                  ),
-                                                  _password,
-                                                  state,
-                                                ),
-                                                _secret(
-                                                  'password-confirmation',
-                                                  _text(
-                                                    'Confirm password',
-                                                    'Повторите пароль',
-                                                  ),
-                                                  _confirmation,
-                                                  state,
-                                                  last: true,
-                                                ),
-                                                WantTypography(
-                                                  _text(
-                                                    'At least 15 characters, uppercase and lowercase letters, a digit and a special character. Spaces and Unicode are allowed.',
-                                                    'Минимум 15 символов, заглавная и строчная буквы, цифра и спецсимвол. Разрешены пробелы и Unicode.',
-                                                  ),
-                                                  colorRole: 'muted-foreground',
-                                                ),
-                                                _hint(
-                                                  'password-hint',
-                                                  _text(
-                                                    'Password hint (optional)',
-                                                    'Подсказка к паролю (необязательно)',
-                                                  ),
-                                                  _passwordHint,
-                                                  state,
-                                                ),
-                                                WantTypography(
-                                                  _text(
-                                                    'Hints are stored openly. Do not include your password or recovery words.',
-                                                    'Подсказки хранятся открыто. Не указывайте пароль или слова восстановления.',
-                                                  ),
-                                                  colorRole: 'muted-foreground',
-                                                ),
-                                              ]),
-                                              _slide([
-                                                WantTypography(
-                                                  _text(
-                                                    'These 24 words grant access to this vault. They cannot restore a deleted vault file.',
-                                                    'Эти 24 слова дают доступ к сейфу. Они не восстанавливают удалённый файл сейфа.',
-                                                  ),
-                                                ),
-                                                if (challenge != null)
-                                                  Wrap(
-                                                    spacing: 12,
-                                                    runSpacing: 12,
-                                                    children: [
-                                                      for (
-                                                        var i = 0;
-                                                        i <
-                                                            challenge
-                                                                .words
-                                                                .length;
-                                                        i++
-                                                      )
-                                                        SizedBox(
-                                                          width: 130,
-                                                          child: Row(
-                                                            spacing: 8,
-                                                            children: [
-                                                              WantTypography(
-                                                                '${i + 1}',
-                                                                variant:
-                                                                    WantTypographyVariant
-                                                                        .caption,
-                                                                colorRole: 'muted-foreground',
-                                                              ),
-                                                              Text(
-                                                                challenge
-                                                                    .words[i],
-                                                                textDirection:
-                                                                    TextDirection
-                                                                        .ltr,
-                                                              ),
-                                                            ],
-                                                          ),
-                                                        ),
-                                                    ],
-                                                  ),
-                                                _row([
-                                                  WantButton(
-                                                    key: const ValueKey(
-                                                      'recovery-download',
-                                                    ),
-                                                    variant: WantButtonVariant
-                                                        .secondary,
-                                                    onPressed: state.busy
-                                                        ? null
-                                                        : () => unawaited(
-                                                            widget.controller
-                                                                .downloadRecovery(),
-                                                          ),
-                                                    child: Text(
-                                                      _text(
-                                                        'Download',
-                                                        'Скачать',
-                                                      ),
-                                                    ),
-                                                  ),
-                                                  WantButton(
-                                                    key: const ValueKey(
-                                                      'recovery-copy',
-                                                    ),
-                                                    variant: WantButtonVariant
-                                                        .secondary,
-                                                    onPressed: state.busy
-                                                        ? null
-                                                        : () => unawaited(
-                                                            widget.controller
-                                                                .copyRecovery(),
-                                                          ),
-                                                    child: Text(
-                                                      _text(
-                                                        'Copy',
-                                                        'Скопировать',
-                                                      ),
-                                                    ),
-                                                  ),
-                                                  WantButton(
-                                                    key: const ValueKey(
-                                                      'recovery-qr',
-                                                    ),
-                                                    variant: WantButtonVariant
-                                                        .secondary,
-                                                    onPressed: state.busy
-                                                        ? null
-                                                        : () => _showQr(state),
-                                                    child: const Text('QR'),
-                                                  ),
-                                                ]),
-                                                WantTypography(
-                                                  _text(
-                                                    'TXT, clipboard and QR contain the phrase in plain text. Clipboard clears after 60 seconds if unchanged.',
-                                                    'TXT, буфер обмена и QR содержат открытую фразу. Буфер очищается через 60 секунд, если не изменён.',
-                                                  ),
-                                                  colorRole: 'muted-foreground',
-                                                ),
-                                                _hint(
-                                                  'recovery-hint',
-                                                  _text(
-                                                    'Where you keep the phrase (optional)',
-                                                    'Где хранится фраза (необязательно)',
-                                                  ),
-                                                  _recoveryHint,
-                                                  state,
-                                                ),
-                                                WantTypography(
-                                                  _text(
-                                                    'This hint is visible before unlock.',
-                                                    'Эта подсказка видна до разблокировки.',
-                                                  ),
-                                                  colorRole: 'muted-foreground',
-                                                ),
-                                              ]),
-                                              for (var i = 0; i < 3; i++)
-                                                _slide([
-                                                  if (challenge != null) ...[
-                                                    WantTypography(
-                                                      _text(
-                                                        'Choose word ${challenge.positions[i] + 1}',
-                                                        'Выберите слово № ${challenge.positions[i] + 1}',
-                                                      ),
-                                                    ),
-                                                    Wrap(
-                                                      spacing: 8,
-                                                      runSpacing: 8,
-                                                      children: [
-                                                        for (final option
-                                                            in challenge
-                                                                .choices[i])
-                                                          Semantics(
-                                                            selected:
-                                                                state
-                                                                    .setupAnswers[i] ==
-                                                                option,
-                                                            inMutuallyExclusiveGroup:
-                                                                true,
-                                                            child: WantButton(
-                                                              key: ValueKey(
-                                                                'quiz-$i-$option',
-                                                              ),
-                                                              variant:
-                                                                  state.setupAnswers[i] ==
-                                                                      option
-                                                                  ? WantButtonVariant
-                                                                        .primary
-                                                                  : WantButtonVariant
-                                                                        .secondary,
-                                                              onPressed:
-                                                                  state.busy ||
-                                                                      uncertain
-                                                                  ? null
-                                                                  : () => widget
-                                                                        .controller
-                                                                        .chooseSetupWord(
-                                                                          i,
-                                                                          option,
-                                                                        ),
-                                                              child: Text(
-                                                                option,
-                                                                textDirection:
-                                                                    TextDirection
-                                                                        .ltr,
-                                                              ),
-                                                            ),
-                                                          ),
-                                                      ],
-                                                    ),
-                                                  ],
-                                                ]),
-                                            ],
-                                          ),
-                                        )
-                                      else
-                                        Expanded(
-                                          child: _slide([
-                                            if (state.phase ==
-                                                VaultPhase.unlocked) ...[
-                                              WantTypography(
-                                                _text(
-                                                  'There are no secrets in this vault yet.',
-                                                  'В сейфе пока нет секретов.',
-                                                ),
-                                              ),
-                                              WantTypography(
-                                                _text(
-                                                  'Locks after five idle minutes and when your Mac locks or sleeps.',
-                                                  'Блокируется через пять минут бездействия, при блокировке и сне Mac.',
-                                                ),
-                                              ),
-                                              WantButton(
-                                                key: const ValueKey(
-                                                  'vault-lock',
-                                                ),
-                                                onPressed: () => unawaited(
-                                                  widget.controller.lock(),
-                                                ),
-                                                child: Text(
-                                                  _text(
-                                                    'Lock vault',
-                                                    'Заблокировать сейф',
-                                                  ),
-                                                ),
-                                              ),
-                                            ],
-                                            if (state.phase ==
-                                                VaultPhase.locked) ...[
-                                              VaultSecretInput(
-                                                key: const ValueKey(
-                                                  'master-password',
-                                                ),
-                                                label: _text(
-                                                  'Master password',
-                                                  'Мастер-пароль',
-                                                ),
-                                                controller: _password,
-                                                enabled: !state.busy,
-                                                autofocus: false,
-                                                last: true,
-                                                onSubmitted: () => unawaited(
-                                                  widget.controller.unlock(
-                                                    _password.text,
-                                                  ),
-                                                ),
-                                              ),
-                                              _row([
-                                                WantButton(
-                                                  key: const ValueKey(
-                                                    'vault-unlock',
-                                                  ),
-                                                  onPressed: state.busy
-                                                      ? null
-                                                      : () => unawaited(
-                                                          widget.controller
-                                                              .unlock(
-                                                                _password.text,
-                                                              ),
-                                                        ),
-                                                  child: Text(
-                                                    _text(
-                                                      'Unlock',
-                                                      'Разблокировать',
-                                                    ),
-                                                  ),
-                                                ),
-                                                WantButton(
-                                                  key: const ValueKey(
-                                                    'vault-recovery',
-                                                  ),
-                                                  variant: WantButtonVariant
-                                                      .secondary,
-                                                  onPressed: state.busy
-                                                      ? null
-                                                      : () {
-                                                          widget.controller
-                                                              .dismissFailure();
-                                                          setState(
-                                                            () => _showHint =
-                                                                !_showHint,
-                                                          );
-                                                        },
-                                                  child: Text(
-                                                    _text(
-                                                      'Forgot password?',
-                                                      'Забыли пароль?',
-                                                    ),
-                                                  ),
-                                                ),
-                                              ]),
-                                              if (_showHint) ...[
-                                                WantTypography(
-                                                  state.hints.password.isEmpty
-                                                      ? _text(
-                                                          'No password hint was saved.',
-                                                          'Подсказка к паролю не сохранена.',
-                                                        )
-                                                      : state.hints.password,
-                                                ),
-                                                WantButton(
-                                                  key: const ValueKey(
-                                                    'start-recovery',
-                                                  ),
-                                                  variant: WantButtonVariant
-                                                      .secondary,
-                                                  onPressed: state.busy
-                                                      ? null
-                                                      : () {
-                                                          widget.controller
-                                                              .dismissFailure();
-                                                          _password.clear();
-                                                          setState(() {
-                                                            _recovering = true;
-                                                            _step = 0;
-                                                          });
-                                                          WidgetsBinding
-                                                              .instance
-                                                              .addPostFrameCallback((
-                                                                _,
-                                                              ) {
-                                                                if (mounted &&
-                                                                    _pages
-                                                                        .hasClients) {
-                                                                  _pages
-                                                                      .jumpToPage(
-                                                                        0,
-                                                                      );
-                                                                }
-                                                              });
-                                                        },
-                                                  child: Text(
-                                                    _text(
-                                                      'Use recovery phrase',
-                                                      'Восстановить по фразе',
-                                                    ),
-                                                  ),
-                                                ),
-                                              ],
-                                            ],
-                                          ]),
-                                        ),
-                                      if (state.error case final error?)
-                                        WantTypography(
-                                          _error(error),
-                                          colorRole: 'destructive',
-                                          liveRegion: true,
-                                        ),
-                                      if (state.busy)
-                                        WantTypography(
-                                          _text(
-                                            'Working…',
-                                            'Выполняем операцию…',
-                                          ),
-                                          liveRegion: true,
-                                        ),
-                                      if (setup)
-                                        _row([
-                                          if (_step > 0)
-                                            WantButton(
-                                              key: const ValueKey('setup-back'),
-                                              variant:
-                                                  WantButtonVariant.secondary,
-                                              onPressed: state.busy || uncertain
-                                                  ? null
-                                                  : () => _go(_step - 1),
-                                              child: Text(
-                                                _text('Back', 'Назад'),
-                                              ),
-                                            ),
-                                          if (_step == 0 && _recovering)
-                                            WantButton(
-                                              variant:
-                                                  WantButtonVariant.secondary,
-                                              onPressed: state.busy
-                                                  ? null
-                                                  : () => unawaited(
-                                                      widget.controller.lock(),
-                                                    ),
-                                              child: Text(
-                                                _text(
-                                                  'Back to unlock',
-                                                  'К разблокировке',
-                                                ),
-                                              ),
-                                            ),
-                                          WantButton(
-                                            key: ValueKey(
-                                              _step == 1
-                                                  ? (_recovering
-                                                        ? 'vault-recover'
-                                                        : 'vault-create')
-                                                  : _step == 5
-                                                  ? 'vault-confirm'
-                                                  : 'setup-next',
-                                            ),
-                                            onPressed: nextEnabled
-                                                ? () => unawaited(_next(state))
-                                                : null,
-                                            child: Text(
-                                              _step == 5
-                                                  ? _text('Finish', 'Завершить')
-                                                  : _text('Continue', 'Далее'),
-                                            ),
-                                          ),
-                                        ]),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ),
-      );
-    },
-  );
 }

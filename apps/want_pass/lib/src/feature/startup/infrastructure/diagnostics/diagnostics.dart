@@ -37,6 +37,21 @@ final class SafeBlocObserver extends BlocObserver
       VaultUnexpectedErrorV1() => 'unexpectedError',
     };
     final safeOperation = switch (operation) {
+      'VaultController.acknowledge():' ||
+      'VaultController.validateRecovery():' ||
+      'PlatformRecoveryExportService.selectFileV3():' ||
+      'RustVaultAccessService.validateRecoveryV3():' ||
+      'RustVaultAccessService.prepareCreationV3():' ||
+      'RustVaultAccessService.prepareRecoveryV3():' ||
+      'RustVaultAccessService.regenerateRecoveryV3():' ||
+      'RustVaultAccessService.exportRecoveryV3():' ||
+      'RustVaultAccessService.confirmV3():' ||
+      'VaultUseCaseImpl.prepareSetupV3():' ||
+      'VaultUseCaseImpl.confirmSetupV3():' ||
+      'VaultUseCaseImpl.regenerateRecoveryV3():' ||
+      'VaultUseCaseImpl.validateRecoveryV3():' ||
+      'VaultUseCaseImpl.exportRecoveryV3():' ||
+      'VaultUseCaseImpl.selectRecoveryFileV3():' ||
       'PlatformRecoveryExportService.clearClipboardV1():' ||
       'PlatformRecoveryExportService.copyV1():' ||
       'PlatformRecoveryExportService.selectFileV1():' ||
@@ -154,6 +169,21 @@ final class SafeBlocObserver extends BlocObserver
     };
     // Operation text is supplied by fixed call sites, never by an exception or user input.
     final safeOperation = switch (operation) {
+      'VaultController.acknowledge():' ||
+      'VaultController.validateRecovery():' ||
+      'PlatformRecoveryExportService.selectFileV3():' ||
+      'RustVaultAccessService.validateRecoveryV3():' ||
+      'RustVaultAccessService.prepareCreationV3():' ||
+      'RustVaultAccessService.prepareRecoveryV3():' ||
+      'RustVaultAccessService.regenerateRecoveryV3():' ||
+      'RustVaultAccessService.exportRecoveryV3():' ||
+      'RustVaultAccessService.confirmV3():' ||
+      'VaultUseCaseImpl.prepareSetupV3():' ||
+      'VaultUseCaseImpl.confirmSetupV3():' ||
+      'VaultUseCaseImpl.regenerateRecoveryV3():' ||
+      'VaultUseCaseImpl.validateRecoveryV3():' ||
+      'VaultUseCaseImpl.exportRecoveryV3():' ||
+      'VaultUseCaseImpl.selectRecoveryFileV3():' ||
       'AppearanceController.close():' ||
       'AppearanceController.init():' ||
       'AppearanceController.save():' ||

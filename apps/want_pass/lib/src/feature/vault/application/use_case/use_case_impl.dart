@@ -8,7 +8,13 @@ final class VaultUseCaseImpl implements VaultUseCase {
   final VaultAccessService _access;
   final VaultReporter _reporter;
   final RecoveryExportService _export;
-  const VaultUseCaseImpl(this._access, this._reporter, this._export);
+  final GroupLogoService _logos;
+  const VaultUseCaseImpl(
+    this._access,
+    this._reporter,
+    this._export,
+    this._logos,
+  );
   @override
   FutureDomainResult<InitializeVaultResultV1> initializeV1({
     required InitializeVaultParamsV1 params,
@@ -618,6 +624,186 @@ final class VaultUseCaseImpl implements VaultUseCase {
       );
       if (outcome.isError) throw outcome.error;
       return const ValidateVaultRecoveryResultV3();
+    }, mapToDomainError: (_, _) => const VaultUnexpectedErrorV1());
+    if (result.isError) {
+      reportVaultSafely(
+        _reporter,
+        layer: VaultDiagnosticLayer.application,
+        operation: op,
+        error: result.error is VaultErrorV1
+            ? result.error as VaultErrorV1
+            : const VaultUnexpectedErrorV1(),
+      );
+    }
+    return result;
+  }
+
+  @override
+  FutureDomainResult<LoadContentResultV1> loadContentV1({
+    required LoadContentParamsV1 params,
+  }) async {
+    const op = 'VaultUseCaseImpl.loadContentV1():';
+    final result = await captureResult<LoadContentResultV1>(() async {
+      final result = await _access.contentV1(handle: params.handle);
+      if (result.isError) throw result.error;
+      return LoadContentResultV1(snapshot: result.value);
+    }, mapToDomainError: (_, _) => const VaultUnexpectedErrorV1());
+    if (result.isError) {
+      reportVaultSafely(
+        _reporter,
+        layer: VaultDiagnosticLayer.application,
+        operation: op,
+        error: result.error is VaultErrorV1
+            ? result.error as VaultErrorV1
+            : const VaultUnexpectedErrorV1(),
+      );
+    }
+    return result;
+  }
+
+  @override
+  FutureDomainResult<SaveGroupResultV1> saveGroupV1({
+    required SaveGroupParamsV1 params,
+  }) async {
+    const op = 'VaultUseCaseImpl.saveGroupV1():';
+    final result = await captureResult<SaveGroupResultV1>(() async {
+      final result = await _access.saveGroupV1(
+        handle: params.handle,
+        input: params.input,
+        revision: params.revision,
+      );
+      if (result.isError) throw result.error;
+      return SaveGroupResultV1(snapshot: result.value);
+    }, mapToDomainError: (_, _) => const VaultUnexpectedErrorV1());
+    if (result.isError) {
+      reportVaultSafely(
+        _reporter,
+        layer: VaultDiagnosticLayer.application,
+        operation: op,
+        error: result.error is VaultErrorV1
+            ? result.error as VaultErrorV1
+            : const VaultUnexpectedErrorV1(),
+      );
+    }
+    return result;
+  }
+
+  @override
+  FutureDomainResult<DeleteGroupResultV1> deleteGroupV1({
+    required DeleteGroupParamsV1 params,
+  }) async {
+    const op = 'VaultUseCaseImpl.deleteGroupV1():';
+    final result = await captureResult<DeleteGroupResultV1>(() async {
+      final result = await _access.deleteGroupV1(
+        handle: params.handle,
+        id: params.id,
+        revision: params.revision,
+      );
+      if (result.isError) throw result.error;
+      return DeleteGroupResultV1(snapshot: result.value);
+    }, mapToDomainError: (_, _) => const VaultUnexpectedErrorV1());
+    if (result.isError) {
+      reportVaultSafely(
+        _reporter,
+        layer: VaultDiagnosticLayer.application,
+        operation: op,
+        error: result.error is VaultErrorV1
+            ? result.error as VaultErrorV1
+            : const VaultUnexpectedErrorV1(),
+      );
+    }
+    return result;
+  }
+
+  @override
+  FutureDomainResult<ReadAccountResultV1> readAccountV1({
+    required ReadAccountParamsV1 params,
+  }) async {
+    const op = 'VaultUseCaseImpl.readAccountV1():';
+    final result = await captureResult<ReadAccountResultV1>(() async {
+      final result = await _access.accountV1(
+        handle: params.handle,
+        id: params.id,
+      );
+      if (result.isError) throw result.error;
+      return ReadAccountResultV1(account: result.value);
+    }, mapToDomainError: (_, _) => const VaultUnexpectedErrorV1());
+    if (result.isError) {
+      reportVaultSafely(
+        _reporter,
+        layer: VaultDiagnosticLayer.application,
+        operation: op,
+        error: result.error is VaultErrorV1
+            ? result.error as VaultErrorV1
+            : const VaultUnexpectedErrorV1(),
+      );
+    }
+    return result;
+  }
+
+  @override
+  FutureDomainResult<SaveAccountResultV1> saveAccountV1({
+    required SaveAccountParamsV1 params,
+  }) async {
+    const op = 'VaultUseCaseImpl.saveAccountV1():';
+    final result = await captureResult<SaveAccountResultV1>(() async {
+      final result = await _access.saveAccountV1(
+        handle: params.handle,
+        input: params.input,
+        revision: params.revision,
+      );
+      if (result.isError) throw result.error;
+      return SaveAccountResultV1(snapshot: result.value);
+    }, mapToDomainError: (_, _) => const VaultUnexpectedErrorV1());
+    if (result.isError) {
+      reportVaultSafely(
+        _reporter,
+        layer: VaultDiagnosticLayer.application,
+        operation: op,
+        error: result.error is VaultErrorV1
+            ? result.error as VaultErrorV1
+            : const VaultUnexpectedErrorV1(),
+      );
+    }
+    return result;
+  }
+
+  @override
+  FutureDomainResult<DeleteAccountResultV1> deleteAccountV1({
+    required DeleteAccountParamsV1 params,
+  }) async {
+    const op = 'VaultUseCaseImpl.deleteAccountV1():';
+    final result = await captureResult<DeleteAccountResultV1>(() async {
+      final result = await _access.deleteAccountV1(
+        handle: params.handle,
+        id: params.id,
+        revision: params.revision,
+      );
+      if (result.isError) throw result.error;
+      return DeleteAccountResultV1(snapshot: result.value);
+    }, mapToDomainError: (_, _) => const VaultUnexpectedErrorV1());
+    if (result.isError) {
+      reportVaultSafely(
+        _reporter,
+        layer: VaultDiagnosticLayer.application,
+        operation: op,
+        error: result.error is VaultErrorV1
+            ? result.error as VaultErrorV1
+            : const VaultUnexpectedErrorV1(),
+      );
+    }
+    return result;
+  }
+
+  @override
+  FutureDomainResult<SelectGroupLogoResultV1> selectGroupLogoV1({
+    required SelectGroupLogoParamsV1 params,
+  }) async {
+    const op = 'VaultUseCaseImpl.selectGroupLogoV1():';
+    final result = await captureResult<SelectGroupLogoResultV1>(() async {
+      final selected = await _logos.selectV1();
+      if (selected.isError) throw selected.error;
+      return SelectGroupLogoResultV1(bytes: selected.value);
     }, mapToDomainError: (_, _) => const VaultUnexpectedErrorV1());
     if (result.isError) {
       reportVaultSafely(

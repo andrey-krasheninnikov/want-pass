@@ -14,6 +14,7 @@ enum VaultPhase {
 final class VaultState extends Equatable {
   final VaultPhase phase;
   final bool busy;
+  final ContentSnapshotV1? content;
   final bool? passwordValid;
   final bool passwordChecking;
   final bool recovering;
@@ -27,6 +28,7 @@ final class VaultState extends Equatable {
   const VaultState({
     required this.phase,
     this.busy = false,
+    this.content,
     this.passwordValid,
     this.passwordChecking = false,
     this.recovering = false,
@@ -42,6 +44,7 @@ final class VaultState extends Equatable {
   });
   VaultState copyWith({
     bool? busy,
+    ContentSnapshotV1? Function()? content,
     bool? Function()? passwordValid,
     bool? passwordChecking,
     bool? passwordSaved,
@@ -54,6 +57,7 @@ final class VaultState extends Equatable {
   }) => VaultState(
     phase: phase,
     busy: busy ?? this.busy,
+    content: content == null ? this.content : content(),
     passwordValid: passwordValid == null ? this.passwordValid : passwordValid(),
     passwordChecking: passwordChecking ?? this.passwordChecking,
     recovering: recovering,
@@ -71,6 +75,7 @@ final class VaultState extends Equatable {
   List<Object?> get props => [
     phase,
     busy,
+    content,
     passwordValid,
     passwordChecking,
     recovering,

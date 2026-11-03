@@ -1,3 +1,8 @@
+pub(crate) mod content;
+pub use content::{
+    AccountInputV1, AccountRecordV1, AccountSummaryV1, ContentSnapshotV1, GroupInputV1,
+    GroupRecordV1,
+};
 pub(crate) mod v2;
 pub(crate) mod v3;
 use crate::{
@@ -8,7 +13,7 @@ use flutter_rust_bridge::frb;
 use std::{
     path::Path,
     sync::{
-        Mutex,
+        Arc, Mutex,
         atomic::{AtomicU64, Ordering},
     },
 };
@@ -52,7 +57,7 @@ struct Draft {
     expected: Option<[u8; 32]>,
 }
 struct State {
-    store: Store,
+    store: Arc<Store>,
     active: Option<Opened>,
     draft: Option<Draft>,
     draft_v2: Option<v2::DraftV2>,
@@ -77,7 +82,7 @@ impl Vault {
         let store = Store::open(Path::new(&directory))?;
         Ok(Self {
             state: Mutex::new(State {
-                store,
+                store: Arc::new(store),
                 active: None,
                 draft: None,
                 draft_v2: None,
@@ -264,17 +269,20 @@ impl Vault {
     pub fn close(&self) -> Result<(), VaultFailure> {
         self.epoch.fetch_add(1, Ordering::SeqCst);
         let mut state = self.state.lock().map_err(|_| VaultFailure::Unavailable)?;
-        let closed = if !state.closed {
+        let store = if !state.closed {
             state.active = None;
             state.draft = None;
             state.draft_v2 = None;
             state.closed = true;
-            state.store.close()
+            Some(Arc::clone(&state.store))
         } else {
-            Ok(())
+            None
         };
         drop(state);
-        let publication = self.wait_for_exports_v2();
-        closed.and(publication)
+        self.wait_for_exports_v2()?;
+        if let Some(store) = store {
+            store.close()?;
+        }
+        Ok(())
     }
 }

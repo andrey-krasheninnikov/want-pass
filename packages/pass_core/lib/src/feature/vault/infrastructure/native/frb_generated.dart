@@ -62,7 +62,7 @@ class VaultRustLib
   String get codegenVersion => '2.13.0';
 
   @override
-  int get rustContentHash => 1480568977;
+  int get rustContentHash => 1824418032;
 
   static const kDefaultExternalLibraryLoaderConfig =
       ExternalLibraryLoaderConfig(
@@ -74,6 +74,12 @@ class VaultRustLib
 }
 
 abstract class VaultRustLibApi extends BaseApi {
+  Future<AccountRecordV1> crateApiVaultAccountV1({
+    required Vault that,
+    required String id,
+    required BigInt generation,
+  });
+
   Future<void> crateApiVaultClose({required Vault that});
 
   Future<void> crateApiVaultConfirm({
@@ -98,6 +104,25 @@ abstract class VaultRustLibApi extends BaseApi {
     required String passwordHint,
     required String recoveryHint,
     required BigInt revision,
+  });
+
+  Future<ContentSnapshotV1> crateApiVaultContentV1({
+    required Vault that,
+    required BigInt generation,
+  });
+
+  Future<ContentSnapshotV1> crateApiVaultDeleteAccountV1({
+    required Vault that,
+    required String id,
+    required BigInt revision,
+    required BigInt generation,
+  });
+
+  Future<ContentSnapshotV1> crateApiVaultDeleteGroupV1({
+    required Vault that,
+    required String id,
+    required BigInt revision,
+    required BigInt generation,
   });
 
   Future<void> crateApiVaultExportRecoveryV2({
@@ -164,6 +189,20 @@ abstract class VaultRustLibApi extends BaseApi {
     required BigInt generation,
   });
 
+  Future<ContentSnapshotV1> crateApiVaultSaveAccountV1({
+    required Vault that,
+    required AccountInputV1 input,
+    required BigInt revision,
+    required BigInt generation,
+  });
+
+  Future<ContentSnapshotV1> crateApiVaultSaveGroupV1({
+    required Vault that,
+    required GroupInputV1 input,
+    required BigInt revision,
+    required BigInt generation,
+  });
+
   Future<VaultStatus> crateApiVaultStatus({required Vault that});
 
   Future<void> crateApiVaultUnlock({
@@ -205,6 +244,45 @@ class VaultRustLibApiImpl extends VaultRustLibApiImplPlatform
   });
 
   @override
+  Future<AccountRecordV1> crateApiVaultAccountV1({
+    required Vault that,
+    required String id,
+    required BigInt generation,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerVault(
+            that,
+            serializer,
+          );
+          sse_encode_String(id, serializer);
+          sse_encode_u_64(generation, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 1,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_account_record_v_1,
+          decodeErrorData: sse_decode_vault_failure,
+        ),
+        constMeta: kCrateApiVaultAccountV1ConstMeta,
+        argValues: const [],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiVaultAccountV1ConstMeta => const TaskConstMeta(
+    debugName: "Vault_account_v1",
+    argNames: ["that", "id", "generation"],
+  );
+
+  @override
   Future<void> crateApiVaultClose({required Vault that}) {
     return handler.executeNormal(
       NormalTask(
@@ -217,7 +295,7 @@ class VaultRustLibApiImpl extends VaultRustLibApiImplPlatform
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 1,
+            funcId: 2,
             port: port_,
           );
         },
@@ -254,7 +332,7 @@ class VaultRustLibApiImpl extends VaultRustLibApiImplPlatform
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 2,
+            funcId: 3,
             port: port_,
           );
         },
@@ -299,7 +377,7 @@ class VaultRustLibApiImpl extends VaultRustLibApiImplPlatform
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 3,
+            funcId: 4,
             port: port_,
           );
         },
@@ -351,7 +429,7 @@ class VaultRustLibApiImpl extends VaultRustLibApiImplPlatform
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 4,
+            funcId: 5,
             port: port_,
           );
         },
@@ -379,6 +457,126 @@ class VaultRustLibApiImpl extends VaultRustLibApiImplPlatform
   );
 
   @override
+  Future<ContentSnapshotV1> crateApiVaultContentV1({
+    required Vault that,
+    required BigInt generation,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerVault(
+            that,
+            serializer,
+          );
+          sse_encode_u_64(generation, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 6,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_content_snapshot_v_1,
+          decodeErrorData: sse_decode_vault_failure,
+        ),
+        constMeta: kCrateApiVaultContentV1ConstMeta,
+        argValues: const [],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiVaultContentV1ConstMeta => const TaskConstMeta(
+    debugName: "Vault_content_v1",
+    argNames: ["that", "generation"],
+  );
+
+  @override
+  Future<ContentSnapshotV1> crateApiVaultDeleteAccountV1({
+    required Vault that,
+    required String id,
+    required BigInt revision,
+    required BigInt generation,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerVault(
+            that,
+            serializer,
+          );
+          sse_encode_String(id, serializer);
+          sse_encode_u_64(revision, serializer);
+          sse_encode_u_64(generation, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 7,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_content_snapshot_v_1,
+          decodeErrorData: sse_decode_vault_failure,
+        ),
+        constMeta: kCrateApiVaultDeleteAccountV1ConstMeta,
+        argValues: const [],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiVaultDeleteAccountV1ConstMeta =>
+      const TaskConstMeta(
+        debugName: "Vault_delete_account_v1",
+        argNames: ["that", "id", "revision", "generation"],
+      );
+
+  @override
+  Future<ContentSnapshotV1> crateApiVaultDeleteGroupV1({
+    required Vault that,
+    required String id,
+    required BigInt revision,
+    required BigInt generation,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerVault(
+            that,
+            serializer,
+          );
+          sse_encode_String(id, serializer);
+          sse_encode_u_64(revision, serializer);
+          sse_encode_u_64(generation, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 8,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_content_snapshot_v_1,
+          decodeErrorData: sse_decode_vault_failure,
+        ),
+        constMeta: kCrateApiVaultDeleteGroupV1ConstMeta,
+        argValues: const [],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiVaultDeleteGroupV1ConstMeta => const TaskConstMeta(
+    debugName: "Vault_delete_group_v1",
+    argNames: ["that", "id", "revision", "generation"],
+  );
+
+  @override
   Future<void> crateApiVaultExportRecoveryV2({
     required Vault that,
     required String destination,
@@ -397,7 +595,7 @@ class VaultRustLibApiImpl extends VaultRustLibApiImplPlatform
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 5,
+            funcId: 9,
             port: port_,
           );
         },
@@ -437,7 +635,7 @@ class VaultRustLibApiImpl extends VaultRustLibApiImplPlatform
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 6,
+            funcId: 10,
             port: port_,
           );
         },
@@ -468,7 +666,7 @@ class VaultRustLibApiImpl extends VaultRustLibApiImplPlatform
             that,
             serializer,
           );
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 7)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 11)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_u_64,
@@ -497,7 +695,7 @@ class VaultRustLibApiImpl extends VaultRustLibApiImplPlatform
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 8,
+            funcId: 12,
             port: port_,
           );
         },
@@ -525,7 +723,7 @@ class VaultRustLibApiImpl extends VaultRustLibApiImplPlatform
             that,
             serializer,
           );
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 9)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 13)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_unit,
@@ -551,7 +749,7 @@ class VaultRustLibApiImpl extends VaultRustLibApiImplPlatform
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 10,
+            funcId: 14,
             port: port_,
           );
         },
@@ -589,7 +787,7 @@ class VaultRustLibApiImpl extends VaultRustLibApiImplPlatform
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 11,
+            funcId: 15,
             port: port_,
           );
         },
@@ -629,7 +827,7 @@ class VaultRustLibApiImpl extends VaultRustLibApiImplPlatform
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 12,
+            funcId: 16,
             port: port_,
           );
         },
@@ -669,7 +867,7 @@ class VaultRustLibApiImpl extends VaultRustLibApiImplPlatform
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 13,
+            funcId: 17,
             port: port_,
           );
         },
@@ -711,7 +909,7 @@ class VaultRustLibApiImpl extends VaultRustLibApiImplPlatform
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 14,
+            funcId: 18,
             port: port_,
           );
         },
@@ -753,7 +951,7 @@ class VaultRustLibApiImpl extends VaultRustLibApiImplPlatform
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 15,
+            funcId: 19,
             port: port_,
           );
         },
@@ -795,7 +993,7 @@ class VaultRustLibApiImpl extends VaultRustLibApiImplPlatform
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 16,
+            funcId: 20,
             port: port_,
           );
         },
@@ -833,7 +1031,7 @@ class VaultRustLibApiImpl extends VaultRustLibApiImplPlatform
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 17,
+            funcId: 21,
             port: port_,
           );
         },
@@ -855,6 +1053,88 @@ class VaultRustLibApiImpl extends VaultRustLibApiImplPlatform
       );
 
   @override
+  Future<ContentSnapshotV1> crateApiVaultSaveAccountV1({
+    required Vault that,
+    required AccountInputV1 input,
+    required BigInt revision,
+    required BigInt generation,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerVault(
+            that,
+            serializer,
+          );
+          sse_encode_box_autoadd_account_input_v_1(input, serializer);
+          sse_encode_u_64(revision, serializer);
+          sse_encode_u_64(generation, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 22,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_content_snapshot_v_1,
+          decodeErrorData: sse_decode_vault_failure,
+        ),
+        constMeta: kCrateApiVaultSaveAccountV1ConstMeta,
+        argValues: const [],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiVaultSaveAccountV1ConstMeta => const TaskConstMeta(
+    debugName: "Vault_save_account_v1",
+    argNames: ["that", "input", "revision", "generation"],
+  );
+
+  @override
+  Future<ContentSnapshotV1> crateApiVaultSaveGroupV1({
+    required Vault that,
+    required GroupInputV1 input,
+    required BigInt revision,
+    required BigInt generation,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerVault(
+            that,
+            serializer,
+          );
+          sse_encode_box_autoadd_group_input_v_1(input, serializer);
+          sse_encode_u_64(revision, serializer);
+          sse_encode_u_64(generation, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 23,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_content_snapshot_v_1,
+          decodeErrorData: sse_decode_vault_failure,
+        ),
+        constMeta: kCrateApiVaultSaveGroupV1ConstMeta,
+        argValues: const [],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiVaultSaveGroupV1ConstMeta => const TaskConstMeta(
+    debugName: "Vault_save_group_v1",
+    argNames: ["that", "input", "revision", "generation"],
+  );
+
+  @override
   Future<VaultStatus> crateApiVaultStatus({required Vault that}) {
     return handler.executeNormal(
       NormalTask(
@@ -867,7 +1147,7 @@ class VaultRustLibApiImpl extends VaultRustLibApiImplPlatform
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 18,
+            funcId: 24,
             port: port_,
           );
         },
@@ -904,7 +1184,7 @@ class VaultRustLibApiImpl extends VaultRustLibApiImplPlatform
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 19,
+            funcId: 25,
             port: port_,
           );
         },
@@ -943,7 +1223,7 @@ class VaultRustLibApiImpl extends VaultRustLibApiImplPlatform
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 20,
+            funcId: 26,
             port: port_,
           );
         },
@@ -982,7 +1262,7 @@ class VaultRustLibApiImpl extends VaultRustLibApiImplPlatform
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 21,
+            funcId: 27,
             port: port_,
           );
         },
@@ -1016,7 +1296,7 @@ class VaultRustLibApiImpl extends VaultRustLibApiImplPlatform
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 22,
+            funcId: 28,
             port: port_,
           );
         },
@@ -1047,7 +1327,7 @@ class VaultRustLibApiImpl extends VaultRustLibApiImplPlatform
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 23,
+            funcId: 29,
             port: port_,
           );
         },
@@ -1110,9 +1390,109 @@ class VaultRustLibApiImpl extends VaultRustLibApiImplPlatform
   }
 
   @protected
+  AccountInputV1 dco_decode_account_input_v_1(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 6)
+      throw Exception('unexpected arr length: expect 6 but see ${arr.length}');
+    return AccountInputV1(
+      id: dco_decode_opt_String(arr[0]),
+      name: dco_decode_String(arr[1]),
+      description: dco_decode_String(arr[2]),
+      login: dco_decode_String(arr[3]),
+      password: dco_decode_String(arr[4]),
+      groupIds: dco_decode_list_String(arr[5]),
+    );
+  }
+
+  @protected
+  AccountRecordV1 dco_decode_account_record_v_1(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 6)
+      throw Exception('unexpected arr length: expect 6 but see ${arr.length}');
+    return AccountRecordV1(
+      id: dco_decode_String(arr[0]),
+      name: dco_decode_String(arr[1]),
+      description: dco_decode_String(arr[2]),
+      login: dco_decode_String(arr[3]),
+      password: dco_decode_String(arr[4]),
+      groupIds: dco_decode_list_String(arr[5]),
+    );
+  }
+
+  @protected
+  AccountSummaryV1 dco_decode_account_summary_v_1(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 3)
+      throw Exception('unexpected arr length: expect 3 but see ${arr.length}');
+    return AccountSummaryV1(
+      id: dco_decode_String(arr[0]),
+      name: dco_decode_String(arr[1]),
+      groupIds: dco_decode_list_String(arr[2]),
+    );
+  }
+
+  @protected
   bool dco_decode_bool(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return raw as bool;
+  }
+
+  @protected
+  AccountInputV1 dco_decode_box_autoadd_account_input_v_1(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return dco_decode_account_input_v_1(raw);
+  }
+
+  @protected
+  GroupInputV1 dco_decode_box_autoadd_group_input_v_1(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return dco_decode_group_input_v_1(raw);
+  }
+
+  @protected
+  ContentSnapshotV1 dco_decode_content_snapshot_v_1(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 3)
+      throw Exception('unexpected arr length: expect 3 but see ${arr.length}');
+    return ContentSnapshotV1(
+      revision: dco_decode_u_64(arr[0]),
+      groups: dco_decode_list_group_record_v_1(arr[1]),
+      accounts: dco_decode_list_account_summary_v_1(arr[2]),
+    );
+  }
+
+  @protected
+  GroupInputV1 dco_decode_group_input_v_1(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 5)
+      throw Exception('unexpected arr length: expect 5 but see ${arr.length}');
+    return GroupInputV1(
+      id: dco_decode_opt_String(arr[0]),
+      name: dco_decode_String(arr[1]),
+      description: dco_decode_String(arr[2]),
+      icon: dco_decode_String(arr[3]),
+      logo: dco_decode_list_prim_u_8_strict(arr[4]),
+    );
+  }
+
+  @protected
+  GroupRecordV1 dco_decode_group_record_v_1(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 5)
+      throw Exception('unexpected arr length: expect 5 but see ${arr.length}');
+    return GroupRecordV1(
+      id: dco_decode_String(arr[0]),
+      name: dco_decode_String(arr[1]),
+      description: dco_decode_String(arr[2]),
+      icon: dco_decode_String(arr[3]),
+      logo: dco_decode_list_prim_u_8_strict(arr[4]),
+    );
   }
 
   @protected
@@ -1125,6 +1505,18 @@ class VaultRustLibApiImpl extends VaultRustLibApiImplPlatform
   List<String> dco_decode_list_String(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return (raw as List<dynamic>).map(dco_decode_String).toList();
+  }
+
+  @protected
+  List<AccountSummaryV1> dco_decode_list_account_summary_v_1(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return (raw as List<dynamic>).map(dco_decode_account_summary_v_1).toList();
+  }
+
+  @protected
+  List<GroupRecordV1> dco_decode_list_group_record_v_1(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return (raw as List<dynamic>).map(dco_decode_group_record_v_1).toList();
   }
 
   @protected
@@ -1143,6 +1535,12 @@ class VaultRustLibApiImpl extends VaultRustLibApiImplPlatform
   Uint8List dco_decode_list_prim_u_8_strict(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return raw as Uint8List;
+  }
+
+  @protected
+  String? dco_decode_opt_String(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw == null ? null : dco_decode_String(raw);
   }
 
   @protected
@@ -1283,9 +1681,123 @@ class VaultRustLibApiImpl extends VaultRustLibApiImplPlatform
   }
 
   @protected
+  AccountInputV1 sse_decode_account_input_v_1(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_id = sse_decode_opt_String(deserializer);
+    var var_name = sse_decode_String(deserializer);
+    var var_description = sse_decode_String(deserializer);
+    var var_login = sse_decode_String(deserializer);
+    var var_password = sse_decode_String(deserializer);
+    var var_groupIds = sse_decode_list_String(deserializer);
+    return AccountInputV1(
+      id: var_id,
+      name: var_name,
+      description: var_description,
+      login: var_login,
+      password: var_password,
+      groupIds: var_groupIds,
+    );
+  }
+
+  @protected
+  AccountRecordV1 sse_decode_account_record_v_1(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_id = sse_decode_String(deserializer);
+    var var_name = sse_decode_String(deserializer);
+    var var_description = sse_decode_String(deserializer);
+    var var_login = sse_decode_String(deserializer);
+    var var_password = sse_decode_String(deserializer);
+    var var_groupIds = sse_decode_list_String(deserializer);
+    return AccountRecordV1(
+      id: var_id,
+      name: var_name,
+      description: var_description,
+      login: var_login,
+      password: var_password,
+      groupIds: var_groupIds,
+    );
+  }
+
+  @protected
+  AccountSummaryV1 sse_decode_account_summary_v_1(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_id = sse_decode_String(deserializer);
+    var var_name = sse_decode_String(deserializer);
+    var var_groupIds = sse_decode_list_String(deserializer);
+    return AccountSummaryV1(id: var_id, name: var_name, groupIds: var_groupIds);
+  }
+
+  @protected
   bool sse_decode_bool(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     return deserializer.buffer.getUint8() != 0;
+  }
+
+  @protected
+  AccountInputV1 sse_decode_box_autoadd_account_input_v_1(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return (sse_decode_account_input_v_1(deserializer));
+  }
+
+  @protected
+  GroupInputV1 sse_decode_box_autoadd_group_input_v_1(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return (sse_decode_group_input_v_1(deserializer));
+  }
+
+  @protected
+  ContentSnapshotV1 sse_decode_content_snapshot_v_1(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_revision = sse_decode_u_64(deserializer);
+    var var_groups = sse_decode_list_group_record_v_1(deserializer);
+    var var_accounts = sse_decode_list_account_summary_v_1(deserializer);
+    return ContentSnapshotV1(
+      revision: var_revision,
+      groups: var_groups,
+      accounts: var_accounts,
+    );
+  }
+
+  @protected
+  GroupInputV1 sse_decode_group_input_v_1(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_id = sse_decode_opt_String(deserializer);
+    var var_name = sse_decode_String(deserializer);
+    var var_description = sse_decode_String(deserializer);
+    var var_icon = sse_decode_String(deserializer);
+    var var_logo = sse_decode_list_prim_u_8_strict(deserializer);
+    return GroupInputV1(
+      id: var_id,
+      name: var_name,
+      description: var_description,
+      icon: var_icon,
+      logo: var_logo,
+    );
+  }
+
+  @protected
+  GroupRecordV1 sse_decode_group_record_v_1(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_id = sse_decode_String(deserializer);
+    var var_name = sse_decode_String(deserializer);
+    var var_description = sse_decode_String(deserializer);
+    var var_icon = sse_decode_String(deserializer);
+    var var_logo = sse_decode_list_prim_u_8_strict(deserializer);
+    return GroupRecordV1(
+      id: var_id,
+      name: var_name,
+      description: var_description,
+      icon: var_icon,
+      logo: var_logo,
+    );
   }
 
   @protected
@@ -1302,6 +1814,34 @@ class VaultRustLibApiImpl extends VaultRustLibApiImplPlatform
     var ans_ = <String>[];
     for (var idx_ = 0; idx_ < len_; ++idx_) {
       ans_.add(sse_decode_String(deserializer));
+    }
+    return ans_;
+  }
+
+  @protected
+  List<AccountSummaryV1> sse_decode_list_account_summary_v_1(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var len_ = sse_decode_i_32(deserializer);
+    var ans_ = <AccountSummaryV1>[];
+    for (var idx_ = 0; idx_ < len_; ++idx_) {
+      ans_.add(sse_decode_account_summary_v_1(deserializer));
+    }
+    return ans_;
+  }
+
+  @protected
+  List<GroupRecordV1> sse_decode_list_group_record_v_1(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var len_ = sse_decode_i_32(deserializer);
+    var ans_ = <GroupRecordV1>[];
+    for (var idx_ = 0; idx_ < len_; ++idx_) {
+      ans_.add(sse_decode_group_record_v_1(deserializer));
     }
     return ans_;
   }
@@ -1330,6 +1870,17 @@ class VaultRustLibApiImpl extends VaultRustLibApiImplPlatform
     // Codec=Sse (Serialization based), see doc to use other codecs
     var len_ = sse_decode_i_32(deserializer);
     return deserializer.buffer.getUint8List(len_);
+  }
+
+  @protected
+  String? sse_decode_opt_String(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    if (sse_decode_bool(deserializer)) {
+      return (sse_decode_String(deserializer));
+    } else {
+      return null;
+    }
   }
 
   @protected
@@ -1473,9 +2024,100 @@ class VaultRustLibApiImpl extends VaultRustLibApiImplPlatform
   }
 
   @protected
+  void sse_encode_account_input_v_1(
+    AccountInputV1 self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_opt_String(self.id, serializer);
+    sse_encode_String(self.name, serializer);
+    sse_encode_String(self.description, serializer);
+    sse_encode_String(self.login, serializer);
+    sse_encode_String(self.password, serializer);
+    sse_encode_list_String(self.groupIds, serializer);
+  }
+
+  @protected
+  void sse_encode_account_record_v_1(
+    AccountRecordV1 self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_String(self.id, serializer);
+    sse_encode_String(self.name, serializer);
+    sse_encode_String(self.description, serializer);
+    sse_encode_String(self.login, serializer);
+    sse_encode_String(self.password, serializer);
+    sse_encode_list_String(self.groupIds, serializer);
+  }
+
+  @protected
+  void sse_encode_account_summary_v_1(
+    AccountSummaryV1 self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_String(self.id, serializer);
+    sse_encode_String(self.name, serializer);
+    sse_encode_list_String(self.groupIds, serializer);
+  }
+
+  @protected
   void sse_encode_bool(bool self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     serializer.buffer.putUint8(self ? 1 : 0);
+  }
+
+  @protected
+  void sse_encode_box_autoadd_account_input_v_1(
+    AccountInputV1 self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_account_input_v_1(self, serializer);
+  }
+
+  @protected
+  void sse_encode_box_autoadd_group_input_v_1(
+    GroupInputV1 self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_group_input_v_1(self, serializer);
+  }
+
+  @protected
+  void sse_encode_content_snapshot_v_1(
+    ContentSnapshotV1 self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_u_64(self.revision, serializer);
+    sse_encode_list_group_record_v_1(self.groups, serializer);
+    sse_encode_list_account_summary_v_1(self.accounts, serializer);
+  }
+
+  @protected
+  void sse_encode_group_input_v_1(GroupInputV1 self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_opt_String(self.id, serializer);
+    sse_encode_String(self.name, serializer);
+    sse_encode_String(self.description, serializer);
+    sse_encode_String(self.icon, serializer);
+    sse_encode_list_prim_u_8_strict(self.logo, serializer);
+  }
+
+  @protected
+  void sse_encode_group_record_v_1(
+    GroupRecordV1 self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_String(self.id, serializer);
+    sse_encode_String(self.name, serializer);
+    sse_encode_String(self.description, serializer);
+    sse_encode_String(self.icon, serializer);
+    sse_encode_list_prim_u_8_strict(self.logo, serializer);
   }
 
   @protected
@@ -1490,6 +2132,30 @@ class VaultRustLibApiImpl extends VaultRustLibApiImplPlatform
     sse_encode_i_32(self.length, serializer);
     for (final item in self) {
       sse_encode_String(item, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_list_account_summary_v_1(
+    List<AccountSummaryV1> self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    for (final item in self) {
+      sse_encode_account_summary_v_1(item, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_list_group_record_v_1(
+    List<GroupRecordV1> self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    for (final item in self) {
+      sse_encode_group_record_v_1(item, serializer);
     }
   }
 
@@ -1523,6 +2189,16 @@ class VaultRustLibApiImpl extends VaultRustLibApiImplPlatform
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_i_32(self.length, serializer);
     serializer.buffer.putUint8List(self);
+  }
+
+  @protected
+  void sse_encode_opt_String(String? self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    sse_encode_bool(self != null, serializer);
+    if (self != null) {
+      sse_encode_String(self, serializer);
+    }
   }
 
   @protected
@@ -1627,6 +2303,15 @@ class VaultImpl extends RustOpaque implements Vault {
         VaultRustLib.instance.api.rust_arc_decrement_strong_count_VaultPtr,
   );
 
+  Future<AccountRecordV1> accountV1({
+    required String id,
+    required BigInt generation,
+  }) => VaultRustLib.instance.api.crateApiVaultAccountV1(
+    that: this,
+    id: id,
+    generation: generation,
+  );
+
   Future<void> close() =>
       VaultRustLib.instance.api.crateApiVaultClose(that: this);
 
@@ -1667,6 +2352,34 @@ class VaultImpl extends RustOpaque implements Vault {
     passwordHint: passwordHint,
     recoveryHint: recoveryHint,
     revision: revision,
+  );
+
+  Future<ContentSnapshotV1> contentV1({required BigInt generation}) =>
+      VaultRustLib.instance.api.crateApiVaultContentV1(
+        that: this,
+        generation: generation,
+      );
+
+  Future<ContentSnapshotV1> deleteAccountV1({
+    required String id,
+    required BigInt revision,
+    required BigInt generation,
+  }) => VaultRustLib.instance.api.crateApiVaultDeleteAccountV1(
+    that: this,
+    id: id,
+    revision: revision,
+    generation: generation,
+  );
+
+  Future<ContentSnapshotV1> deleteGroupV1({
+    required String id,
+    required BigInt revision,
+    required BigInt generation,
+  }) => VaultRustLib.instance.api.crateApiVaultDeleteGroupV1(
+    that: this,
+    id: id,
+    revision: revision,
+    generation: generation,
   );
 
   Future<void> exportRecoveryV2({
@@ -1759,6 +2472,28 @@ class VaultImpl extends RustOpaque implements Vault {
     required BigInt generation,
   }) => VaultRustLib.instance.api.crateApiVaultRegenerateRecoveryV3(
     that: this,
+    generation: generation,
+  );
+
+  Future<ContentSnapshotV1> saveAccountV1({
+    required AccountInputV1 input,
+    required BigInt revision,
+    required BigInt generation,
+  }) => VaultRustLib.instance.api.crateApiVaultSaveAccountV1(
+    that: this,
+    input: input,
+    revision: revision,
+    generation: generation,
+  );
+
+  Future<ContentSnapshotV1> saveGroupV1({
+    required GroupInputV1 input,
+    required BigInt revision,
+    required BigInt generation,
+  }) => VaultRustLib.instance.api.crateApiVaultSaveGroupV1(
+    that: this,
+    input: input,
+    revision: revision,
     generation: generation,
   );
 

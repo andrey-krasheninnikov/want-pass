@@ -1,6 +1,8 @@
 import 'dart:io';
 import 'dart:ui' as ui;
 
+import 'package:forui/forui.dart';
+
 import 'package:flutter/rendering.dart';
 
 import 'package:flutter/widgets.dart';
@@ -109,6 +111,44 @@ void main() {
           tester,
           () => runtime.vault.state.phase == VaultPhase.unlocked,
         );
+        await _until(
+          tester,
+          () =>
+              runtime.vault.state.content != null && !runtime.vault.state.busy,
+        );
+        await _tap(tester, 'group-create');
+        await _enter(tester, 'group-name', 'Synthetic native group');
+        await _enter(
+          tester,
+          'group-description',
+          'Synthetic native description',
+        );
+        await _tap(tester, 'group-save');
+        await _until(
+          tester,
+          () =>
+              runtime.vault.state.content!.groups.isNotEmpty &&
+              !runtime.vault.state.busy,
+        );
+        final groupId = runtime.vault.state.content!.groups.single.id;
+        await _tap(tester, 'account-create');
+        await _enter(tester, 'account-name', 'Synthetic native card');
+        await _enter(tester, 'account-login', 'fixture@example.invalid');
+        final visibility = find.descendant(
+          of: find.byKey(const ValueKey('account-password')),
+          matching: find.byType(FButton),
+        );
+        await tester.tap(visibility);
+        await _settle(tester);
+        await _enter(tester, 'account-password', 'Synthetic\naccount value');
+        await _tap(tester, 'account-group-$groupId');
+        await _tap(tester, 'account-save');
+        await _until(
+          tester,
+          () =>
+              runtime.vault.state.content!.accounts.isNotEmpty &&
+              !runtime.vault.state.busy,
+        );
         await _tap(tester, 'vault-dial');
         await _until(
           tester,
@@ -169,6 +209,21 @@ void main() {
         );
         expect(find.byKey(const ValueKey('vault-dial')), findsOneWidget);
       }
+      await _until(
+        tester,
+        () => runtime.vault.state.content != null && !runtime.vault.state.busy,
+      );
+      final snapshot = runtime.vault.state.content!;
+      expect(snapshot.groups.single.name, 'Synthetic native group');
+      expect(
+        snapshot.groups.single.description,
+        'Synthetic native description',
+      );
+      expect(snapshot.accounts.single.groupIds, [snapshot.groups.single.id]);
+      final account = await runtime.vault.readAccount(
+        snapshot.accounts.single.id,
+      );
+      expect(account!.password, 'Synthetic\naccount value');
       completed = true;
     } finally {
       FlutterError.onError = productErrorHandler;
@@ -199,7 +254,9 @@ Future<void> _enter(WidgetTester tester, String key, String value) async {
   await tester.pump();
   expect(
     tester.widget<EditableText>(field).controller.text,
-    key == 'recovery-phrase' ? value : value.replaceAll('\n', ''),
+    key == 'recovery-phrase' || key == 'account-password'
+        ? value
+        : value.replaceAll('\n', ''),
   );
 }
 

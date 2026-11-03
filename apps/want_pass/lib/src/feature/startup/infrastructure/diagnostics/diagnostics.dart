@@ -37,6 +37,27 @@ final class SafeBlocObserver extends BlocObserver
       VaultUnexpectedErrorV1() => 'unexpectedError',
     };
     final safeOperation = switch (operation) {
+      'RustVaultAccessService.contentV1():' ||
+      'RustVaultAccessService.saveGroupV1():' ||
+      'RustVaultAccessService.deleteGroupV1():' ||
+      'RustVaultAccessService.accountV1():' ||
+      'RustVaultAccessService.saveAccountV1():' ||
+      'RustVaultAccessService.deleteAccountV1():' ||
+      'VaultUseCaseImpl.loadContentV1():' ||
+      'VaultUseCaseImpl.saveGroupV1():' ||
+      'VaultUseCaseImpl.deleteGroupV1():' ||
+      'VaultUseCaseImpl.readAccountV1():' ||
+      'VaultUseCaseImpl.saveAccountV1():' ||
+      'VaultUseCaseImpl.deleteAccountV1():' ||
+      'VaultUseCaseImpl.selectGroupLogoV1():' ||
+      'VaultController.loadContent():' ||
+      'VaultController.saveGroup():' ||
+      'VaultController.deleteGroup():' ||
+      'VaultController.readAccount():' ||
+      'VaultController.saveAccount():' ||
+      'VaultController.deleteAccount():' ||
+      'VaultController.selectGroupLogo():' ||
+      'PlatformGroupLogoService.selectV1():' ||
       'VaultController.validatePassword():' ||
       'RustVaultAccessService.validatePasswordV3():' ||
       'RustVaultAccessService.unlockV3():' ||

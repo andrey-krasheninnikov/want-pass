@@ -801,7 +801,9 @@ class _VaultPageState extends State<VaultPage> {
               child: SafeArea(
                 child: Center(
                   child: ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 720),
+                    constraints: BoxConstraints(
+                      maxWidth: state.phase == VaultPhase.unlocked ? 1200 : 720,
+                    ),
                     child: Padding(
                       padding: const EdgeInsets.all(20),
                       child: Column(
@@ -859,6 +861,13 @@ class _VaultPageState extends State<VaultPage> {
                                               physics:
                                                   const NeverScrollableScrollPhysics(),
                                               children: _slides(state),
+                                            ),
+                                          )
+                                        else if (state.phase ==
+                                            VaultPhase.unlocked)
+                                          Expanded(
+                                            child: VaultContentView(
+                                              controller: widget.controller,
                                             ),
                                           )
                                         else

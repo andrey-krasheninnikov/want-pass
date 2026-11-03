@@ -345,3 +345,32 @@ pub fn open_recovery(bytes: &[u8], phrase: &str) -> Result<Opened, VaultFailure>
     )?;
     open_key(bytes, unwrapped)
 }
+
+// Preserve authenticated key slots; document edits never need the master password.
+pub fn replace_document(
+    bytes: &[u8],
+    opened: &Opened,
+    document: &[u8],
+) -> Result<Vec<u8>, VaultFailure> {
+    let header_len = header(bytes)? + 144;
+    if document.len() > MAX_FILE - header_len - 44 {
+        return Err(VaultFailure::Unsupported);
+    }
+    let verified = open_key(bytes, Zeroizing::new(opened.key.to_vec()))?;
+    if verified.id != opened.id || verified.document.as_slice() != opened.document.as_slice() {
+        return Err(VaultFailure::Stale);
+    }
+    let nonce = random::<24>()?;
+    let mut plaintext = Zeroizing::new(1_u32.to_le_bytes().to_vec());
+    plaintext.extend_from_slice(document);
+    let ciphertext = encrypt(
+        opened.key.as_ref(),
+        &nonce,
+        &plaintext,
+        &context(&bytes[..header_len], b"/payload"),
+    )?;
+    let mut candidate = bytes[..header_len].to_vec();
+    candidate.extend_from_slice(&nonce);
+    candidate.extend_from_slice(&ciphertext);
+    Ok(candidate)
+}

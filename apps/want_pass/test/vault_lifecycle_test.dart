@@ -108,6 +108,7 @@ void main() {
         access,
         const _Reporter(),
         const PlatformRecoveryExportService(_Reporter()),
+        const PlatformGroupLogoService(_Reporter()),
       );
       final mismatch = await useCase.prepareCreationV1(
         params: PrepareVaultCreationParamsV1(
@@ -1062,6 +1063,83 @@ void main() {
     },
   );
 
+  test(
+    'mutation lock errors preserve a pending automatic hints load',
+    () async {
+      final access = _Access();
+      access.handle
+        ..exists = true
+        ..state = VaultAccessStateV1.unlocked;
+      final events = StreamController<VaultLockSignal>.broadcast();
+      addTearDown(events.close);
+      final controller = _controller(access, events.stream);
+      addTearDown(controller.close);
+      await controller.init();
+      expect(controller.state.phase, VaultPhase.unlocked);
+      await controller.loadContent();
+      access.contentFailure = const VaultRejectedErrorV1(
+        VaultFailureKindV1.stale,
+      );
+      access.hintsReply = Completer<DomainResult<VaultHintsDtoV2>>();
+      final subscription = controller.stream.listen((state) {
+        if (state.phase == VaultPhase.locked && !state.busy) {
+          unawaited(controller.readHints());
+        }
+      });
+      addTearDown(() async {
+        await subscription.cancel();
+        if (!access.hintsReply!.isCompleted) {
+          access.hintsReply!.complete(const Result.success(VaultHintsDtoV2()));
+        }
+      });
+      await controller.saveGroup(const GroupDraftV1(name: 'Fixture group'));
+      await Future<void>.delayed(Duration.zero);
+      expect(controller.state.busy, isTrue);
+      expect(controller.state.error, access.contentFailure);
+      await subscription.cancel();
+      access.hintsReply!.complete(const Result.success(VaultHintsDtoV2()));
+      await Future<void>.delayed(Duration.zero);
+    },
+  );
+  test(
+    'a late mutation lock cannot attach errors to a newer session',
+    () async {
+      final access = _Access();
+      access.handle
+        ..exists = true
+        ..state = VaultAccessStateV1.unlocked;
+      final events = StreamController<VaultLockSignal>.broadcast();
+      addTearDown(events.close);
+      final controller = _controller(access, events.stream);
+      addTearDown(controller.close);
+      await controller.init();
+      expect(controller.state.phase, VaultPhase.unlocked);
+      await controller.loadContent();
+      access.contentFailure = const VaultRejectedErrorV1(
+        VaultFailureKindV1.stale,
+      );
+      final oldStatus = Completer<DomainResult<VaultAccessStateV1>>();
+      addTearDown(() {
+        if (!oldStatus.isCompleted) {
+          oldStatus.complete(const Result.success(VaultAccessStateV1.locked));
+        }
+      });
+      access.statusReplies.add(oldStatus);
+      final oldSave = controller.saveGroup(
+        const GroupDraftV1(name: 'Fixture group'),
+      );
+      for (var i = 0; i < 20 && access.statusReplies.isNotEmpty; i++) {
+        await Future<void>.delayed(Duration.zero);
+      }
+      expect(access.statusReplies, isEmpty);
+      await controller.lock();
+      await controller.unlock(_password);
+      oldStatus.complete(const Result.success(VaultAccessStateV1.locked));
+      await oldSave;
+      expect(controller.state.phase, VaultPhase.unlocked);
+      expect(controller.state.error, isNull);
+    },
+  );
   test('background initialization does not open the vault', () async {
     final access = _Access();
     await LaunchMode.withBackgroundMode(() async {
@@ -1083,6 +1161,7 @@ VaultController _controller(
     access,
     const _Reporter(),
     export ?? const PlatformRecoveryExportService(_Reporter()),
+    const PlatformGroupLogoService(_Reporter()),
   ),
   const _Reporter(),
   events,
@@ -1107,6 +1186,55 @@ final class _Handle implements VaultHandleV1 {
 }
 
 final class _Access implements VaultAccessService {
+  @override
+  FutureDomainResult<ContentSnapshotV1> contentV1({
+    required VaultHandleV1 handle,
+  }) async => Result.success(
+    ContentSnapshotV1(
+      revision: BigInt.zero,
+      groups: const [],
+      accounts: const [],
+    ),
+  );
+  @override
+  FutureDomainResult<ContentSnapshotV1> saveGroupV1({
+    required VaultHandleV1 handle,
+    required GroupDraftV1 input,
+    required BigInt revision,
+  }) async => Result.error(
+    contentFailure ??
+        const VaultRejectedErrorV1(VaultFailureKindV1.unavailable),
+  );
+  @override
+  FutureDomainResult<ContentSnapshotV1> deleteGroupV1({
+    required VaultHandleV1 handle,
+    required String id,
+    required BigInt revision,
+  }) async =>
+      const Result.error(VaultRejectedErrorV1(VaultFailureKindV1.unavailable));
+  @override
+  FutureDomainResult<AccountV1> accountV1({
+    required VaultHandleV1 handle,
+    required String id,
+  }) async =>
+      const Result.error(VaultRejectedErrorV1(VaultFailureKindV1.unavailable));
+  @override
+  FutureDomainResult<ContentSnapshotV1> saveAccountV1({
+    required VaultHandleV1 handle,
+    required AccountDraftV1 input,
+    required BigInt revision,
+  }) async =>
+      const Result.error(VaultRejectedErrorV1(VaultFailureKindV1.unavailable));
+  @override
+  FutureDomainResult<ContentSnapshotV1> deleteAccountV1({
+    required VaultHandleV1 handle,
+    required String id,
+    required BigInt revision,
+  }) async =>
+      const Result.error(VaultRejectedErrorV1(VaultFailureKindV1.unavailable));
+
+  VaultErrorV1? contentFailure;
+  Completer<DomainResult<VaultHintsDtoV2>>? hintsReply;
   BigInt revision = BigInt.zero;
   VaultErrorV1? regenerationFailure;
   VaultErrorV1? validationFailure;
@@ -1192,7 +1320,9 @@ final class _Access implements VaultAccessService {
   @override
   FutureDomainResult<VaultHintsDtoV2> hintsV2({
     required VaultHandleV1 handle,
-  }) async => const Result.success(VaultHintsDtoV2());
+  }) =>
+      hintsReply?.future ??
+      Future.value(const Result.success(VaultHintsDtoV2()));
   @override
   FutureDomainResult<VaultRecoveryChallengeV2> prepareCreationV2({
     required VaultHandleV1 handle,

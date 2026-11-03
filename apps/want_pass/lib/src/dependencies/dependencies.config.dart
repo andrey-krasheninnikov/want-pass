@@ -18,7 +18,8 @@ import 'package:want_pass/src/feature/startup/application/_barrel.dart'
 import 'package:want_pass/src/feature/vault/application/_barrel.dart' as _i849;
 
 import 'package:want_pass/src/feature/vault/infrastructure/_barrel.dart'
-    as _i84;
+    as _i293;
+
 import 'package:want_pass_core/want_pass_core.dart' as _i73;
 
 extension GetItInjectableX on _i174.GetIt {
@@ -29,12 +30,23 @@ extension GetItInjectableX on _i174.GetIt {
   }) async {
     final gh = _i526.GetItHelper(this, environment, environmentFilter);
     gh.singleton<_i849.RecoveryExportService>(
-      () => _i84.PlatformRecoveryExportService(gh<_i73.VaultReporter>()),
+      () => _i293.PlatformRecoveryExportService(gh<_i73.VaultReporter>()),
+    );
+    gh.singleton<_i849.GroupLogoService>(
+      () => _i293.PlatformGroupLogoService(gh<_i73.VaultReporter>()),
     );
     gh.singleton<_i121.StartupUseCase>(
       () => _i121.StartupUseCaseImpl(
         gh<_i73.StartupAccessService>(),
         gh<_i73.StartupReporter>(),
+      ),
+    );
+    gh.singleton<_i849.VaultUseCase>(
+      () => _i849.VaultUseCaseImpl(
+        gh<_i73.VaultAccessService>(),
+        gh<_i73.VaultReporter>(),
+        gh<_i849.RecoveryExportService>(),
+        gh<_i849.GroupLogoService>(),
       ),
     );
     await gh.singletonAsync<_i121.StartupController>(
@@ -52,13 +64,6 @@ extension GetItInjectableX on _i174.GetIt {
       () => _i792.FileAppearancePreferencesService(
         gh<String>(instanceName: 'preferencesDirectory'),
         gh<_i73.StartupReporter>(),
-      ),
-    );
-    gh.singleton<_i849.VaultUseCase>(
-      () => _i849.VaultUseCaseImpl(
-        gh<_i73.VaultAccessService>(),
-        gh<_i73.VaultReporter>(),
-        gh<_i849.RecoveryExportService>(),
       ),
     );
     gh.singleton<_i984.AppearanceUseCase>(

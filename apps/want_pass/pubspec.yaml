@@ -18,11 +18,14 @@ dependencies:
   get_it: ^9.3.0
   injectable: ^3.0.0
   launch_mode: 0.2.0
+  path_provider: 2.1.6
   talker: ^5.1.20
   talker_bloc_effects: 0.1.0
   want_allure: 1.0.0
   want_pass_core: ^0.1.0
 dev_dependencies:
+  integration_test:
+    sdk: flutter
   build: ^4.0.11
   dart_style: ^3.1.14
   source_gen: ^4.2.4

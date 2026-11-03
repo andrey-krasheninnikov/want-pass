@@ -9,7 +9,7 @@ import 'package:talker_bloc_effects/talker_bloc_effects.dart';
 import 'package:want_pass_core/want_pass_core.dart';
 
 final class SafeBlocObserver extends BlocObserver
-    implements BlocWithEffectsObserver, StartupReporter {
+    implements BlocWithEffectsObserver, StartupReporter, VaultReporter {
   final Talker _talker;
   final TalkerBlocEffectsObserver _effects;
 
@@ -25,6 +25,55 @@ final class SafeBlocObserver extends BlocObserver
           effectFilter: (_, effect) => effect is StartupDiagnosticEvent,
         ),
       );
+
+  @override
+  void reportVault({
+    required VaultDiagnosticLayer layer,
+    required String operation,
+    required VaultErrorV1 error,
+  }) {
+    final marker = switch (error) {
+      VaultRejectedErrorV1(:final kind) => kind.name,
+      VaultUnexpectedErrorV1() => 'unexpectedError',
+    };
+    final safeOperation = switch (operation) {
+      'RustVaultAccessService.openV1():' ||
+      'RustVaultAccessService.statusV1():' ||
+      'RustVaultAccessService.prepareCreationV1():' ||
+      'RustVaultAccessService.prepareRecoveryV1():' ||
+      'RustVaultAccessService.confirmV1():' ||
+      'RustVaultAccessService.unlockV1():' ||
+      'VaultUseCaseImpl.initializeV1():' ||
+      'VaultUseCaseImpl.prepareCreationV1():' ||
+      'VaultUseCaseImpl.prepareRecoveryV1():' ||
+      'VaultUseCaseImpl.confirmCreationV1():' ||
+      'VaultUseCaseImpl.confirmRecoveryV1():' ||
+      'VaultUseCaseImpl.unlockV1():' ||
+      'VaultUseCaseImpl.lockV1():' ||
+      'VaultUseCaseImpl.closeV1():' ||
+      'VaultController.init():' ||
+      'VaultController.prepareCreation():' ||
+      'VaultController.prepareRecovery():' ||
+      'VaultController.confirm():' ||
+      'VaultController.unlock():' ||
+      'VaultController.lock():' ||
+      'VaultController.activity():' ||
+      'VaultController._monitorLost():' ||
+      'VaultController.close():' ||
+      '_NativeVaultHandle.invalidateSync():' ||
+      '_NativeVaultHandle.close():' ||
+      'createVaultLockEvents():' => operation,
+      _ => 'unknownOperation',
+    };
+    try {
+      _talker.log(
+        '${layer.name} $safeOperation $marker',
+        logLevel: LogLevel.warning,
+      );
+    } on Object {
+      // Diagnostics cannot interrupt a vault operation.
+    }
+  }
 
   @override
   void onError(BlocBase<dynamic> bloc, Object error, StackTrace stackTrace) {

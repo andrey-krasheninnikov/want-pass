@@ -26,9 +26,34 @@ A separate random 32-byte entropy value becomes 24 English BIP39 words with chec
 
 Отдельная случайная энтропия 32 байта кодируется 24 английскими словами BIP39 с checksum. BIP39 используется только как кодировка энтропии: wallet seed и пользовательская произвольная фраза не применяются. Из восстановленной энтропии recovery-ключ получается через HKDF-SHA256 с vault ID в качестве соли и `WantPass/recovery/v1` в качестве info. Создание и recovery записываются только после подтверждения трёх различных случайных слов. Фраза не сохраняется в сейфе или логах и не является резервной копией файла.
 
-The canonical binary header contains only magic, format/suite/profile identifiers, random vault ID and password salt. Each key slot authenticates that header and a distinct password/recovery context. The payload authenticates the complete header including both encrypted slots. Names, groups, environments, revisions, attachments and all other user document fields belong inside the encrypted payload. V1 refuses files over 64 MiB before allocation. Exact byte layout and fixture checks live beside the codec tests.
+The canonical binary header contains only magic, format/suite/profile identifiers, random vault ID and password salt. Each key slot authenticates that header and a distinct password/recovery context. The payload authenticates the complete header including both encrypted slots. Names, groups, environments, revisions, attachments and all other user document fields belong inside the encrypted payload. V1 refuses files over 64 MiB before allocation. The byte layout is defined below and checked by codec tests.
 
-Канонический бинарный заголовок содержит только magic, идентификаторы формата/алгоритмов/профиля, случайный vault ID и соль пароля. Каждый key slot аутентифицирует заголовок и отдельный контекст password/recovery. Payload аутентифицирует полный заголовок с обоими зашифрованными slots. Названия, группы, окружения, версии, вложения и остальные поля пользовательского документа находятся внутри шифрованного payload. V1 отвергает файлы больше 64 MiB до выделения памяти. Точная раскладка байтов и проверки образцов находятся рядом с тестами кодека.
+Канонический бинарный заголовок содержит только magic, идентификаторы формата/алгоритмов/профиля, случайный vault ID и соль пароля. Каждый key slot аутентифицирует заголовок и отдельный контекст password/recovery. Payload аутентифицирует полный заголовок с обоими зашифрованными slots. Названия, группы, окружения, версии, вложения и остальные поля пользовательского документа находятся внутри шифрованного payload. V1 отвергает файлы больше 64 MiB до выделения памяти. Раскладка байтов определена ниже и проверяется тестами кодека.
+
+## Binary layout / Бинарная раскладка
+
+Offsets are zero-based, end-exclusive; integers use little endian. The minimum file size is 234 bytes; the maximum is 64 MiB including header, nonce and tags.
+
+Смещения считаются от нуля, правая граница не включается; целые числа записываются little endian. Минимальный размер файла 234 байта, максимальный 64 MiB вместе с заголовком, nonce и tags.
+
+| Bytes / Байты | Content / Содержимое |
+| --- | --- |
+| 0..8 | Magic `57 50 41 53 53 00 01 00` |
+| 8..10 | Format / Формат: `u16 = 1` |
+| 10..12 | Suite / Алгоритмы: `u16 = 1` |
+| 12..14 | KDF profile / Профиль KDF: `u16 = 1` |
+| 14..30 | Random vault ID / Случайный vault ID: 16 bytes / байт |
+| 30..46 | Password salt / Соль пароля: 16 bytes / байт |
+| 46..70 | Password slot nonce / Nonce password slot: 24 bytes / байта |
+| 70..118 | Wrapped data key + tag / Ключ данных в обёртке + tag: 32 + 16 bytes / байт |
+| 118..142 | Recovery slot nonce / Nonce recovery slot: 24 bytes / байта |
+| 142..190 | Wrapped data key + tag / Ключ данных в обёртке + tag: 32 + 16 bytes / байт |
+| 190..214 | Payload nonce / Nonce payload: 24 bytes / байта |
+| 214..end | Encrypted payload + 16-byte tag / Зашифрованный payload + tag 16 байт |
+
+Password-slot AAD is bytes `0..46` followed by ASCII `/password`; recovery-slot AAD uses `/recovery`. Payload AAD is bytes `0..190` followed by ASCII `/payload`. Decrypted payload starts with `u32 = 1` for its schema, followed by opaque document bytes. An empty new vault contains no document bytes after that schema.
+
+AAD password slot состоит из байтов `0..46` и ASCII `/password`; recovery slot использует `/recovery`. AAD payload состоит из байтов `0..190` и ASCII `/payload`. Расшифрованный payload начинается с `u32 = 1`, обозначающего schema, затем идут байты документа. В новом пустом сейфе после schema нет байтов документа.
 
 ## Lifecycle and writes / Lifecycle и запись
 

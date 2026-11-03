@@ -4,3 +4,4 @@
 .flutter-plugins-dependencies
 build/
 server/target/
+packages/pass_core/rust/target/

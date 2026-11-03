@@ -4,11 +4,14 @@ import 'package:want_allure/want_allure.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 import 'package:want_pass/src/feature/startup/application/_barrel.dart';
+import 'package:want_pass/src/feature/vault/application/_barrel.dart';
+import 'package:want_pass/src/feature/vault/presentation/_barrel.dart';
 
 class WantPassApp extends StatelessWidget {
   final StartupController startup;
+  final VaultController vault;
 
-  const WantPassApp({super.key, required this.startup});
+  const WantPassApp({super.key, required this.startup, required this.vault});
 
   @override
   Widget build(BuildContext context) => MaterialApp(
@@ -27,16 +30,10 @@ class WantPassApp extends StatelessWidget {
       value: startup,
       child: BlocBuilder<StartupController, StartupState>(
         builder: (context, state) {
+          if (state is StartupReady) return VaultPage(controller: vault);
           final russian = Localizations.localeOf(context).languageCode == 'ru';
           final (title, message) = switch ((state, russian)) {
-            (StartupReady(), true) => (
-              'Личное место для ваших секретов.',
-              'Создание сейфа пока недоступно в этой версии.',
-            ),
-            (StartupReady(), false) => (
-              'A private home for your secrets.',
-              'Vault setup is not available in this build yet.',
-            ),
+            (StartupReady(), _) => ('', ''),
             (StartupFailed(), true) => (
               'Не удалось запустить Want Pass.',
               'Перезапустите приложение и попробуйте ещё раз.',

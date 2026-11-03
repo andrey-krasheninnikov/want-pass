@@ -7,5 +7,5 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   LaunchMode.initializeAutomatically();
   final runtime = await AppRuntime.bootstrap();
-  runApp(WantPassApp(startup: runtime.startup));
+  runApp(WantPassApp(startup: runtime.startup, vault: runtime.vault));
 }

@@ -2,7 +2,7 @@ use want_pass_vault::api::{AccountInputV1, GroupInputV1, Vault};
 
 const PASSWORD: &str = "Synthetic content password 2026!";
 
-fn create() -> (tempfile::TempDir, Vault) {
+fn create() -> (tempfile::TempDir, Vault, String) {
     let directory = tempfile::tempdir().unwrap();
     let vault = Vault::open(directory.path().join("vault").to_str().unwrap().to_owned()).unwrap();
     let challenge = vault
@@ -21,12 +21,12 @@ fn create() -> (tempfile::TempDir, Vault) {
             challenge.revision,
         )
         .unwrap();
-    (directory, vault)
+    (directory, vault, challenge.words.join(" "))
 }
 
 #[test]
 fn groups_preserve_accounts_across_deletion_lock_and_reopen() {
-    let (_directory, vault) = create();
+    let (_directory, vault, _) = create();
     let empty = vault.content_v1(vault.generation()).unwrap();
     assert_eq!(empty.groups.len(), 0);
     let first = vault
@@ -95,7 +95,7 @@ fn groups_preserve_accounts_across_deletion_lock_and_reopen() {
 #[test]
 fn invalid_and_stale_edits_preserve_the_authenticated_file() {
     use want_pass_vault::api::VaultFailure;
-    let (directory, vault) = create();
+    let (directory, vault, _) = create();
     let path = directory.path().join("vault/vault.wpass");
     let original = std::fs::read(&path).unwrap();
     let invalid = vault.save_group_v1(
@@ -140,4 +140,114 @@ fn invalid_and_stale_edits_preserve_the_authenticated_file() {
         Err(VaultFailure::Stale)
     ));
     assert_eq!(std::fs::read(&path).unwrap(), baseline);
+}
+
+const LOGO: &[u8] = &[
+    137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 13, 73, 72, 68, 82, 0, 0, 0, 1, 0, 0, 0, 1, 8, 4, 0,
+    0, 0, 181, 28, 12, 2, 0, 0, 0, 11, 73, 68, 65, 84, 120, 218, 99, 252, 255, 31, 0, 3, 3, 2, 0,
+    239, 163, 55, 91, 0, 0, 0, 0, 73, 69, 78, 68, 174, 66, 96, 130,
+];
+
+#[test]
+fn recovery_preserves_groups_logos_and_credentials() {
+    let (_directory, vault, phrase) = create();
+    let group = vault
+        .save_group_v1(
+            GroupInputV1 {
+                id: None,
+                name: "Recovery fixture".into(),
+                description: "Synthetic group description".into(),
+                icon: "code".into(),
+                logo: LOGO.to_vec(),
+            },
+            0,
+            vault.generation(),
+        )
+        .unwrap();
+    let saved = vault
+        .save_account_v1(
+            AccountInputV1 {
+                id: None,
+                name: "Recovery account".into(),
+                description: String::new(),
+                login: "fixture@example.invalid".into(),
+                password: "Fixture secret".into(),
+                group_ids: vec![group.groups[0].id.clone()],
+            },
+            group.revision,
+            vault.generation(),
+        )
+        .unwrap();
+    let current = vault.content_v1(vault.generation()).unwrap();
+    assert_eq!(current.groups[0].logo, LOGO);
+    let bytes = std::fs::read(_directory.path().join("vault/vault.wpass")).unwrap();
+    assert!(!bytes.windows(LOGO.len()).any(|window| window == LOGO));
+    vault.lock().unwrap();
+    let challenge = vault
+        .prepare_recovery_v3(
+            phrase,
+            "Synthetic replacement password 2026!".into(),
+            vault.generation(),
+        )
+        .unwrap();
+    vault
+        .confirm_v3(
+            challenge
+                .positions
+                .iter()
+                .map(|p| challenge.words[*p as usize].clone())
+                .collect(),
+            "Synthetic replacement password 2026!".into(),
+            String::new(),
+            String::new(),
+            challenge.revision,
+        )
+        .unwrap();
+    assert_eq!(
+        vault.content_v1(vault.generation()).unwrap().groups[0].description,
+        "Synthetic group description"
+    );
+    assert_eq!(
+        vault
+            .account_v1(saved.accounts[0].id.clone(), vault.generation())
+            .unwrap()
+            .password,
+        "Fixture secret"
+    );
+}
+
+#[test]
+fn unknown_document_is_never_replaced_with_empty_content() {
+    use want_pass_vault::{api::VaultFailure, format};
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("vault");
+    let vault = Vault::open(path.to_str().unwrap().to_owned()).unwrap();
+    let prepared =
+        format::prepare(PASSWORD, br#"{"schema":999,"future":"synthetic"}"#, None).unwrap();
+    std::fs::write(path.join("vault.wpass"), &prepared.bytes).unwrap();
+    vault
+        .unlock_v3(PASSWORD.to_owned(), vault.generation())
+        .unwrap();
+    assert!(matches!(
+        vault.content_v1(vault.generation()),
+        Err(VaultFailure::Unsupported)
+    ));
+    assert!(matches!(
+        vault.save_group_v1(
+            GroupInputV1 {
+                id: None,
+                name: "Synthetic name".into(),
+                description: String::new(),
+                icon: "folder".into(),
+                logo: vec![]
+            },
+            0,
+            vault.generation()
+        ),
+        Err(VaultFailure::Unsupported)
+    ));
+    assert_eq!(
+        std::fs::read(path.join("vault.wpass")).unwrap(),
+        prepared.bytes
+    );
 }

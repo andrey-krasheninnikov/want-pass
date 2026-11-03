@@ -79,4 +79,31 @@ abstract interface class VaultAccessService {
     required VaultHintsDtoV2 hints,
     required BigInt revision,
   });
+  FutureDomainResult<ContentSnapshotV1> contentV1({
+    required VaultHandleV1 handle,
+  });
+  FutureDomainResult<ContentSnapshotV1> saveGroupV1({
+    required VaultHandleV1 handle,
+    required GroupDraftV1 input,
+    required BigInt revision,
+  });
+  FutureDomainResult<ContentSnapshotV1> deleteGroupV1({
+    required VaultHandleV1 handle,
+    required String id,
+    required BigInt revision,
+  });
+  FutureDomainResult<AccountV1> accountV1({
+    required VaultHandleV1 handle,
+    required String id,
+  });
+  FutureDomainResult<ContentSnapshotV1> saveAccountV1({
+    required VaultHandleV1 handle,
+    required AccountDraftV1 input,
+    required BigInt revision,
+  });
+  FutureDomainResult<ContentSnapshotV1> deleteAccountV1({
+    required VaultHandleV1 handle,
+    required String id,
+    required BigInt revision,
+  });
 }

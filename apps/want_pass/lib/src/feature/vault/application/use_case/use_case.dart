@@ -72,4 +72,25 @@ abstract interface class VaultUseCase {
   FutureDomainResult<SelectRecoveryFileResultV1> selectRecoveryFileV3({
     required SelectRecoveryFileParamsV3 params,
   });
+  FutureDomainResult<LoadContentResultV1> loadContentV1({
+    required LoadContentParamsV1 params,
+  });
+  FutureDomainResult<SaveGroupResultV1> saveGroupV1({
+    required SaveGroupParamsV1 params,
+  });
+  FutureDomainResult<DeleteGroupResultV1> deleteGroupV1({
+    required DeleteGroupParamsV1 params,
+  });
+  FutureDomainResult<ReadAccountResultV1> readAccountV1({
+    required ReadAccountParamsV1 params,
+  });
+  FutureDomainResult<SaveAccountResultV1> saveAccountV1({
+    required SaveAccountParamsV1 params,
+  });
+  FutureDomainResult<DeleteAccountResultV1> deleteAccountV1({
+    required DeleteAccountParamsV1 params,
+  });
+  FutureDomainResult<SelectGroupLogoResultV1> selectGroupLogoV1({
+    required SelectGroupLogoParamsV1 params,
+  });
 }

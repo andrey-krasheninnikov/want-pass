@@ -42,13 +42,43 @@ abstract class VaultRustLibApiImplPlatform
   String dco_decode_String(dynamic raw);
 
   @protected
+  AccountInputV1 dco_decode_account_input_v_1(dynamic raw);
+
+  @protected
+  AccountRecordV1 dco_decode_account_record_v_1(dynamic raw);
+
+  @protected
+  AccountSummaryV1 dco_decode_account_summary_v_1(dynamic raw);
+
+  @protected
   bool dco_decode_bool(dynamic raw);
+
+  @protected
+  AccountInputV1 dco_decode_box_autoadd_account_input_v_1(dynamic raw);
+
+  @protected
+  GroupInputV1 dco_decode_box_autoadd_group_input_v_1(dynamic raw);
+
+  @protected
+  ContentSnapshotV1 dco_decode_content_snapshot_v_1(dynamic raw);
+
+  @protected
+  GroupInputV1 dco_decode_group_input_v_1(dynamic raw);
+
+  @protected
+  GroupRecordV1 dco_decode_group_record_v_1(dynamic raw);
 
   @protected
   int dco_decode_i_32(dynamic raw);
 
   @protected
   List<String> dco_decode_list_String(dynamic raw);
+
+  @protected
+  List<AccountSummaryV1> dco_decode_list_account_summary_v_1(dynamic raw);
+
+  @protected
+  List<GroupRecordV1> dco_decode_list_group_record_v_1(dynamic raw);
 
   @protected
   List<List<String>> dco_decode_list_list_String(dynamic raw);
@@ -58,6 +88,9 @@ abstract class VaultRustLibApiImplPlatform
 
   @protected
   Uint8List dco_decode_list_prim_u_8_strict(dynamic raw);
+
+  @protected
+  String? dco_decode_opt_String(dynamic raw);
 
   @protected
   RecoveryChallenge dco_decode_recovery_challenge(dynamic raw);
@@ -114,13 +147,53 @@ abstract class VaultRustLibApiImplPlatform
   String sse_decode_String(SseDeserializer deserializer);
 
   @protected
+  AccountInputV1 sse_decode_account_input_v_1(SseDeserializer deserializer);
+
+  @protected
+  AccountRecordV1 sse_decode_account_record_v_1(SseDeserializer deserializer);
+
+  @protected
+  AccountSummaryV1 sse_decode_account_summary_v_1(SseDeserializer deserializer);
+
+  @protected
   bool sse_decode_bool(SseDeserializer deserializer);
+
+  @protected
+  AccountInputV1 sse_decode_box_autoadd_account_input_v_1(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  GroupInputV1 sse_decode_box_autoadd_group_input_v_1(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  ContentSnapshotV1 sse_decode_content_snapshot_v_1(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  GroupInputV1 sse_decode_group_input_v_1(SseDeserializer deserializer);
+
+  @protected
+  GroupRecordV1 sse_decode_group_record_v_1(SseDeserializer deserializer);
 
   @protected
   int sse_decode_i_32(SseDeserializer deserializer);
 
   @protected
   List<String> sse_decode_list_String(SseDeserializer deserializer);
+
+  @protected
+  List<AccountSummaryV1> sse_decode_list_account_summary_v_1(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  List<GroupRecordV1> sse_decode_list_group_record_v_1(
+    SseDeserializer deserializer,
+  );
 
   @protected
   List<List<String>> sse_decode_list_list_String(SseDeserializer deserializer);
@@ -130,6 +203,9 @@ abstract class VaultRustLibApiImplPlatform
 
   @protected
   Uint8List sse_decode_list_prim_u_8_strict(SseDeserializer deserializer);
+
+  @protected
+  String? sse_decode_opt_String(SseDeserializer deserializer);
 
   @protected
   RecoveryChallenge sse_decode_recovery_challenge(SseDeserializer deserializer);
@@ -193,13 +269,70 @@ abstract class VaultRustLibApiImplPlatform
   void sse_encode_String(String self, SseSerializer serializer);
 
   @protected
+  void sse_encode_account_input_v_1(
+    AccountInputV1 self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_account_record_v_1(
+    AccountRecordV1 self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_account_summary_v_1(
+    AccountSummaryV1 self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_bool(bool self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_box_autoadd_account_input_v_1(
+    AccountInputV1 self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_box_autoadd_group_input_v_1(
+    GroupInputV1 self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_content_snapshot_v_1(
+    ContentSnapshotV1 self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_group_input_v_1(GroupInputV1 self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_group_record_v_1(
+    GroupRecordV1 self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_i_32(int self, SseSerializer serializer);
 
   @protected
   void sse_encode_list_String(List<String> self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_list_account_summary_v_1(
+    List<AccountSummaryV1> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_list_group_record_v_1(
+    List<GroupRecordV1> self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_list_list_String(
@@ -218,6 +351,9 @@ abstract class VaultRustLibApiImplPlatform
     Uint8List self,
     SseSerializer serializer,
   );
+
+  @protected
+  void sse_encode_opt_String(String? self, SseSerializer serializer);
 
   @protected
   void sse_encode_recovery_challenge(

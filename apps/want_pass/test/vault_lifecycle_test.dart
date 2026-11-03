@@ -108,6 +108,7 @@ void main() {
         access,
         const _Reporter(),
         const PlatformRecoveryExportService(_Reporter()),
+        const PlatformGroupLogoService(_Reporter()),
       );
       final mismatch = await useCase.prepareCreationV1(
         params: PrepareVaultCreationParamsV1(
@@ -1083,6 +1084,7 @@ VaultController _controller(
     access,
     const _Reporter(),
     export ?? const PlatformRecoveryExportService(_Reporter()),
+    const PlatformGroupLogoService(_Reporter()),
   ),
   const _Reporter(),
   events,
@@ -1107,6 +1109,51 @@ final class _Handle implements VaultHandleV1 {
 }
 
 final class _Access implements VaultAccessService {
+  @override
+  FutureDomainResult<ContentSnapshotV1> contentV1({
+    required VaultHandleV1 handle,
+  }) async => Result.success(
+    ContentSnapshotV1(
+      revision: BigInt.zero,
+      groups: const [],
+      accounts: const [],
+    ),
+  );
+  @override
+  FutureDomainResult<ContentSnapshotV1> saveGroupV1({
+    required VaultHandleV1 handle,
+    required GroupDraftV1 input,
+    required BigInt revision,
+  }) async =>
+      const Result.error(VaultRejectedErrorV1(VaultFailureKindV1.unavailable));
+  @override
+  FutureDomainResult<ContentSnapshotV1> deleteGroupV1({
+    required VaultHandleV1 handle,
+    required String id,
+    required BigInt revision,
+  }) async =>
+      const Result.error(VaultRejectedErrorV1(VaultFailureKindV1.unavailable));
+  @override
+  FutureDomainResult<AccountV1> accountV1({
+    required VaultHandleV1 handle,
+    required String id,
+  }) async =>
+      const Result.error(VaultRejectedErrorV1(VaultFailureKindV1.unavailable));
+  @override
+  FutureDomainResult<ContentSnapshotV1> saveAccountV1({
+    required VaultHandleV1 handle,
+    required AccountDraftV1 input,
+    required BigInt revision,
+  }) async =>
+      const Result.error(VaultRejectedErrorV1(VaultFailureKindV1.unavailable));
+  @override
+  FutureDomainResult<ContentSnapshotV1> deleteAccountV1({
+    required VaultHandleV1 handle,
+    required String id,
+    required BigInt revision,
+  }) async =>
+      const Result.error(VaultRejectedErrorV1(VaultFailureKindV1.unavailable));
+
   BigInt revision = BigInt.zero;
   VaultErrorV1? regenerationFailure;
   VaultErrorV1? validationFailure;

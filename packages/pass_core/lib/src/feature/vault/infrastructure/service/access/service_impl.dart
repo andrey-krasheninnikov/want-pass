@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:domain_error/domain_error.dart';
 import 'package:injectable/injectable.dart';
 import 'package:want_pass_core/src/feature/vault/application/_barrel.dart';
@@ -567,6 +569,192 @@ final class RustVaultAccessService implements VaultAccessService {
     }
     return result;
   }
+
+  @override
+  FutureDomainResult<ContentSnapshotV1> contentV1({
+    required VaultHandleV1 handle,
+  }) async {
+    const op = 'RustVaultAccessService.contentV1():';
+    final result = await captureResult<ContentSnapshotV1>(() async {
+      final vault = (handle as _NativeVaultHandle)._vault;
+      final value = await vault.contentV1(generation: vault.generation());
+      return _content(value);
+    }, mapToDomainError: _mapNativeError);
+    if (result.isError) {
+      reportVaultSafely(
+        _reporter,
+        layer: VaultDiagnosticLayer.infrastructure,
+        operation: op,
+        error: result.error is VaultErrorV1
+            ? result.error as VaultErrorV1
+            : const VaultUnexpectedErrorV1(),
+      );
+    }
+    return result;
+  }
+
+  @override
+  FutureDomainResult<ContentSnapshotV1> saveGroupV1({
+    required VaultHandleV1 handle,
+    required GroupDraftV1 input,
+    required BigInt revision,
+  }) async {
+    const op = 'RustVaultAccessService.saveGroupV1():';
+    final result = await captureResult<ContentSnapshotV1>(() async {
+      final vault = (handle as _NativeVaultHandle)._vault;
+      final value = await vault.saveGroupV1(
+        input: native.GroupInputV1(
+          id: input.id,
+          name: input.name,
+          description: input.description,
+          icon: input.icon,
+          logo: Uint8List.fromList(input.logo),
+        ),
+        revision: revision,
+        generation: vault.generation(),
+      );
+      return _content(value);
+    }, mapToDomainError: _mapNativeError);
+    if (result.isError) {
+      reportVaultSafely(
+        _reporter,
+        layer: VaultDiagnosticLayer.infrastructure,
+        operation: op,
+        error: result.error is VaultErrorV1
+            ? result.error as VaultErrorV1
+            : const VaultUnexpectedErrorV1(),
+      );
+    }
+    return result;
+  }
+
+  @override
+  FutureDomainResult<ContentSnapshotV1> deleteGroupV1({
+    required VaultHandleV1 handle,
+    required String id,
+    required BigInt revision,
+  }) async {
+    const op = 'RustVaultAccessService.deleteGroupV1():';
+    final result = await captureResult<ContentSnapshotV1>(() async {
+      final vault = (handle as _NativeVaultHandle)._vault;
+      final value = await vault.deleteGroupV1(
+        id: id,
+        revision: revision,
+        generation: vault.generation(),
+      );
+      return _content(value);
+    }, mapToDomainError: _mapNativeError);
+    if (result.isError) {
+      reportVaultSafely(
+        _reporter,
+        layer: VaultDiagnosticLayer.infrastructure,
+        operation: op,
+        error: result.error is VaultErrorV1
+            ? result.error as VaultErrorV1
+            : const VaultUnexpectedErrorV1(),
+      );
+    }
+    return result;
+  }
+
+  @override
+  FutureDomainResult<AccountV1> accountV1({
+    required VaultHandleV1 handle,
+    required String id,
+  }) async {
+    const op = 'RustVaultAccessService.accountV1():';
+    final result = await captureResult<AccountV1>(() async {
+      final vault = (handle as _NativeVaultHandle)._vault;
+      final value = await vault.accountV1(
+        id: id,
+        generation: vault.generation(),
+      );
+      return AccountV1(
+        id: value.id,
+        name: value.name,
+        description: value.description,
+        login: value.login,
+        password: value.password,
+        groupIds: value.groupIds,
+      );
+    }, mapToDomainError: _mapNativeError);
+    if (result.isError) {
+      reportVaultSafely(
+        _reporter,
+        layer: VaultDiagnosticLayer.infrastructure,
+        operation: op,
+        error: result.error is VaultErrorV1
+            ? result.error as VaultErrorV1
+            : const VaultUnexpectedErrorV1(),
+      );
+    }
+    return result;
+  }
+
+  @override
+  FutureDomainResult<ContentSnapshotV1> saveAccountV1({
+    required VaultHandleV1 handle,
+    required AccountDraftV1 input,
+    required BigInt revision,
+  }) async {
+    const op = 'RustVaultAccessService.saveAccountV1():';
+    final result = await captureResult<ContentSnapshotV1>(() async {
+      final vault = (handle as _NativeVaultHandle)._vault;
+      final value = await vault.saveAccountV1(
+        input: native.AccountInputV1(
+          id: input.id,
+          name: input.name,
+          description: input.description,
+          login: input.login,
+          password: input.password,
+          groupIds: List.unmodifiable(input.groupIds),
+        ),
+        revision: revision,
+        generation: vault.generation(),
+      );
+      return _content(value);
+    }, mapToDomainError: _mapNativeError);
+    if (result.isError) {
+      reportVaultSafely(
+        _reporter,
+        layer: VaultDiagnosticLayer.infrastructure,
+        operation: op,
+        error: result.error is VaultErrorV1
+            ? result.error as VaultErrorV1
+            : const VaultUnexpectedErrorV1(),
+      );
+    }
+    return result;
+  }
+
+  @override
+  FutureDomainResult<ContentSnapshotV1> deleteAccountV1({
+    required VaultHandleV1 handle,
+    required String id,
+    required BigInt revision,
+  }) async {
+    const op = 'RustVaultAccessService.deleteAccountV1():';
+    final result = await captureResult<ContentSnapshotV1>(() async {
+      final vault = (handle as _NativeVaultHandle)._vault;
+      final value = await vault.deleteAccountV1(
+        id: id,
+        revision: revision,
+        generation: vault.generation(),
+      );
+      return _content(value);
+    }, mapToDomainError: _mapNativeError);
+    if (result.isError) {
+      reportVaultSafely(
+        _reporter,
+        layer: VaultDiagnosticLayer.infrastructure,
+        operation: op,
+        error: result.error is VaultErrorV1
+            ? result.error as VaultErrorV1
+            : const VaultUnexpectedErrorV1(),
+      );
+    }
+    return result;
+  }
 }
 
 final class _NativeVaultHandle implements VaultHandleV1 {
@@ -663,3 +851,23 @@ VaultErrorV1 _mapNativeError(Object error, StackTrace stack) => switch (error) {
   ),
   _ => const VaultUnexpectedErrorV1(),
 };
+
+ContentSnapshotV1 _content(native.ContentSnapshotV1 value) => ContentSnapshotV1(
+  revision: value.revision,
+  groups: value.groups
+      .map(
+        (g) => GroupV1(
+          id: g.id,
+          name: g.name,
+          description: g.description,
+          icon: g.icon,
+          logo: g.logo,
+        ),
+      )
+      .toList(),
+  accounts: value.accounts
+      .map(
+        (a) => AccountSummaryV1(id: a.id, name: a.name, groupIds: a.groupIds),
+      )
+      .toList(),
+);

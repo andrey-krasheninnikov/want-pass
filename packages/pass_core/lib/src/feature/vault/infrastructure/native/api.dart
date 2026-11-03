@@ -9,6 +9,11 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
 // Rust type: RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<Vault>>
 abstract class Vault implements RustOpaqueInterface {
+  Future<AccountRecordV1> accountV1({
+    required String id,
+    required BigInt generation,
+  });
+
   Future<void> close();
 
   Future<void> confirm({
@@ -30,6 +35,20 @@ abstract class Vault implements RustOpaqueInterface {
     required String passwordHint,
     required String recoveryHint,
     required BigInt revision,
+  });
+
+  Future<ContentSnapshotV1> contentV1({required BigInt generation});
+
+  Future<ContentSnapshotV1> deleteAccountV1({
+    required String id,
+    required BigInt revision,
+    required BigInt generation,
+  });
+
+  Future<ContentSnapshotV1> deleteGroupV1({
+    required String id,
+    required BigInt revision,
+    required BigInt generation,
   });
 
   Future<void> exportRecoveryV2({
@@ -85,6 +104,18 @@ abstract class Vault implements RustOpaqueInterface {
   });
 
   Future<RecoveryChallengeV3> regenerateRecoveryV3({
+    required BigInt generation,
+  });
+
+  Future<ContentSnapshotV1> saveAccountV1({
+    required AccountInputV1 input,
+    required BigInt revision,
+    required BigInt generation,
+  });
+
+  Future<ContentSnapshotV1> saveGroupV1({
+    required GroupInputV1 input,
+    required BigInt revision,
     required BigInt generation,
   });
 

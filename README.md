@@ -92,10 +92,18 @@ For a clean acceptance run, close Want Pass and run `make clean-data`, then `mak
 
 Для чистого прогона приёмки закройте Want Pass и выполните `make clean-data`, затем `make run`. Сброс удаляет сейф и оформление текущего namespace. Предварительно сохраните нужный файл сейфа. Старый bundle namespace и экспортированные recovery-файлы сохраняются; автоматической миграции V1 нет. Неизвестные файлы, symlink или занятый сейф блокируют сброс.
 
-`make check` runs local Dart, Flutter and both Rust suites. `make native-ui` runs creation, recovery and reopening in two macOS application processes using a separate disposable Application Support directory; it removes that directory after reopening. An interrupted run can leave only its `integration-issue-3-local_*` fixture. Real OS lock/sleep delivery and other platforms require separate verification.
+`make check` runs local Dart, Flutter and both Rust suites. `make native-ui` runs creation, group/card editing, recovery and reopening in two macOS application processes using a separate disposable Application Support directory; it removes that directory after reopening. An interrupted run can leave only its `integration-issue-3-local_*` fixture. Real OS lock/sleep delivery and other platforms require separate verification.
 
-`make check` выполняет локальные Dart-, Flutter-проверки и оба набора Rust-тестов. `make native-ui` проверяет создание, recovery и повторное открытие в двух процессах macOS-приложения с отдельным временным каталогом Application Support; после повторного открытия каталог удаляется. Прерванный прогон может оставить только свой тестовый каталог `integration-issue-3-local_*`. Доставка настоящих событий lock/sleep ОС и другие платформы требуют отдельной проверки.
+`make check` выполняет локальные Dart-, Flutter-проверки и оба набора Rust-тестов. `make native-ui` проверяет создание, редактирование групп и карточек, recovery и повторное открытие в двух процессах macOS-приложения с отдельным временным каталогом Application Support; после повторного открытия каталог удаляется. Прерванный прогон может оставить только свой тестовый каталог `integration-issue-3-local_*`. Доставка настоящих событий lock/sleep ОС и другие платформы требуют отдельной проверки.
 
 After changing the Rust bridge API, install `flutter_rust_bridge_codegen 2.13.0` and `cargo-expand` in a tool directory on `PATH`, then run `make generate`. The wrapper checks the bridge version, keeps diagnostics free of call arguments and applies the layer import rules. Ordinary builds use the committed bridge files and require no bridge tooling.
 
 После изменения Rust bridge API установите `flutter_rust_bridge_codegen 2.13.0` и `cargo-expand` в каталог инструментов на `PATH`, затем выполните `make generate`. Wrapper проверяет версию bridge, исключает аргументы вызовов из диагностики и применяет правила импортов слоёв. Обычная сборка использует закоммиченные bridge-файлы и не требует инструментов bridge.
+
+## Groups and cards / Группы и карточки
+
+After unlocking, create groups with a name, description and a built-in icon or local PNG/JPEG. Create account cards with a login/email, password and any number of groups. Deleting a group preserves every card. All content, including logos and memberships, is encrypted in the vault. Services, environments and history follow in their own roadmap tasks.
+
+После разблокировки создавайте группы с названием, описанием и встроенной иконкой либо локальным PNG/JPEG. Карточка учётной записи содержит логин/email, пароль и любое число групп. Удаление группы сохраняет все карточки. Содержимое, включая логотипы и связи, зашифровано в сейфе. Сервисы, окружения и история реализуются отдельными задачами roadmap.
+
+See / См. [ADR 0010](docs/adr/0010-encrypted-groups-and-account-cards.md).

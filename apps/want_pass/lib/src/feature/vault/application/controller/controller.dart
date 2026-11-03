@@ -549,8 +549,9 @@ final class VaultController extends CubitWithEffects<VaultState, VaultEffect> {
   Future<void> _perform<T>(
     String operation,
     FutureDomainResult<T> Function(VaultHandleV1) run,
-    void Function(T) success,
-  ) async {
+    void Function(T) success, {
+    bool contentMutation = false,
+  }) async {
     if (_closing ||
         isClosed ||
         !_monitorAvailable ||
@@ -574,7 +575,14 @@ final class VaultController extends CubitWithEffects<VaultState, VaultEffect> {
         final result = await run(_handle!);
         if (_closing || epoch != _epoch) return;
         if (result.isError) {
-          _fail(operation, _error(result.error));
+          final error = _error(result.error);
+          if (contentMutation &&
+              error is VaultRejectedErrorV1 &&
+              (error.kind == VaultFailureKindV1.writeUncertain ||
+                  error.kind == VaultFailureKindV1.stale)) {
+            await lock();
+          }
+          _fail(operation, error);
         } else {
           success(result.value);
           activity();
@@ -588,6 +596,13 @@ final class VaultController extends CubitWithEffects<VaultState, VaultEffect> {
     _operation = future;
     await future;
     if (identical(_operation, future)) _operation = null;
+    if (!_closing &&
+        epoch == _epoch &&
+        state.phase == VaultPhase.unlocked &&
+        state.content == null &&
+        state.error == null) {
+      await loadContent();
+    }
   }
 
   Future<void> lock({bool notify = false}) async {
@@ -680,6 +695,166 @@ final class VaultController extends CubitWithEffects<VaultState, VaultEffect> {
             ? VaultState(phase: VaultPhase.unavailable, error: error)
             : state.copyWith(busy: false, error: () => error),
       );
+    }
+  }
+
+  Future<void> loadContent() {
+    const op = 'VaultController.loadContent():';
+    if (state.phase != VaultPhase.unlocked) return Future.value();
+    return _perform(
+      op,
+      (handle) =>
+          _useCase.loadContentV1(params: LoadContentParamsV1(handle: handle)),
+      (value) =>
+          emit(state.copyWith(content: () => value.snapshot, busy: false)),
+    );
+  }
+
+  Future<AccountV1?> readAccount(String id) async {
+    const op = 'VaultController.readAccount():';
+    if (state.phase != VaultPhase.unlocked) return null;
+    AccountV1? account;
+    await _perform(
+      op,
+      (handle) => _useCase.readAccountV1(
+        params: ReadAccountParamsV1(handle: handle, id: id),
+      ),
+      (value) {
+        account = value.account;
+        emit(state.copyWith(busy: false));
+      },
+    );
+    return account;
+  }
+
+  Future<bool> saveGroup(GroupDraftV1 input, {BigInt? revision}) async {
+    const op = 'VaultController.saveGroup():';
+    final snapshot = state.content;
+    if (state.phase != VaultPhase.unlocked || snapshot == null) return false;
+    var saved = false;
+    await _perform(
+      op,
+      (handle) => _useCase.saveGroupV1(
+        params: SaveGroupParamsV1(
+          handle: handle,
+          input: input,
+          revision: revision ?? snapshot.revision,
+        ),
+      ),
+      (value) {
+        saved = true;
+        emit(state.copyWith(content: () => value.snapshot, busy: false));
+      },
+      contentMutation: true,
+    );
+    return saved;
+  }
+
+  Future<bool> deleteGroup(String id, {BigInt? revision}) async {
+    const op = 'VaultController.deleteGroup():';
+    final snapshot = state.content;
+    if (state.phase != VaultPhase.unlocked || snapshot == null) return false;
+    var saved = false;
+    await _perform(
+      op,
+      (handle) => _useCase.deleteGroupV1(
+        params: DeleteGroupParamsV1(
+          handle: handle,
+          id: id,
+          revision: revision ?? snapshot.revision,
+        ),
+      ),
+      (value) {
+        saved = true;
+        emit(state.copyWith(content: () => value.snapshot, busy: false));
+      },
+      contentMutation: true,
+    );
+    return saved;
+  }
+
+  Future<bool> saveAccount(AccountDraftV1 input, {BigInt? revision}) async {
+    const op = 'VaultController.saveAccount():';
+    final snapshot = state.content;
+    if (state.phase != VaultPhase.unlocked || snapshot == null) return false;
+    var saved = false;
+    await _perform(
+      op,
+      (handle) => _useCase.saveAccountV1(
+        params: SaveAccountParamsV1(
+          handle: handle,
+          input: input,
+          revision: revision ?? snapshot.revision,
+        ),
+      ),
+      (value) {
+        saved = true;
+        emit(state.copyWith(content: () => value.snapshot, busy: false));
+      },
+      contentMutation: true,
+    );
+    return saved;
+  }
+
+  Future<bool> deleteAccount(String id, {BigInt? revision}) async {
+    const op = 'VaultController.deleteAccount():';
+    final snapshot = state.content;
+    if (state.phase != VaultPhase.unlocked || snapshot == null) return false;
+    var saved = false;
+    await _perform(
+      op,
+      (handle) => _useCase.deleteAccountV1(
+        params: DeleteAccountParamsV1(
+          handle: handle,
+          id: id,
+          revision: revision ?? snapshot.revision,
+        ),
+      ),
+      (value) {
+        saved = true;
+        emit(state.copyWith(content: () => value.snapshot, busy: false));
+      },
+      contentMutation: true,
+    );
+    return saved;
+  }
+
+  Future<List<int>?> selectGroupLogo() async {
+    const op = 'VaultController.selectGroupLogo():';
+    if (_closing ||
+        isClosed ||
+        state.phase != VaultPhase.unlocked ||
+        state.busy ||
+        _exportOperation != null ||
+        !LaunchMode.isInitialized ||
+        !LaunchMode.isForeground) {
+      return null;
+    }
+    final epoch = _epoch;
+    final cancelled = Completer<void>();
+    _fileSelectionCancelled = cancelled;
+    emit(state.copyWith(busy: true, error: () => null));
+    final operation = Future.any<DomainResult<SelectGroupLogoResultV1>?>([
+      _useCase.selectGroupLogoV1(params: const SelectGroupLogoParamsV1()),
+      cancelled.future.then((_) => null),
+    ]);
+    _exportOperation = operation.then<void>((_) {});
+    try {
+      final result = await operation;
+      if (result == null || _closing || epoch != _epoch) return null;
+      if (result.isError) {
+        _fail(op, _error(result.error));
+        return null;
+      }
+      return result.value.bytes;
+    } finally {
+      if (identical(_fileSelectionCancelled, cancelled)) {
+        _fileSelectionCancelled = null;
+        _exportOperation = null;
+      }
+      if (!_closing && !isClosed && epoch == _epoch) {
+        emit(state.copyWith(busy: false));
+      }
     }
   }
 

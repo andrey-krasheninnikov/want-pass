@@ -37,6 +37,49 @@ final class SafeBlocObserver extends BlocObserver
       VaultUnexpectedErrorV1() => 'unexpectedError',
     };
     final safeOperation = switch (operation) {
+      'PlatformCredentialFileService.selectAttachmentV1():' ||
+      'PlatformCredentialFileService.selectDestinationV1():' ||
+      'RustVaultAccessService.cardCatalogV1():' ||
+      'RustVaultAccessService.searchCardsV1():' ||
+      'RustVaultAccessService.cardRowsV1():' ||
+      'RustVaultAccessService.cardListRowsV1():' ||
+      'RustVaultAccessService.cardPreviewV1():' ||
+      'RustVaultAccessService.cardV1():' ||
+      'RustVaultAccessService.contentV2():' ||
+      'RustVaultAccessService.copyCardFieldV1():' ||
+      'RustVaultAccessService.copyAccountV1():' ||
+      'RustVaultAccessService.currentTotpV1():' ||
+      'RustVaultAccessService.deleteCardV1():' ||
+      'RustVaultAccessService.deleteGroupV2():' ||
+      'RustVaultAccessService.exportAttachmentV1():' ||
+      'RustVaultAccessService.saveCardV1():' ||
+      'RustVaultAccessService.saveGroupV2():' ||
+      'VaultController.copyCard():' ||
+      'VaultController.deleteCard():' ||
+      'VaultController.downloadAttachment():' ||
+      'VaultController.searchCards():' ||
+      'VaultController.readCardListRows():' ||
+      'VaultController.readCardPreview():' ||
+      'VaultController.revealCardField():' ||
+      'VaultController.readCard():' ||
+      'VaultController.readTotp():' ||
+      'VaultController.saveCard():' ||
+      'VaultController.selectAttachment():' ||
+      'VaultUseCaseImpl.copyCardV1():' ||
+      'VaultUseCaseImpl.deleteCardV1():' ||
+      'VaultUseCaseImpl.deleteGroupV2():' ||
+      'VaultUseCaseImpl.exportCardAttachmentV1():' ||
+      'VaultUseCaseImpl.loadContentV2():' ||
+      'VaultUseCaseImpl.searchCardsV1():' ||
+      'VaultUseCaseImpl.readCardListRowsV1():' ||
+      'VaultUseCaseImpl.readCardPreviewV1():' ||
+      'VaultUseCaseImpl.readCardFieldV1():' ||
+      'VaultUseCaseImpl.readCardV1():' ||
+      'VaultUseCaseImpl.readTotpV1():' ||
+      'VaultUseCaseImpl.saveCardV1():' ||
+      'VaultUseCaseImpl.saveGroupV2():' ||
+      'VaultUseCaseImpl.selectAttachmentV1():' ||
+      'VaultUseCaseImpl.selectCardDestinationV1():' ||
       'RustVaultAccessService.contentV1():' ||
       'RustVaultAccessService.saveGroupV1():' ||
       'RustVaultAccessService.deleteGroupV1():' ||
@@ -195,6 +238,49 @@ final class SafeBlocObserver extends BlocObserver
     };
     // Operation text is supplied by fixed call sites, never by an exception or user input.
     final safeOperation = switch (operation) {
+      'PlatformCredentialFileService.selectAttachmentV1():' ||
+      'PlatformCredentialFileService.selectDestinationV1():' ||
+      'RustVaultAccessService.cardCatalogV1():' ||
+      'RustVaultAccessService.searchCardsV1():' ||
+      'RustVaultAccessService.cardRowsV1():' ||
+      'RustVaultAccessService.cardListRowsV1():' ||
+      'RustVaultAccessService.cardPreviewV1():' ||
+      'RustVaultAccessService.cardV1():' ||
+      'RustVaultAccessService.contentV2():' ||
+      'RustVaultAccessService.copyCardFieldV1():' ||
+      'RustVaultAccessService.copyAccountV1():' ||
+      'RustVaultAccessService.currentTotpV1():' ||
+      'RustVaultAccessService.deleteCardV1():' ||
+      'RustVaultAccessService.deleteGroupV2():' ||
+      'RustVaultAccessService.exportAttachmentV1():' ||
+      'RustVaultAccessService.saveCardV1():' ||
+      'RustVaultAccessService.saveGroupV2():' ||
+      'VaultController.copyCard():' ||
+      'VaultController.deleteCard():' ||
+      'VaultController.downloadAttachment():' ||
+      'VaultController.searchCards():' ||
+      'VaultController.readCardListRows():' ||
+      'VaultController.readCardPreview():' ||
+      'VaultController.revealCardField():' ||
+      'VaultController.readCard():' ||
+      'VaultController.readTotp():' ||
+      'VaultController.saveCard():' ||
+      'VaultController.selectAttachment():' ||
+      'VaultUseCaseImpl.copyCardV1():' ||
+      'VaultUseCaseImpl.deleteCardV1():' ||
+      'VaultUseCaseImpl.deleteGroupV2():' ||
+      'VaultUseCaseImpl.exportCardAttachmentV1():' ||
+      'VaultUseCaseImpl.loadContentV2():' ||
+      'VaultUseCaseImpl.searchCardsV1():' ||
+      'VaultUseCaseImpl.readCardListRowsV1():' ||
+      'VaultUseCaseImpl.readCardPreviewV1():' ||
+      'VaultUseCaseImpl.readCardFieldV1():' ||
+      'VaultUseCaseImpl.readCardV1():' ||
+      'VaultUseCaseImpl.readTotpV1():' ||
+      'VaultUseCaseImpl.saveCardV1():' ||
+      'VaultUseCaseImpl.saveGroupV2():' ||
+      'VaultUseCaseImpl.selectAttachmentV1():' ||
+      'VaultUseCaseImpl.selectCardDestinationV1():' ||
       'VaultController.validatePassword():' ||
       'RustVaultAccessService.validatePasswordV3():' ||
       'RustVaultAccessService.unlockV3():' ||

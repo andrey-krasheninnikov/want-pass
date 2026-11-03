@@ -7,23 +7,25 @@ import 'package:want_pass/src/feature/vault/application/_barrel.dart';
 import 'package:want_pass/src/feature/vault/presentation/_barrel.dart';
 import 'package:want_pass_core/want_pass_core.dart';
 
-final class VaultUnlockDialog extends StatefulWidget {
+final class VaultUnlockForm extends StatefulWidget {
   final VaultController controller;
+  final FocusNode focusNode;
   final VoidCallback onRecovery;
   final String requirements;
   final String Function(VaultErrorV1) errorText;
-  const VaultUnlockDialog({
+  const VaultUnlockForm({
     super.key,
     required this.controller,
+    required this.focusNode,
     required this.onRecovery,
     required this.requirements,
     required this.errorText,
   });
   @override
-  State<VaultUnlockDialog> createState() => _VaultUnlockDialogState();
+  State<VaultUnlockForm> createState() => _VaultUnlockFormState();
 }
 
-final class _VaultUnlockDialogState extends State<VaultUnlockDialog> {
+final class _VaultUnlockFormState extends State<VaultUnlockForm> {
   final _password = TextEditingController();
   Timer? _debounce;
   String _lastText = '';
@@ -170,8 +172,8 @@ final class _VaultUnlockDialogState extends State<VaultUnlockDialog> {
                 ),
               ),
             );
-            return WantDialog(
-              title: _text('Sign-in required', 'Требуется вход'),
+            return ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 440),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -188,6 +190,7 @@ final class _VaultUnlockDialogState extends State<VaultUnlockDialog> {
                           controller: _password,
                           enabled: !busy,
                           autofocus: true,
+                          focusNode: widget.focusNode,
                           last: true,
                           invalid: _invalidAttempt || rejected,
                           postfix: VaultPasswordHelp(

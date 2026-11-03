@@ -13,6 +13,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:want_pass/src/core/_barrel.dart';
 import 'package:want_pass/src/feature/_common/presentation/_barrel.dart';
 import 'package:want_pass/src/feature/vault/application/_barrel.dart';
+import 'package:want_pass/src/feature/vault/presentation/_barrel.dart';
 import 'package:want_pass_core/want_pass_core.dart';
 import 'package:want_allure/want_allure.dart';
 
@@ -74,6 +75,11 @@ void main() {
       );
       await _settle(tester);
       expect(await signalWantPassFirstFrame(), isTrue);
+      final program = await ui.FragmentProgram.fromAsset(
+        'shaders/filaments.frag',
+      );
+      program.fragmentShader().dispose();
+
       if (phase == 'create') {
         await _tap(tester, 'setup-next');
         await _until(
@@ -133,6 +139,9 @@ void main() {
         final groupId = runtime.vault.state.content!.groups.single.id;
         await _tap(tester, 'account-create');
         await _enter(tester, 'account-name', 'Synthetic native card');
+        await _tap(tester, 'card-service');
+        await tester.tap(find.text('GitHub').last);
+        await _settle(tester);
         await _enter(tester, 'account-login', 'fixture@example.invalid');
         final visibility = find.descendant(
           of: find.byKey(const ValueKey('account-password')),
@@ -141,20 +150,23 @@ void main() {
         await tester.tap(visibility);
         await _settle(tester);
         await _enter(tester, 'account-password', 'Synthetic\naccount value');
-        await _tap(tester, 'account-group-$groupId');
+        expect(runtime.vault.state.content!.groups.single.id, groupId);
         await _tap(tester, 'account-save');
         await _until(
           tester,
           () =>
-              runtime.vault.state.content!.accounts.isNotEmpty &&
+              runtime.vault.state.content!.cards.isNotEmpty &&
               !runtime.vault.state.busy,
         );
-        await _tap(tester, 'vault-dial');
+        await _tap(tester, 'vault-padlock');
         await _until(
           tester,
           () => runtime.vault.state.phase == VaultPhase.locked,
         );
-        await _tap(tester, 'vault-dial');
+        await _settle(tester);
+        expect(find.byType(VaultFilaments), findsOneWidget);
+        await _captureWorkspace(tester, captureBoundary, 'locked-native');
+        await _tap(tester, 'vault-padlock');
         await _settle(tester);
         await _enter(
           tester,
@@ -195,7 +207,7 @@ void main() {
           () => runtime.vault.state.phase == VaultPhase.unlocked,
         );
       } else {
-        await _tap(tester, 'vault-dial');
+        await _tap(tester, 'vault-padlock');
         await _settle(tester);
         await _enter(tester, 'unlock-password', password);
         await _tap(tester, 'vault-unlock');
@@ -207,7 +219,7 @@ void main() {
           tester,
           () => runtime.vault.state.phase == VaultPhase.unlocked,
         );
-        expect(find.byKey(const ValueKey('vault-dial')), findsOneWidget);
+        expect(find.byKey(const ValueKey('vault-padlock')), findsOneWidget);
       }
       await _until(
         tester,
@@ -219,11 +231,16 @@ void main() {
         snapshot.groups.single.description,
         'Synthetic native description',
       );
-      expect(snapshot.accounts.single.groupIds, [snapshot.groups.single.id]);
-      final account = await runtime.vault.readAccount(
-        snapshot.accounts.single.id,
+      expect(snapshot.cards.single.groupIds, [snapshot.groups.single.id]);
+      final account = await runtime.vault.readCard(snapshot.cards.single.id);
+      expect(
+        account!.fields.firstWhere((f) => f.id == FieldIdV1.password).value,
+        'Synthetic\naccount value',
       );
-      expect(account!.password, 'Synthetic\naccount value');
+      expect(account.summary.service, 'github');
+      expect(find.byType(VaultFilaments), findsNothing);
+      expect(find.byType(WantBackgroundMotion), findsNothing);
+      await _captureWorkspace(tester, captureBoundary, 'workspace-native');
       completed = true;
     } finally {
       FlutterError.onError = productErrorHandler;
@@ -238,19 +255,33 @@ void main() {
 }
 
 Future<void> _enter(WidgetTester tester, String key, String value) async {
+  await _foreground(tester, key);
   final field = find.descendant(
     of: find.byKey(ValueKey(key)),
     matching: find.bySubtype<EditableText>(),
   );
-  await tester.ensureVisible(field);
+  await _until(tester, () {
+    if (field.evaluate().isEmpty) return false;
+    final input = tester.widget<EditableText>(field);
+    return !input.readOnly && input.focusNode.canRequestFocus;
+  });
+  final scrollable = Scrollable.maybeOf(tester.element(field));
+  if (scrollable != null) {
+    await scrollable.position.ensureVisible(
+      tester.renderObject(field),
+      alignment: .5,
+    );
+  }
   await _settle(tester);
   await tester.tap(field);
+  tester.widget<EditableText>(field).focusNode.requestFocus();
   await tester.pump();
+  await tester.enterText(field, value);
   expect(
     tester.state<EditableTextState>(field).widget.focusNode.hasFocus,
     isTrue,
+    reason: 'Input focus: $key',
   );
-  tester.testTextInput.enterText(value);
   await tester.pump();
   expect(
     tester.widget<EditableText>(field).controller.text,
@@ -303,10 +334,23 @@ final class _Reporter implements VaultReporter {
   }) {}
 }
 
+Future<void> _foreground(WidgetTester tester, String label) async {
+  debugPrint('Native UI focus: $label');
+  await _until(
+    tester,
+    () => tester.binding.lifecycleState == AppLifecycleState.resumed,
+  );
+}
+
 Future<void> _tap(WidgetTester tester, String key) async {
   final label = key.startsWith('quiz-') ? 'quiz' : key;
   debugPrint('Native UI action: $label');
+  await _foreground(tester, label);
   final button = find.byKey(ValueKey(key));
+  if (key == 'group-create' && button.evaluate().isEmpty) {
+    await _tap(tester, 'groups-open');
+    await _settle(tester);
+  }
   await tester.ensureVisible(button);
   await _settle(tester);
   await tester.tap(button);
@@ -342,4 +386,24 @@ Future<void> _settle(WidgetTester tester) async {
     EnginePhase.sendSemanticsUpdate,
     const Duration(seconds: 10),
   );
+}
+
+Future<void> _captureWorkspace(
+  WidgetTester tester,
+  GlobalKey boundary,
+  String name,
+) async {
+  const directory = String.fromEnvironment('VAULT_VISUAL_DIR');
+  if (directory.isEmpty) return;
+  await _settle(tester);
+  final render =
+      boundary.currentContext!.findRenderObject()! as RenderRepaintBoundary;
+  final image = await render.toImage(pixelRatio: 1);
+  try {
+    final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
+    await File('$directory/$name.png')
+        .writeAsBytes(bytes!.buffer.asUint8List(), flush: true);
+  } finally {
+    image.dispose();
+  }
 }

@@ -28,6 +28,7 @@ void main() {
         reporter,
         const PlatformRecoveryExportService(reporter),
         const PlatformGroupLogoService(reporter),
+        const PlatformCredentialFileService(reporter),
       ),
       reporter,
       events.stream,
@@ -50,28 +51,38 @@ void main() {
     );
     final group = controller.state.content!.groups.single;
     expect(
-      await controller.saveAccount(
-        AccountDraftV1(
+      await controller.saveCard(
+        CardDraftV1(
           name: 'Synthetic account',
-          login: 'fixture@example.invalid',
-          password: 'fixture password',
+          service: 'github',
+          cardType: CardTypeV1.account,
+          environment: EnvironmentV1.production,
+          fields: const [
+            CardFieldDraftV1(
+              id: FieldIdV1.login,
+              value: 'fixture@example.invalid',
+            ),
+            CardFieldDraftV1(id: FieldIdV1.password, value: 'fixture password'),
+          ],
           groupIds: List.unmodifiable([group.id]),
         ),
       ),
       isTrue,
     );
     expect(await controller.deleteGroup(group.id), isTrue);
-    final account = controller.state.content!.accounts.single;
+    final account = controller.state.content!.cards.single;
     expect(account.groupIds, isEmpty);
     expect(
-      (await controller.readAccount(account.id))!.password,
+      (await controller.readCard(account.id))!.fields
+          .firstWhere((f) => f.id == FieldIdV1.password)
+          .value,
       'fixture password',
     );
     await controller.lock();
     expect(controller.state.content, isNull);
-    expect(await controller.readAccount(account.id), isNull);
+    expect(await controller.readCard(account.id), isNull);
     await controller.unlock(password);
-    expect(controller.state.content!.accounts.single.id, account.id);
+    expect(controller.state.content!.cards.single.id, account.id);
   });
 }
 

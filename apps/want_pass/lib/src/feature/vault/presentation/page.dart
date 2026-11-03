@@ -28,6 +28,7 @@ class _VaultPageState extends State<VaultPage> {
   final _recoveryHint = TextEditingController();
   final _background = WantBackgroundController();
   final _headingFocus = FocusNode();
+  final _unlockFocus = FocusNode();
   late final PageController _pages;
   late bool _includeAppearance;
   int _step = 1, _navigationEpoch = 0;
@@ -67,8 +68,15 @@ class _VaultPageState extends State<VaultPage> {
 
   bool _keyboard(KeyEvent event) {
     widget.controller.activity();
+    final keyboard = HardwareKeyboard.instance;
+    final modifier = Theme.of(context).platform == TargetPlatform.macOS
+        ? keyboard.isMetaPressed
+        : keyboard.isControlPressed;
     if (event is KeyDownEvent &&
-        event.logicalKey == LogicalKeyboardKey.escape) {
+        modifier &&
+        !keyboard.isAltPressed &&
+        !keyboard.isShiftPressed &&
+        event.logicalKey == LogicalKeyboardKey.keyL) {
       unawaited(widget.controller.lock());
       return true;
     }
@@ -113,6 +121,7 @@ class _VaultPageState extends State<VaultPage> {
     _pages.dispose();
     _background.dispose();
     _headingFocus.dispose();
+    _unlockFocus.dispose();
     super.dispose();
   }
 
@@ -308,12 +317,6 @@ class _VaultPageState extends State<VaultPage> {
     if (state.phase == VaultPhase.unavailable) {
       return _text('Vault unavailable', 'Сейф недоступен');
     }
-    if (state.phase == VaultPhase.unlocked) {
-      return _text('Access granted', 'Доступ разрешен');
-    }
-    if (state.phase == VaultPhase.locked && !_recovering) {
-      return _text('Sign-in required', 'Требуется вход');
-    }
     return switch (_step) {
       0 =>
         _recovering
@@ -397,16 +400,25 @@ class _VaultPageState extends State<VaultPage> {
   }
 
   void _showUnlock() {
-    widget.controller.dismissFailure();
-    _dialog(
-      (context) => VaultUnlockDialog(
-        controller: widget.controller,
-        onRecovery: _startRecovery,
-        requirements: _passwordRequirements,
-        errorText: _error,
-      ),
-    );
+    _unlockFocus.requestFocus();
   }
+
+  Widget _ambient(VaultState state, bool setup, {required Widget child}) =>
+      setup
+      ? WantBackgroundMotion(
+          controller: _background,
+          showPauseControl: false,
+          alternateWithLightning: true,
+          pauseLabel: _text('Pause background', 'Остановить фон'),
+          resumeLabel: _text('Resume background', 'Включить фон'),
+          child: child,
+        )
+      : state.phase == VaultPhase.locked
+      ? VaultFilaments(child: child)
+      : child;
+  Widget _surface({required bool setup, required Widget child}) => setup
+      ? WantCard(hoverEffect: false, padding: EdgeInsets.zero, child: child)
+      : child;
 
   void _effect(BuildContext context, VaultEffect effect) {
     switch (effect) {
@@ -428,11 +440,15 @@ class _VaultPageState extends State<VaultPage> {
             ),
           ),
         );
+      case VaultCredentialCopiedV1():
+        return;
       case VaultNotice(:final kind):
-        final success =
-            kind == VaultNoticeKind.copied ||
-            kind == VaultNoticeKind.exported ||
-            kind == VaultNoticeKind.unlocked;
+        if (kind == VaultNoticeKind.locked ||
+            kind == VaultNoticeKind.unlocked ||
+            kind == VaultNoticeKind.copied) {
+          return;
+        }
+        final success = kind == VaultNoticeKind.exported;
         showWantSnackbar(
           context: context,
           variant: success
@@ -442,28 +458,11 @@ class _VaultPageState extends State<VaultPage> {
               ? _text('Success', 'Готово')
               : _text('Info', 'Информация'),
           closeLabel: _text('Close', 'Закрыть'),
-          title: Text(switch (kind) {
-            VaultNoticeKind.copied => _text(
-              'Recovery JSON copied',
-              'JSON восстановления скопирован',
-            ),
-            VaultNoticeKind.exportStarted => _text(
-              'Saving recovery JSON…',
-              'Сохраняем JSON восстановления…',
-            ),
-            VaultNoticeKind.exported => _text(
-              'Recovery JSON saved',
-              'JSON восстановления сохранён',
-            ),
-            VaultNoticeKind.unlocked => _text(
-              'Access granted',
-              'Доступ разрешен',
-            ),
-            VaultNoticeKind.locked => _text(
-              'Vault locked',
-              'Сейф заблокирован',
-            ),
-          }),
+          title: Text(
+            success
+                ? _text('File saved', 'Файл сохранён')
+                : _text('Saving file…', 'Сохраняем файл…'),
+          ),
         );
     }
   }
@@ -792,17 +791,14 @@ class _VaultPageState extends State<VaultPage> {
             color: WantTheme.of(context).color('background'),
             textStyle: WantTheme.of(context).forui.typography.body.sm
                 .copyWith(fontSize: 16, height: 1.7),
-            child: WantBackgroundMotion(
-              controller: _background,
-              showPauseControl: false,
-              alternateWithLightning: true,
-              pauseLabel: _text('Pause background', 'Остановить фон'),
-              resumeLabel: _text('Resume background', 'Включить фон'),
+            child: _ambient(
+              state,
+              setup,
               child: SafeArea(
                 child: Center(
                   child: ConstrainedBox(
                     constraints: BoxConstraints(
-                      maxWidth: state.phase == VaultPhase.unlocked ? 1200 : 720,
+                      maxWidth: setup ? 720 : double.infinity,
                     ),
                     child: Padding(
                       padding: const EdgeInsets.all(20),
@@ -812,18 +808,50 @@ class _VaultPageState extends State<VaultPage> {
                           Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
-                              SizedBox(
-                                width: 48,
-                                height: 48,
-                                child: WantSvg3D.asset(
-                                  'assets/brand/logo.svg',
-                                  semanticsLabel: 'Want Pass',
-                                  glow: !MediaQuery.highContrastOf(context),
-                                  placeholderBuilder: (_) =>
-                                      Image.asset('assets/brand/logo-dark.png'),
-                                  errorBuilder: (_, error) =>
-                                      Image.asset('assets/brand/logo-dark.png'),
-                                ),
+                              Row(
+                                spacing: 12,
+                                children: [
+                                  SizedBox(
+                                    width: 48,
+                                    height: 48,
+                                    child: WantSvg3D.asset(
+                                      'assets/brand/logo.svg',
+                                      semanticsLabel: 'Want Pass',
+                                      glow: !MediaQuery.highContrastOf(context),
+                                      placeholderBuilder: (_) => Image.asset(
+                                        'assets/brand/logo-dark.png',
+                                      ),
+                                      errorBuilder: (_, error) => Image.asset(
+                                        'assets/brand/logo-dark.png',
+                                      ),
+                                    ),
+                                  ),
+                                  if (!setup &&
+                                      state.phase != VaultPhase.unavailable)
+                                    VaultPadlock(
+                                      key: const ValueKey('vault-padlock'),
+                                      opened:
+                                          state.phase == VaultPhase.unlocked,
+                                      label: state.phase == VaultPhase.unlocked
+                                          ? _text(
+                                              'Lock vault',
+                                              'Заблокировать сейф',
+                                            )
+                                          : _text(
+                                              'Unlock vault',
+                                              'Разблокировать сейф',
+                                            ),
+                                      onPressed: state.busy
+                                          ? null
+                                          : state.phase == VaultPhase.unlocked
+                                          ? () => unawaited(
+                                              widget.controller.lock(),
+                                            )
+                                          : state.phase == VaultPhase.locked
+                                          ? _showUnlock
+                                          : null,
+                                    ),
+                                ],
                               ),
                               if (widget.appearance case final appearance?)
                                 AppearanceControls(controller: appearance),
@@ -831,9 +859,8 @@ class _VaultPageState extends State<VaultPage> {
                           ),
                           Expanded(
                             child: LayoutBuilder(
-                              builder: (context, constraints) => WantCard(
-                                hoverEffect: false,
-                                padding: EdgeInsets.zero,
+                              builder: (context, constraints) => _surface(
+                                setup: setup,
                                 child: SizedBox(
                                   height: constraints.maxHeight,
                                   child: Padding(
@@ -844,16 +871,21 @@ class _VaultPageState extends State<VaultPage> {
                                       spacing: 12,
                                       children: [
                                         if (setup) _progress(),
-                                        Focus(
-                                          focusNode: _headingFocus,
-                                          child: Semantics(
-                                            header: true,
-                                            child: WantTypography(
-                                              _title(state),
-                                              variant: WantTypographyVariant.h2,
+                                        if (setup ||
+                                            state.phase == VaultPhase.loading ||
+                                            state.phase ==
+                                                VaultPhase.unavailable)
+                                          Focus(
+                                            focusNode: _headingFocus,
+                                            child: Semantics(
+                                              header: true,
+                                              child: WantTypography(
+                                                _title(state),
+                                                variant:
+                                                    WantTypographyVariant.h2,
+                                              ),
                                             ),
                                           ),
-                                        ),
                                         if (setup)
                                           Expanded(
                                             child: PageView(
@@ -870,76 +902,33 @@ class _VaultPageState extends State<VaultPage> {
                                               controller: widget.controller,
                                             ),
                                           )
-                                        else
+                                        else if (state.phase ==
+                                            VaultPhase.locked)
                                           Expanded(
-                                            child: _slide([
-                                              if (state.phase ==
-                                                      VaultPhase.unlocked ||
-                                                  state.phase ==
-                                                      VaultPhase.locked) ...[
-                                                Center(
-                                                  child: VaultSafeDial(
-                                                    key: const ValueKey(
-                                                      'vault-dial',
-                                                    ),
-                                                    opened:
-                                                        state.phase ==
-                                                        VaultPhase.unlocked,
-                                                    remaining: () => widget
-                                                        .controller
-                                                        .idleRemaining,
-                                                    label:
-                                                        state.phase ==
-                                                            VaultPhase.unlocked
-                                                        ? _text(
-                                                            'Lock vault',
-                                                            'Заблокировать сейф',
-                                                          )
-                                                        : _text(
-                                                            'Unlock vault',
-                                                            'Разблокировать сейф',
-                                                          ),
-                                                    onPressed: state.busy
-                                                        ? null
-                                                        : state.phase ==
-                                                              VaultPhase
-                                                                  .unlocked
-                                                        ? () => unawaited(
-                                                            widget.controller
-                                                                .lock(
-                                                                  notify: true,
-                                                                ),
-                                                          )
-                                                        : _showUnlock,
-                                                  ),
-                                                ),
-                                                if (state.phase ==
-                                                    VaultPhase.unlocked)
-                                                  VaultIdleCountdown(
-                                                    remaining: () => widget
-                                                        .controller
-                                                        .idleRemaining,
-                                                  ),
-                                              ],
-                                            ]),
-                                          ),
+                                            child: Center(
+                                              child: VaultUnlockForm(
+                                                controller: widget.controller,
+                                                focusNode: _unlockFocus,
+                                                onRecovery: _startRecovery,
+                                                requirements:
+                                                    _passwordRequirements,
+                                                errorText: _error,
+                                              ),
+                                            ),
+                                          )
+                                        else
+                                          Expanded(child: _slide([])),
                                         if (state.error case final error?
                                             when state.phase !=
-                                                    VaultPhase.locked ||
-                                                error
-                                                    is! VaultRejectedErrorV1 ||
-                                                (error.kind !=
-                                                        VaultFailureKindV1
-                                                            .credentials &&
-                                                    error.kind !=
-                                                        VaultFailureKindV1
-                                                            .invalidPassword))
+                                                    VaultPhase.locked &&
+                                                state.phase !=
+                                                    VaultPhase.unlocked)
                                           WantTypography(
                                             _error(error),
                                             colorRole: 'destructive',
                                             liveRegion: true,
                                           ),
-                                        if (state.busy)
+                                        if (state.busy && setup)
                                           WantTypography(
                                             _text(
                                               'Working…',

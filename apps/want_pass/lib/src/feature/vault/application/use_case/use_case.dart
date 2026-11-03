@@ -93,4 +93,49 @@ abstract interface class VaultUseCase {
   FutureDomainResult<SelectGroupLogoResultV1> selectGroupLogoV1({
     required SelectGroupLogoParamsV1 params,
   });
+  FutureDomainResult<LoadContentResultV2> loadContentV2({
+    required LoadContentParamsV2 params,
+  });
+  FutureDomainResult<SaveGroupResultV2> saveGroupV2({
+    required SaveGroupParamsV2 params,
+  });
+  FutureDomainResult<DeleteGroupResultV2> deleteGroupV2({
+    required DeleteGroupParamsV2 params,
+  });
+  FutureDomainResult<SearchCardsResultV1> searchCardsV1({
+    required SearchCardsParamsV1 params,
+  });
+  FutureDomainResult<ReadCardListRowsResultV1> readCardListRowsV1({
+    required ReadCardListRowsParamsV1 params,
+  });
+  FutureDomainResult<ReadCardPreviewResultV1> readCardPreviewV1({
+    required ReadCardPreviewParamsV1 params,
+  });
+  FutureDomainResult<ReadCardFieldResultV1> readCardFieldV1({
+    required ReadCardFieldParamsV1 params,
+  });
+  FutureDomainResult<ReadCardResultV1> readCardV1({
+    required ReadCardParamsV1 params,
+  });
+  FutureDomainResult<SaveCardResultV1> saveCardV1({
+    required SaveCardParamsV1 params,
+  });
+  FutureDomainResult<DeleteCardResultV1> deleteCardV1({
+    required DeleteCardParamsV1 params,
+  });
+  FutureDomainResult<ReadTotpResultV1> readTotpV1({
+    required ReadTotpParamsV1 params,
+  });
+  FutureDomainResult<CopyCardResultV1> copyCardV1({
+    required CopyCardParamsV1 params,
+  });
+  FutureDomainResult<SelectAttachmentResultV1> selectAttachmentV1({
+    required SelectAttachmentParamsV1 params,
+  });
+  FutureDomainResult<SelectCardDestinationResultV1> selectCardDestinationV1({
+    required SelectCardDestinationParamsV1 params,
+  });
+  FutureDomainResult<ExportCardAttachmentResultV1> exportCardAttachmentV1({
+    required ExportCardAttachmentParamsV1 params,
+  });
 }

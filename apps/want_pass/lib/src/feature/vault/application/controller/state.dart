@@ -14,7 +14,8 @@ enum VaultPhase {
 final class VaultState extends Equatable {
   final VaultPhase phase;
   final bool busy;
-  final ContentSnapshotV1? content;
+  final ContentSnapshotV2? content;
+  final CardCatalogV1? catalog;
   final bool? passwordValid;
   final bool passwordChecking;
   final bool recovering;
@@ -29,6 +30,7 @@ final class VaultState extends Equatable {
     required this.phase,
     this.busy = false,
     this.content,
+    this.catalog,
     this.passwordValid,
     this.passwordChecking = false,
     this.recovering = false,
@@ -44,7 +46,8 @@ final class VaultState extends Equatable {
   });
   VaultState copyWith({
     bool? busy,
-    ContentSnapshotV1? Function()? content,
+    ContentSnapshotV2? Function()? content,
+    CardCatalogV1? Function()? catalog,
     bool? Function()? passwordValid,
     bool? passwordChecking,
     bool? passwordSaved,
@@ -58,6 +61,7 @@ final class VaultState extends Equatable {
     phase: phase,
     busy: busy ?? this.busy,
     content: content == null ? this.content : content(),
+    catalog: catalog == null ? this.catalog : catalog(),
     passwordValid: passwordValid == null ? this.passwordValid : passwordValid(),
     passwordChecking: passwordChecking ?? this.passwordChecking,
     recovering: recovering,
@@ -76,6 +80,7 @@ final class VaultState extends Equatable {
     phase,
     busy,
     content,
+    catalog,
     passwordValid,
     passwordChecking,
     recovering,

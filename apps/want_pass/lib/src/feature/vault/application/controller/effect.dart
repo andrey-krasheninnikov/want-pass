@@ -18,3 +18,16 @@ final class VaultRecoveryReset extends VaultEffect {
 final class VaultRecoveryRegenerated extends VaultEffect {
   const VaultRecoveryRegenerated();
 }
+
+final class VaultCredentialCopiedV1 extends VaultEffect {
+  final String cardId;
+  final CardCopyKindV1 kind;
+  final FieldIdV1? field;
+  const VaultCredentialCopiedV1({
+    required this.cardId,
+    required this.kind,
+    this.field,
+  });
+  @override
+  String toString() => 'VaultCredentialCopiedV1(<redacted>)';
+}

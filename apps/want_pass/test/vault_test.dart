@@ -28,6 +28,7 @@ void main() {
         reporter,
         PlatformRecoveryExportService(reporter),
         const PlatformGroupLogoService(_Reporter()),
+        const PlatformCredentialFileService(_Reporter()),
       );
       final initialized = await useCase.initializeV1(
         params: const InitializeVaultParamsV1(),
@@ -83,6 +84,7 @@ void main() {
         reporter,
         PlatformRecoveryExportService(reporter),
         const PlatformGroupLogoService(_Reporter()),
+        const PlatformCredentialFileService(_Reporter()),
       ),
       reporter,
       events.stream,

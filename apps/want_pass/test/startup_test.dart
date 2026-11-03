@@ -108,6 +108,108 @@ final class _VaultHandle implements VaultHandleV1 {
 
 final class _VaultAccess implements VaultAccessService {
   @override
+  FutureDomainResult<CardMatchesV1> searchCardsV1({
+    required VaultHandleV1 handle,
+    required CardSearchV1 query,
+    required BigInt revision,
+  }) async => Result.success(
+    CardMatchesV1(revision: revision, cardIds: const [], groupIds: const []),
+  );
+  @override
+  FutureDomainResult<List<CardListRowV1>> cardListRowsV1({
+    required VaultHandleV1 handle,
+    required List<String> ids,
+    required BigInt revision,
+  }) async => const Result.success([]);
+  @override
+  FutureDomainResult<List<CardRowV1>> cardRowsV1({
+    required VaultHandleV1 handle,
+    required List<String> ids,
+    required BigInt revision,
+  }) async => const Result.success([]);
+  @override
+  FutureDomainResult<CardCatalogV1> cardCatalogV1() async => Result.success(
+    CardCatalogV1(
+      services: const ['github'],
+      presets: [CardPresetV1(cardType: CardTypeV1.account, fields: const [])],
+    ),
+  );
+  @override
+  FutureDomainResult<ContentSnapshotV2> contentV2({
+    required VaultHandleV1 handle,
+  }) async => Result.success(
+    ContentSnapshotV2(revision: BigInt.zero, groups: const [], cards: const []),
+  );
+  @override
+  FutureDomainResult<ContentSnapshotV2> saveGroupV2({
+    required VaultHandleV1 handle,
+    required GroupDraftV1 input,
+    required BigInt revision,
+  }) async =>
+      const Result.error(VaultRejectedErrorV1(VaultFailureKindV1.unavailable));
+  @override
+  FutureDomainResult<ContentSnapshotV2> deleteGroupV2({
+    required VaultHandleV1 handle,
+    required String id,
+    required BigInt revision,
+  }) async =>
+      const Result.error(VaultRejectedErrorV1(VaultFailureKindV1.unavailable));
+  @override
+  FutureDomainResult<CardPreviewV1> cardPreviewV1({
+    required VaultHandleV1 handle,
+    required String id,
+    required BigInt revision,
+  }) async =>
+      const Result.error(VaultRejectedErrorV1(VaultFailureKindV1.unavailable));
+  @override
+  FutureDomainResult<CardV1> cardV1({
+    required VaultHandleV1 handle,
+    required String id,
+  }) async =>
+      const Result.error(VaultRejectedErrorV1(VaultFailureKindV1.unavailable));
+  @override
+  FutureDomainResult<ContentSnapshotV2> saveCardV1({
+    required VaultHandleV1 handle,
+    required CardDraftV1 input,
+    required BigInt revision,
+  }) async =>
+      const Result.error(VaultRejectedErrorV1(VaultFailureKindV1.unavailable));
+  @override
+  FutureDomainResult<ContentSnapshotV2> deleteCardV1({
+    required VaultHandleV1 handle,
+    required String id,
+    required BigInt revision,
+  }) async =>
+      const Result.error(VaultRejectedErrorV1(VaultFailureKindV1.unavailable));
+  @override
+  FutureDomainResult<TotpCodeV1> currentTotpV1({
+    required VaultHandleV1 handle,
+    required String id,
+  }) async =>
+      const Result.error(VaultRejectedErrorV1(VaultFailureKindV1.unavailable));
+  @override
+  FutureDomainResult<String> copyCardFieldV1({
+    required VaultHandleV1 handle,
+    required String id,
+    required FieldIdV1 field,
+  }) async =>
+      const Result.error(VaultRejectedErrorV1(VaultFailureKindV1.unavailable));
+  @override
+  FutureDomainResult<String> copyAccountV1({
+    required VaultHandleV1 handle,
+    required String id,
+  }) async =>
+      const Result.error(VaultRejectedErrorV1(VaultFailureKindV1.unavailable));
+  @override
+  FutureDomainResult<void> exportAttachmentV1({
+    required VaultHandleV1 handle,
+    required String id,
+    required String destination,
+    required BigInt revision,
+  }) async =>
+      const Result.error(VaultRejectedErrorV1(VaultFailureKindV1.unavailable));
+
+  @override
   FutureDomainResult<ContentSnapshotV1> contentV1({
     required VaultHandleV1 handle,
   }) async => Result.success(
@@ -325,6 +427,7 @@ void main() {
         observer,
         PlatformRecoveryExportService(observer),
         PlatformGroupLogoService(observer),
+        PlatformCredentialFileService(observer),
       ),
       observer,
       vaultEvents,
@@ -600,6 +703,34 @@ void main() {
       await controller.init();
       expect(controller.isClosed, isTrue);
       expect(states, isEmpty);
+    },
+  );
+
+  test(
+    'vault diagnostics retain card operation names and redact untrusted text',
+    () {
+      for (final operation in [
+        'RustVaultAccessService.saveCardV1():',
+        'VaultUseCaseImpl.saveCardV1():',
+        'VaultController.copyCard():',
+        'PlatformCredentialFileService.selectAttachmentV1():',
+      ]) {
+        observer.reportVault(
+          layer: VaultDiagnosticLayer.application,
+          operation: operation,
+          error: const VaultRejectedErrorV1(VaultFailureKindV1.storage),
+        );
+        expect(talker.history.last.message, 'application $operation storage');
+      }
+      observer.reportVault(
+        layer: VaultDiagnosticLayer.application,
+        operation: 'Synthetic private input',
+        error: const VaultUnexpectedErrorV1(),
+      );
+      expect(
+        talker.history.last.message,
+        'application unknownOperation unexpectedError',
+      );
     },
   );
 

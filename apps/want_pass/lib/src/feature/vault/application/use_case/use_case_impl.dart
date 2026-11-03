@@ -9,11 +9,13 @@ final class VaultUseCaseImpl implements VaultUseCase {
   final VaultReporter _reporter;
   final RecoveryExportService _export;
   final GroupLogoService _logos;
+  final CredentialFileService _files;
   const VaultUseCaseImpl(
     this._access,
     this._reporter,
     this._export,
     this._logos,
+    this._files,
   );
   @override
   FutureDomainResult<InitializeVaultResultV1> initializeV1({
@@ -804,6 +806,421 @@ final class VaultUseCaseImpl implements VaultUseCase {
       final selected = await _logos.selectV1();
       if (selected.isError) throw selected.error;
       return SelectGroupLogoResultV1(bytes: selected.value);
+    }, mapToDomainError: (_, _) => const VaultUnexpectedErrorV1());
+    if (result.isError) {
+      reportVaultSafely(
+        _reporter,
+        layer: VaultDiagnosticLayer.application,
+        operation: op,
+        error: result.error is VaultErrorV1
+            ? result.error as VaultErrorV1
+            : const VaultUnexpectedErrorV1(),
+      );
+    }
+    return result;
+  }
+
+  @override
+  FutureDomainResult<LoadContentResultV2> loadContentV2({
+    required LoadContentParamsV2 params,
+  }) async {
+    const op = 'VaultUseCaseImpl.loadContentV2():';
+    final result = await captureResult<LoadContentResultV2>(() async {
+      final content = await _access.contentV2(handle: params.handle);
+      if (content.isError) throw content.error;
+      final catalog = await _access.cardCatalogV1();
+      if (catalog.isError) throw catalog.error;
+      return LoadContentResultV2(
+        snapshot: content.value,
+        catalog: catalog.value,
+      );
+    }, mapToDomainError: (_, _) => const VaultUnexpectedErrorV1());
+    if (result.isError) {
+      reportVaultSafely(
+        _reporter,
+        layer: VaultDiagnosticLayer.application,
+        operation: op,
+        error: result.error is VaultErrorV1
+            ? result.error as VaultErrorV1
+            : const VaultUnexpectedErrorV1(),
+      );
+    }
+    return result;
+  }
+
+  @override
+  FutureDomainResult<SaveGroupResultV2> saveGroupV2({
+    required SaveGroupParamsV2 params,
+  }) async {
+    const op = 'VaultUseCaseImpl.saveGroupV2():';
+    final result = await captureResult<SaveGroupResultV2>(() async {
+      final result = await _access.saveGroupV2(
+        handle: params.handle,
+        input: params.input,
+        revision: params.revision,
+      );
+      if (result.isError) throw result.error;
+      return SaveGroupResultV2(snapshot: result.value);
+    }, mapToDomainError: (_, _) => const VaultUnexpectedErrorV1());
+    if (result.isError) {
+      reportVaultSafely(
+        _reporter,
+        layer: VaultDiagnosticLayer.application,
+        operation: op,
+        error: result.error is VaultErrorV1
+            ? result.error as VaultErrorV1
+            : const VaultUnexpectedErrorV1(),
+      );
+    }
+    return result;
+  }
+
+  @override
+  FutureDomainResult<DeleteGroupResultV2> deleteGroupV2({
+    required DeleteGroupParamsV2 params,
+  }) async {
+    const op = 'VaultUseCaseImpl.deleteGroupV2():';
+    final result = await captureResult<DeleteGroupResultV2>(() async {
+      final result = await _access.deleteGroupV2(
+        handle: params.handle,
+        id: params.id,
+        revision: params.revision,
+      );
+      if (result.isError) throw result.error;
+      return DeleteGroupResultV2(snapshot: result.value);
+    }, mapToDomainError: (_, _) => const VaultUnexpectedErrorV1());
+    if (result.isError) {
+      reportVaultSafely(
+        _reporter,
+        layer: VaultDiagnosticLayer.application,
+        operation: op,
+        error: result.error is VaultErrorV1
+            ? result.error as VaultErrorV1
+            : const VaultUnexpectedErrorV1(),
+      );
+    }
+    return result;
+  }
+
+  @override
+  FutureDomainResult<SearchCardsResultV1> searchCardsV1({
+    required SearchCardsParamsV1 params,
+  }) async {
+    const op = 'VaultUseCaseImpl.searchCardsV1():';
+    final result = await captureResult<SearchCardsResultV1>(() async {
+      final value = await _access.searchCardsV1(
+        handle: params.handle,
+        query: params.query,
+        revision: params.revision,
+      );
+      if (value.isError) throw value.error;
+      return SearchCardsResultV1(matches: value.value);
+    }, mapToDomainError: (_, _) => const VaultUnexpectedErrorV1());
+    if (result.isError) {
+      reportVaultSafely(
+        _reporter,
+        layer: VaultDiagnosticLayer.application,
+        operation: op,
+        error: result.error is VaultErrorV1
+            ? result.error as VaultErrorV1
+            : const VaultUnexpectedErrorV1(),
+      );
+    }
+    return result;
+  }
+
+  @override
+  FutureDomainResult<ReadCardListRowsResultV1> readCardListRowsV1({
+    required ReadCardListRowsParamsV1 params,
+  }) async {
+    const op = 'VaultUseCaseImpl.readCardListRowsV1():';
+    final result = await captureResult<ReadCardListRowsResultV1>(() async {
+      final value = await _access.cardListRowsV1(
+        handle: params.handle,
+        ids: params.ids,
+        revision: params.revision,
+      );
+      if (value.isError) throw value.error;
+      return ReadCardListRowsResultV1(rows: value.value);
+    }, mapToDomainError: (_, _) => const VaultUnexpectedErrorV1());
+    if (result.isError) {
+      reportVaultSafely(
+        _reporter,
+        layer: VaultDiagnosticLayer.application,
+        operation: op,
+        error: result.error is VaultErrorV1
+            ? result.error as VaultErrorV1
+            : const VaultUnexpectedErrorV1(),
+      );
+    }
+    return result;
+  }
+
+  @override
+  FutureDomainResult<ReadCardPreviewResultV1> readCardPreviewV1({
+    required ReadCardPreviewParamsV1 params,
+  }) async {
+    const op = 'VaultUseCaseImpl.readCardPreviewV1():';
+    final result = await captureResult<ReadCardPreviewResultV1>(() async {
+      final value = await _access.cardPreviewV1(
+        handle: params.handle,
+        id: params.id,
+        revision: params.revision,
+      );
+      if (value.isError) throw value.error;
+      return ReadCardPreviewResultV1(preview: value.value);
+    }, mapToDomainError: (_, _) => const VaultUnexpectedErrorV1());
+    if (result.isError) {
+      reportVaultSafely(
+        _reporter,
+        layer: VaultDiagnosticLayer.application,
+        operation: op,
+        error: result.error is VaultErrorV1
+            ? result.error as VaultErrorV1
+            : const VaultUnexpectedErrorV1(),
+      );
+    }
+    return result;
+  }
+
+  @override
+  FutureDomainResult<ReadCardFieldResultV1> readCardFieldV1({
+    required ReadCardFieldParamsV1 params,
+  }) async {
+    const op = 'VaultUseCaseImpl.readCardFieldV1():';
+    final result = await captureResult<ReadCardFieldResultV1>(() async {
+      final value = await _access.copyCardFieldV1(
+        handle: params.handle,
+        id: params.id,
+        field: params.field,
+      );
+      if (value.isError) throw value.error;
+      return ReadCardFieldResultV1(value: value.value);
+    }, mapToDomainError: (_, _) => const VaultUnexpectedErrorV1());
+    if (result.isError) {
+      reportVaultSafely(
+        _reporter,
+        layer: VaultDiagnosticLayer.application,
+        operation: op,
+        error: result.error is VaultErrorV1
+            ? result.error as VaultErrorV1
+            : const VaultUnexpectedErrorV1(),
+      );
+    }
+    return result;
+  }
+
+  @override
+  FutureDomainResult<ReadCardResultV1> readCardV1({
+    required ReadCardParamsV1 params,
+  }) async {
+    const op = 'VaultUseCaseImpl.readCardV1():';
+    final result = await captureResult<ReadCardResultV1>(() async {
+      final result = await _access.cardV1(handle: params.handle, id: params.id);
+      if (result.isError) throw result.error;
+      return ReadCardResultV1(card: result.value);
+    }, mapToDomainError: (_, _) => const VaultUnexpectedErrorV1());
+    if (result.isError) {
+      reportVaultSafely(
+        _reporter,
+        layer: VaultDiagnosticLayer.application,
+        operation: op,
+        error: result.error is VaultErrorV1
+            ? result.error as VaultErrorV1
+            : const VaultUnexpectedErrorV1(),
+      );
+    }
+    return result;
+  }
+
+  @override
+  FutureDomainResult<SaveCardResultV1> saveCardV1({
+    required SaveCardParamsV1 params,
+  }) async {
+    const op = 'VaultUseCaseImpl.saveCardV1():';
+    final result = await captureResult<SaveCardResultV1>(() async {
+      final result = await _access.saveCardV1(
+        handle: params.handle,
+        input: params.input,
+        revision: params.revision,
+      );
+      if (result.isError) throw result.error;
+      return SaveCardResultV1(snapshot: result.value);
+    }, mapToDomainError: (_, _) => const VaultUnexpectedErrorV1());
+    if (result.isError) {
+      reportVaultSafely(
+        _reporter,
+        layer: VaultDiagnosticLayer.application,
+        operation: op,
+        error: result.error is VaultErrorV1
+            ? result.error as VaultErrorV1
+            : const VaultUnexpectedErrorV1(),
+      );
+    }
+    return result;
+  }
+
+  @override
+  FutureDomainResult<DeleteCardResultV1> deleteCardV1({
+    required DeleteCardParamsV1 params,
+  }) async {
+    const op = 'VaultUseCaseImpl.deleteCardV1():';
+    final result = await captureResult<DeleteCardResultV1>(() async {
+      final result = await _access.deleteCardV1(
+        handle: params.handle,
+        id: params.id,
+        revision: params.revision,
+      );
+      if (result.isError) throw result.error;
+      return DeleteCardResultV1(snapshot: result.value);
+    }, mapToDomainError: (_, _) => const VaultUnexpectedErrorV1());
+    if (result.isError) {
+      reportVaultSafely(
+        _reporter,
+        layer: VaultDiagnosticLayer.application,
+        operation: op,
+        error: result.error is VaultErrorV1
+            ? result.error as VaultErrorV1
+            : const VaultUnexpectedErrorV1(),
+      );
+    }
+    return result;
+  }
+
+  @override
+  FutureDomainResult<ReadTotpResultV1> readTotpV1({
+    required ReadTotpParamsV1 params,
+  }) async {
+    const op = 'VaultUseCaseImpl.readTotpV1():';
+    final result = await captureResult<ReadTotpResultV1>(() async {
+      final result = await _access.currentTotpV1(
+        handle: params.handle,
+        id: params.id,
+      );
+      if (result.isError) throw result.error;
+      return ReadTotpResultV1(code: result.value);
+    }, mapToDomainError: (_, _) => const VaultUnexpectedErrorV1());
+    if (result.isError) {
+      reportVaultSafely(
+        _reporter,
+        layer: VaultDiagnosticLayer.application,
+        operation: op,
+        error: result.error is VaultErrorV1
+            ? result.error as VaultErrorV1
+            : const VaultUnexpectedErrorV1(),
+      );
+    }
+    return result;
+  }
+
+  @override
+  FutureDomainResult<CopyCardResultV1> copyCardV1({
+    required CopyCardParamsV1 params,
+  }) async {
+    const op = 'VaultUseCaseImpl.copyCardV1():';
+    final result = await captureResult<CopyCardResultV1>(() async {
+      String text;
+      switch (params.kind) {
+        case CardCopyKindV1.account:
+          final result = await _access.copyAccountV1(
+            handle: params.handle,
+            id: params.id,
+          );
+          if (result.isError) throw result.error;
+          text = result.value;
+        case CardCopyKindV1.otp:
+          final result = await _access.currentTotpV1(
+            handle: params.handle,
+            id: params.id,
+          );
+          if (result.isError) throw result.error;
+          text = result.value.code;
+        case CardCopyKindV1.field:
+          final result = await _access.copyCardFieldV1(
+            handle: params.handle,
+            id: params.id,
+            field: params.field!,
+          );
+          if (result.isError) throw result.error;
+          text = result.value;
+      }
+      final copied = await _export.copyV1(text);
+      if (copied.isError) throw copied.error;
+      return CopyCardResultV1(text: text);
+    }, mapToDomainError: (_, _) => const VaultUnexpectedErrorV1());
+    if (result.isError) {
+      reportVaultSafely(
+        _reporter,
+        layer: VaultDiagnosticLayer.application,
+        operation: op,
+        error: result.error is VaultErrorV1
+            ? result.error as VaultErrorV1
+            : const VaultUnexpectedErrorV1(),
+      );
+    }
+    return result;
+  }
+
+  @override
+  FutureDomainResult<SelectAttachmentResultV1> selectAttachmentV1({
+    required SelectAttachmentParamsV1 params,
+  }) async {
+    const op = 'VaultUseCaseImpl.selectAttachmentV1():';
+    final result = await captureResult<SelectAttachmentResultV1>(() async {
+      final result = await _files.selectAttachmentV1();
+      if (result.isError) throw result.error;
+      return SelectAttachmentResultV1(attachment: result.value);
+    }, mapToDomainError: (_, _) => const VaultUnexpectedErrorV1());
+    if (result.isError) {
+      reportVaultSafely(
+        _reporter,
+        layer: VaultDiagnosticLayer.application,
+        operation: op,
+        error: result.error is VaultErrorV1
+            ? result.error as VaultErrorV1
+            : const VaultUnexpectedErrorV1(),
+      );
+    }
+    return result;
+  }
+
+  @override
+  FutureDomainResult<SelectCardDestinationResultV1> selectCardDestinationV1({
+    required SelectCardDestinationParamsV1 params,
+  }) async {
+    const op = 'VaultUseCaseImpl.selectCardDestinationV1():';
+    final result = await captureResult<SelectCardDestinationResultV1>(() async {
+      final result = await _files.selectDestinationV1(params.name);
+      if (result.isError) throw result.error;
+      return SelectCardDestinationResultV1(destination: result.value);
+    }, mapToDomainError: (_, _) => const VaultUnexpectedErrorV1());
+    if (result.isError) {
+      reportVaultSafely(
+        _reporter,
+        layer: VaultDiagnosticLayer.application,
+        operation: op,
+        error: result.error is VaultErrorV1
+            ? result.error as VaultErrorV1
+            : const VaultUnexpectedErrorV1(),
+      );
+    }
+    return result;
+  }
+
+  @override
+  FutureDomainResult<ExportCardAttachmentResultV1> exportCardAttachmentV1({
+    required ExportCardAttachmentParamsV1 params,
+  }) async {
+    const op = 'VaultUseCaseImpl.exportCardAttachmentV1():';
+    final result = await captureResult<ExportCardAttachmentResultV1>(() async {
+      final result = await _access.exportAttachmentV1(
+        handle: params.handle,
+        id: params.id,
+        destination: params.destination,
+        revision: params.revision,
+      );
+      if (result.isError) throw result.error;
+      return const ExportCardAttachmentResultV1();
     }, mapToDomainError: (_, _) => const VaultUnexpectedErrorV1());
     if (result.isError) {
       reportVaultSafely(

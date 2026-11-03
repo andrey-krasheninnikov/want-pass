@@ -42,6 +42,7 @@ final class SafeBlocObserver extends BlocObserver
       'RustVaultAccessService.cardCatalogV1():' ||
       'RustVaultAccessService.searchCardsV1():' ||
       'RustVaultAccessService.cardRowsV1():' ||
+      'RustVaultAccessService.cardListRowsV1():' ||
       'RustVaultAccessService.cardPreviewV1():' ||
       'RustVaultAccessService.cardV1():' ||
       'RustVaultAccessService.contentV2():' ||
@@ -57,7 +58,7 @@ final class SafeBlocObserver extends BlocObserver
       'VaultController.deleteCard():' ||
       'VaultController.downloadAttachment():' ||
       'VaultController.searchCards():' ||
-      'VaultController.readCardRows():' ||
+      'VaultController.readCardListRows():' ||
       'VaultController.readCardPreview():' ||
       'VaultController.revealCardField():' ||
       'VaultController.readCard():' ||
@@ -70,7 +71,7 @@ final class SafeBlocObserver extends BlocObserver
       'VaultUseCaseImpl.exportCardAttachmentV1():' ||
       'VaultUseCaseImpl.loadContentV2():' ||
       'VaultUseCaseImpl.searchCardsV1():' ||
-      'VaultUseCaseImpl.readCardRowsV1():' ||
+      'VaultUseCaseImpl.readCardListRowsV1():' ||
       'VaultUseCaseImpl.readCardPreviewV1():' ||
       'VaultUseCaseImpl.readCardFieldV1():' ||
       'VaultUseCaseImpl.readCardV1():' ||
@@ -242,6 +243,7 @@ final class SafeBlocObserver extends BlocObserver
       'RustVaultAccessService.cardCatalogV1():' ||
       'RustVaultAccessService.searchCardsV1():' ||
       'RustVaultAccessService.cardRowsV1():' ||
+      'RustVaultAccessService.cardListRowsV1():' ||
       'RustVaultAccessService.cardPreviewV1():' ||
       'RustVaultAccessService.cardV1():' ||
       'RustVaultAccessService.contentV2():' ||
@@ -257,7 +259,7 @@ final class SafeBlocObserver extends BlocObserver
       'VaultController.deleteCard():' ||
       'VaultController.downloadAttachment():' ||
       'VaultController.searchCards():' ||
-      'VaultController.readCardRows():' ||
+      'VaultController.readCardListRows():' ||
       'VaultController.readCardPreview():' ||
       'VaultController.revealCardField():' ||
       'VaultController.readCard():' ||
@@ -270,7 +272,7 @@ final class SafeBlocObserver extends BlocObserver
       'VaultUseCaseImpl.exportCardAttachmentV1():' ||
       'VaultUseCaseImpl.loadContentV2():' ||
       'VaultUseCaseImpl.searchCardsV1():' ||
-      'VaultUseCaseImpl.readCardRowsV1():' ||
+      'VaultUseCaseImpl.readCardListRowsV1():' ||
       'VaultUseCaseImpl.readCardPreviewV1():' ||
       'VaultUseCaseImpl.readCardFieldV1():' ||
       'VaultUseCaseImpl.readCardV1():' ||

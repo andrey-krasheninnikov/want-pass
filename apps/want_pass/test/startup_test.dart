@@ -116,6 +116,12 @@ final class _VaultAccess implements VaultAccessService {
     CardMatchesV1(revision: revision, cardIds: const [], groupIds: const []),
   );
   @override
+  FutureDomainResult<List<CardListRowV1>> cardListRowsV1({
+    required VaultHandleV1 handle,
+    required List<String> ids,
+    required BigInt revision,
+  }) async => const Result.success([]);
+  @override
   FutureDomainResult<List<CardRowV1>> cardRowsV1({
     required VaultHandleV1 handle,
     required List<String> ids,

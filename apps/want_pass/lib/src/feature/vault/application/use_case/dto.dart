@@ -445,11 +445,11 @@ final class SearchCardsResultV1 extends Equatable {
   String toString() => 'SearchCardsResultV1(<redacted>)';
 }
 
-final class ReadCardRowsParamsV1 extends Equatable {
+final class ReadCardListRowsParamsV1 extends Equatable {
   final VaultHandleV1 handle;
   final List<String> ids;
   final BigInt revision;
-  const ReadCardRowsParamsV1({
+  const ReadCardListRowsParamsV1({
     required this.handle,
     required this.ids,
     required this.revision,
@@ -457,14 +457,14 @@ final class ReadCardRowsParamsV1 extends Equatable {
   @override
   List<Object?> get props => [handle, ids, revision];
   @override
-  String toString() => 'ReadCardRowsParamsV1(<redacted>)';
+  String toString() => 'ReadCardListRowsParamsV1(<redacted>)';
 }
 
-final class ReadCardRowsResultV1 extends Equatable {
-  final List<CardRowV1> rows;
-  const ReadCardRowsResultV1({required this.rows});
+final class ReadCardListRowsResultV1 extends Equatable {
+  final List<CardListRowV1> rows;
+  const ReadCardListRowsResultV1({required this.rows});
   @override
   List<Object?> get props => [rows];
   @override
-  String toString() => 'ReadCardRowsResultV1(<redacted>)';
+  String toString() => 'ReadCardListRowsResultV1(<redacted>)';
 }

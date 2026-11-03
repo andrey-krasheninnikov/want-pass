@@ -900,6 +900,19 @@ fn preview_is_revision_bound_and_never_returns_concealed_values() {
     });
     let saved = vault.save_card_v1(input, 0, vault.generation()).unwrap();
     let id = saved.cards[0].id.clone();
+    let list = vault
+        .card_list_rows_v1(vec![id.clone()], saved.revision, vault.generation())
+        .unwrap();
+    let want_pass_vault::api::CardListRowV1 {
+        id: listed_id,
+        login,
+    } = &list[0];
+    assert_eq!(listed_id, &id);
+    assert_eq!(login.as_deref(), Some("fixture@example.invalid"));
+    assert!(matches!(
+        vault.card_list_rows_v1(vec![id.clone()], 0, vault.generation()),
+        Err(VaultFailure::Stale)
+    ));
     let preview = vault
         .card_preview_v1(id.clone(), saved.revision, vault.generation())
         .unwrap();

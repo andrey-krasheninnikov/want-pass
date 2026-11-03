@@ -98,6 +98,24 @@ class CardInputV1 {
           attachment == other.attachment;
 }
 
+class CardListRowV1 {
+  final String id;
+  final String? login;
+
+  const CardListRowV1({required this.id, this.login});
+
+  @override
+  int get hashCode => id.hashCode ^ login.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is CardListRowV1 &&
+          runtimeType == other.runtimeType &&
+          id == other.id &&
+          login == other.login;
+}
+
 class CardMatchesV1 {
   final BigInt revision;
   final List<String> cardIds;

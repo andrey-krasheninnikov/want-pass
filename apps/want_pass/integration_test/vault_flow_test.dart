@@ -260,6 +260,7 @@ Future<void> _enter(WidgetTester tester, String key, String value) async {
     matching: find.bySubtype<EditableText>(),
   );
   await _until(tester, () {
+    if (field.evaluate().isEmpty) return false;
     final input = tester.widget<EditableText>(field);
     return !input.readOnly && input.focusNode.canRequestFocus;
   });

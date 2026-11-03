@@ -123,6 +123,10 @@ pub struct CardMatchesV1 {
     pub card_ids: Vec<String>,
     pub group_ids: Vec<String>,
 }
+pub struct CardListRowV1 {
+    pub id: String,
+    pub login: Option<String>,
+}
 pub struct CardRowV1 {
     pub id: String,
     pub fields: Vec<FieldIdV1>,
@@ -374,6 +378,34 @@ impl Vault {
                 card_ids,
                 group_ids,
             })
+        })
+    }
+    pub fn card_list_rows_v1(
+        &self,
+        ids: Vec<String>,
+        revision: u64,
+        generation: u64,
+    ) -> Result<Vec<CardListRowV1>, VaultFailure> {
+        if ids.len() > 50 || ids.iter().collect::<BTreeSet<_>>().len() != ids.len() {
+            return Err(VaultFailure::Unsupported);
+        }
+        self.read_cards(generation, |d| {
+            if d.revision != revision {
+                return Err(VaultFailure::Stale);
+            }
+            ids.iter()
+                .map(|id| {
+                    let c = d
+                        .cards
+                        .iter()
+                        .find(|c| c.id == *id)
+                        .ok_or(VaultFailure::Missing)?;
+                    Ok(CardListRowV1 {
+                        id: c.id.clone(),
+                        login: super::otp::field(&c.fields, FieldIdV1::Login).map(str::to_owned),
+                    })
+                })
+                .collect()
         })
     }
     pub fn card_rows_v1(

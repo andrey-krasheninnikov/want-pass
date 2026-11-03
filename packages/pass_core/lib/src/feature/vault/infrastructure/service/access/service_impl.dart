@@ -927,6 +927,37 @@ final class RustVaultAccessService implements VaultAccessService {
   }
 
   @override
+  FutureDomainResult<List<CardListRowV1>> cardListRowsV1({
+    required VaultHandleV1 handle,
+    required List<String> ids,
+    required BigInt revision,
+  }) async {
+    const op = 'RustVaultAccessService.cardListRowsV1():';
+    final result = await captureResult<List<CardListRowV1>>(() async {
+      final vault = (handle as _NativeVaultHandle)._vault;
+      final rows = await vault.cardListRowsV1(
+        ids: ids,
+        revision: revision,
+        generation: vault.generation(),
+      );
+      return List.unmodifiable(
+        rows.map((row) => CardListRowV1(id: row.id, login: row.login)),
+      );
+    }, mapToDomainError: _mapNativeError);
+    if (result.isError) {
+      reportVaultSafely(
+        _reporter,
+        layer: VaultDiagnosticLayer.infrastructure,
+        operation: op,
+        error: result.error is VaultErrorV1
+            ? result.error as VaultErrorV1
+            : const VaultUnexpectedErrorV1(),
+      );
+    }
+    return result;
+  }
+
+  @override
   FutureDomainResult<List<CardRowV1>> cardRowsV1({
     required VaultHandleV1 handle,
     required List<String> ids,

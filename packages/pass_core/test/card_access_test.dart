@@ -66,6 +66,25 @@ void main() {
     )).value;
     expect(otp.code.length, 6);
     expect(otp.toString(), isNot(contains(otp.code)));
+    final listRows = (await access.cardListRowsV1(
+      handle: handle,
+      ids: [summary.id],
+      revision: saved.value.revision,
+    )).value;
+    expect(listRows.single.login, 'fixture@example.invalid');
+    expect(listRows.single.props.length, 2);
+    expect(
+      listRows.single.toString(),
+      isNot(contains('fixture@example.invalid')),
+    );
+    expect(
+      (await access.cardListRowsV1(
+        handle: handle,
+        ids: [summary.id],
+        revision: BigInt.zero,
+      )).isError,
+      isTrue,
+    );
     final preview = (await access.cardPreviewV1(
       handle: handle,
       id: summary.id,

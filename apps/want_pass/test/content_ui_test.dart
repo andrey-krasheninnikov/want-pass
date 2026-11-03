@@ -531,6 +531,48 @@ void main() {
     await tester.pumpWidget(const SizedBox.shrink());
     await _closeFixture(tester, fixture);
   });
+  testWidgets('multiline editor keeps arrow keys for the text caret', (
+    tester,
+  ) async {
+    final fixture = (await tester.runAsync(_Fixture.create))!;
+    addTearDown(() => _closeFixture(tester, fixture));
+    await tester.pumpWidget(
+      MaterialApp(
+        builder: (context, child) =>
+            WantTheme(data: WantThemeData.light(), child: child!),
+        home: Scaffold(body: VaultContentView(controller: fixture.controller)),
+      ),
+    );
+    await _pump(tester);
+    await _tap(tester, 'account-create');
+    await _tap(tester, 'card-type');
+    await tester.ensureVisible(find.text('Secure note').last);
+    await tester.tap(find.text('Secure note').last);
+    await _pump(tester);
+    final toggle = find.descendant(
+      of: find.byKey(const ValueKey('card-field-value')),
+      matching: find.byType(FButton),
+    );
+    await tester.ensureVisible(toggle);
+    await tester.tap(toggle);
+    await _pump(tester);
+    await _enter(tester, 'card-field-value', 'first line\nsecond line');
+    final input = tester.widget<EditableText>(
+      find.descendant(
+        of: find.byKey(const ValueKey('card-field-value')),
+        matching: find.byType(EditableText),
+      ),
+    );
+    final before = input.controller.selection.extentOffset;
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowUp);
+    await _pump(tester);
+    expect(input.controller.selection.extentOffset, lessThan(before));
+    expect(find.byKey(const ValueKey('account-save')), findsOneWidget);
+    await tester.pumpWidget(const SizedBox.shrink());
+    await _closeFixture(tester, fixture);
+    await _pump(tester);
+  });
+
   testWidgets('dirty form survives resize and search requires a decision', (
     tester,
   ) async {
@@ -561,6 +603,19 @@ void main() {
     await tester.tap(find.text('Stay'));
     await _pump(tester);
     expect(find.text('Unsaved fixture'), findsOneWidget);
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+    await tester.sendKeyEvent(LogicalKeyboardKey.keyN);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+    await _pump(tester);
+    await _tap(tester, 'discard-changes');
+    final replacement = tester.widget<EditableText>(
+      find.descendant(
+        of: find.byKey(const ValueKey('account-name')),
+        matching: find.byType(EditableText),
+      ),
+    );
+    expect(replacement.controller.text, isEmpty);
+    await _enter(tester, 'account-name', 'Replacement draft');
     await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
     await tester.sendKeyEvent(LogicalKeyboardKey.keyK);
     await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);

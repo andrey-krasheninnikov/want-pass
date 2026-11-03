@@ -92,6 +92,9 @@ abstract class VaultRustLibApiImplPlatform
   CardInputV1 dco_decode_card_input_v_1(dynamic raw);
 
   @protected
+  CardListRowV1 dco_decode_card_list_row_v_1(dynamic raw);
+
+  @protected
   CardMatchesV1 dco_decode_card_matches_v_1(dynamic raw);
 
   @protected
@@ -147,6 +150,9 @@ abstract class VaultRustLibApiImplPlatform
 
   @protected
   List<AccountSummaryV1> dco_decode_list_account_summary_v_1(dynamic raw);
+
+  @protected
+  List<CardListRowV1> dco_decode_list_card_list_row_v_1(dynamic raw);
 
   @protected
   List<CardPresetV1> dco_decode_list_card_preset_v_1(dynamic raw);
@@ -324,6 +330,9 @@ abstract class VaultRustLibApiImplPlatform
   CardInputV1 sse_decode_card_input_v_1(SseDeserializer deserializer);
 
   @protected
+  CardListRowV1 sse_decode_card_list_row_v_1(SseDeserializer deserializer);
+
+  @protected
   CardMatchesV1 sse_decode_card_matches_v_1(SseDeserializer deserializer);
 
   @protected
@@ -383,6 +392,11 @@ abstract class VaultRustLibApiImplPlatform
 
   @protected
   List<AccountSummaryV1> sse_decode_list_account_summary_v_1(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  List<CardListRowV1> sse_decode_list_card_list_row_v_1(
     SseDeserializer deserializer,
   );
 
@@ -609,6 +623,12 @@ abstract class VaultRustLibApiImplPlatform
   void sse_encode_card_input_v_1(CardInputV1 self, SseSerializer serializer);
 
   @protected
+  void sse_encode_card_list_row_v_1(
+    CardListRowV1 self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_card_matches_v_1(
     CardMatchesV1 self,
     SseSerializer serializer,
@@ -683,6 +703,12 @@ abstract class VaultRustLibApiImplPlatform
   @protected
   void sse_encode_list_account_summary_v_1(
     List<AccountSummaryV1> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_list_card_list_row_v_1(
+    List<CardListRowV1> self,
     SseSerializer serializer,
   );
 

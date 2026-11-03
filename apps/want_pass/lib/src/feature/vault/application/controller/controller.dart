@@ -966,8 +966,8 @@ final class VaultController extends CubitWithEffects<VaultState, VaultEffect> {
     }
   }
 
-  Future<List<CardRowV1>?> readCardRows(List<String> ids) async {
-    const op = 'VaultController.readCardRows():';
+  Future<List<CardListRowV1>?> readCardListRows(List<String> ids) async {
+    const op = 'VaultController.readCardListRows():';
     if (_closing ||
         isClosed ||
         state.phase != VaultPhase.unlocked ||
@@ -983,8 +983,8 @@ final class VaultController extends CubitWithEffects<VaultState, VaultEffect> {
     final done = Completer<void>();
     _browseOperations.add(done.future);
     try {
-      final result = await _useCase.readCardRowsV1(
-        params: ReadCardRowsParamsV1(
+      final result = await _useCase.readCardListRowsV1(
+        params: ReadCardListRowsParamsV1(
           handle: _handle!,
           ids: List.unmodifiable(ids),
           revision: revision,

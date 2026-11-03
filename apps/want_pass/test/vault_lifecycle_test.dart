@@ -986,6 +986,14 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
+    final reads = access.rowReads;
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+    await tester.pumpAndSettle();
+    expect(find.text('fixture@example.invalid'), findsNothing);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    await tester.pumpAndSettle();
+    expect(access.rowReads, greaterThan(reads));
+    expect(find.text('fixture@example.invalid'), findsOneWidget);
     final mountedRows = find
         .byWidgetPredicate(
           (w) =>
@@ -1036,6 +1044,52 @@ void main() {
     await events.close();
   });
 
+  testWidgets('lock shortcut closes a dirty form guard immediately', (
+    tester,
+  ) async {
+    final access = _Access();
+    access.handle.exists = true;
+    access.handle.state = VaultAccessStateV1.unlocked;
+    final events = StreamController<VaultLockSignal>.broadcast();
+    final controller = _controller(access, events.stream, _Export());
+    final startup = StartupController(_Startup(), const _Reporter());
+    await tester.runAsync(() async {
+      await startup.init();
+      await controller.init();
+      await controller.loadContent();
+    });
+    await tester.pumpWidget(WantPassApp(startup: startup, vault: controller));
+    await tester.pumpAndSettle();
+    await _tapKey(tester, 'account-create');
+    await tester.enterText(
+      find.descendant(
+        of: find.byKey(const ValueKey('account-name')),
+        matching: find.byType(EditableText),
+      ),
+      'Synthetic unsaved name',
+    );
+    Future<void> shortcut(LogicalKeyboardKey key) async {
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+      await tester.sendKeyEvent(key);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+      await tester.pumpAndSettle();
+    }
+
+    await shortcut(LogicalKeyboardKey.keyN);
+    expect(find.text('Unsaved changes'), findsOneWidget);
+    await shortcut(LogicalKeyboardKey.keyL);
+    expect(controller.state.phase, VaultPhase.locked);
+    expect(find.text('Unsaved changes'), findsNothing);
+    expect(find.text('Synthetic unsaved name'), findsNothing);
+    expect(find.byType(VaultUnlockForm), findsOneWidget);
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.runAsync(() async {
+      await controller.close();
+      await startup.close();
+      await events.close();
+    });
+  });
+
   test('single-field copy never reads the complete card', () async {
     final access = _Access()..fieldCopy = 'fixture@example.invalid';
     access.handle.exists = true;
@@ -1070,7 +1124,7 @@ void main() {
         access.searchReply = Completer<DomainResult<CardMatchesV1>>();
         access.rowsReply = Completer<DomainResult<List<CardRowV1>>>();
         final browsing = rows
-            ? controller.readCardRows(['synthetic-id'])
+            ? controller.readCardListRows(['synthetic-id'])
             : controller.searchCards(const CardSearchV1(text: 'synthetic'));
         final copying = controller.copyCard('0123456789abcdef0123456789abcdef');
         await Future<void>.delayed(Duration.zero);
@@ -1625,6 +1679,24 @@ final class _Access implements VaultAccessService {
           ),
         )
       : await searchReply!.future;
+  @override
+  FutureDomainResult<List<CardListRowV1>> cardListRowsV1({
+    required VaultHandleV1 handle,
+    required List<String> ids,
+    required BigInt revision,
+  }) async {
+    final rows = await cardRowsV1(handle: handle, ids: ids, revision: revision);
+    return rows.isError
+        ? Result.error(rows.error)
+        : Result.success(
+            List.unmodifiable(
+              rows.value.map(
+                (row) => CardListRowV1(id: row.id, login: row.login),
+              ),
+            ),
+          );
+  }
+
   @override
   FutureDomainResult<List<CardRowV1>> cardRowsV1({
     required VaultHandleV1 handle,

@@ -7,8 +7,8 @@ final class _VaultContentViewState extends State<VaultContentView>
   final _listFocus = FocusNode();
   final _detailsFocus = FocusNode();
   final _listScroll = ScrollController();
-  final _cardEditor = GlobalKey<_CardEditorState>();
-  final _groupEditor = GlobalKey<_GroupEditorState>();
+  var _cardEditor = GlobalKey<_CardEditorState>();
+  var _groupEditor = GlobalKey<_GroupEditorState>();
   final _logins = <String, String?>{};
   final _visible = <String>{}, _wanted = <String>{};
   Timer? _debounce, _rowTimer;
@@ -73,10 +73,11 @@ final class _VaultContentViewState extends State<VaultContentView>
     _epoch++;
     _debounce?.cancel();
     _rowTimer?.cancel();
-    if (!_available) {
-      _logins.clear();
-    } else {
+    if (mounted) setState(_logins.clear);
+    if (_available) {
+      _wanted.addAll(_visible);
       _refresh();
+      _scheduleRows();
     }
   }
 
@@ -210,7 +211,7 @@ final class _VaultContentViewState extends State<VaultContentView>
     final ids = _wanted.take(50).toList();
     _wanted.removeAll(ids);
     try {
-      final rows = await widget.controller.readCardRows(ids);
+      final rows = await widget.controller.readCardListRows(ids);
       if (!_available) return;
       if (epoch != _epoch) {
         _wanted.addAll(ids.where(_visible.contains));
@@ -310,6 +311,8 @@ final class _VaultContentViewState extends State<VaultContentView>
   }
 
   void _stopEditing() {
+    _cardEditor = GlobalKey<_CardEditorState>();
+    _groupEditor = GlobalKey<_GroupEditorState>();
     _editing = _editingGroup = false;
     _card = null;
     _editGroup = null;
@@ -437,6 +440,7 @@ final class _VaultContentViewState extends State<VaultContentView>
   }
 
   void _openSelected() {
+    if (_editing) return;
     if (_selected == null) _move(1);
     setState(() => _compactDetail = true);
     _detailsFocus.requestFocus();
@@ -1086,12 +1090,12 @@ final class _VaultContentViewState extends State<VaultContentView>
                   _copy(FieldIdV1.login),
               key(LogicalKeyboardKey.keyT, shift: true): () =>
                   _copy(null, otp: true),
-              const SingleActivator(LogicalKeyboardKey.arrowDown): () =>
-                  _move(1),
-              const SingleActivator(LogicalKeyboardKey.arrowUp): () =>
-                  _move(-1),
-              const SingleActivator(LogicalKeyboardKey.enter): () {
-                if (!_editing) _openSelected();
+              if (!_editing) ...{
+                const SingleActivator(LogicalKeyboardKey.arrowDown): () =>
+                    _move(1),
+                const SingleActivator(LogicalKeyboardKey.arrowUp): () =>
+                    _move(-1),
+                const SingleActivator(LogicalKeyboardKey.enter): _openSelected,
               },
               const SingleActivator(LogicalKeyboardKey.escape): _escape,
             },

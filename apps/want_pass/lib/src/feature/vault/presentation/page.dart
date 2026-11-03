@@ -68,6 +68,18 @@ class _VaultPageState extends State<VaultPage> {
 
   bool _keyboard(KeyEvent event) {
     widget.controller.activity();
+    final keyboard = HardwareKeyboard.instance;
+    final modifier = Theme.of(context).platform == TargetPlatform.macOS
+        ? keyboard.isMetaPressed
+        : keyboard.isControlPressed;
+    if (event is KeyDownEvent &&
+        modifier &&
+        !keyboard.isAltPressed &&
+        !keyboard.isShiftPressed &&
+        event.logicalKey == LogicalKeyboardKey.keyL) {
+      unawaited(widget.controller.lock());
+      return true;
+    }
     return false;
   }
 

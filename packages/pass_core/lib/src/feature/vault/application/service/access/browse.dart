@@ -40,6 +40,16 @@ final class CardMatchesV1 extends Equatable {
   String toString() => 'CardMatchesV1(<redacted>)';
 }
 
+final class CardListRowV1 extends Equatable {
+  final String id;
+  final String? login;
+  const CardListRowV1({required this.id, this.login});
+  @override
+  List<Object?> get props => [id, login];
+  @override
+  String toString() => 'CardListRowV1(<redacted>)';
+}
+
 final class CardRowV1 extends Equatable {
   final String id;
   final List<FieldIdV1> fields;

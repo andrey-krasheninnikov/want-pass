@@ -232,6 +232,7 @@ final class VaultController extends CubitWithEffects<VaultState, VaultEffect> {
       (handle) =>
           _useCase.readHintsV2(params: ReadVaultHintsParamsV2(handle: handle)),
       (value) => emit(state.copyWith(busy: false, hints: value.hints)),
+      preserveError: true,
     );
   }
 
@@ -551,6 +552,7 @@ final class VaultController extends CubitWithEffects<VaultState, VaultEffect> {
     FutureDomainResult<T> Function(VaultHandleV1) run,
     void Function(T) success, {
     bool contentMutation = false,
+    bool preserveError = false,
   }) async {
     if (_closing ||
         isClosed ||
@@ -568,7 +570,7 @@ final class VaultController extends CubitWithEffects<VaultState, VaultEffect> {
       return;
     }
     final epoch = _epoch;
-    emit(state.copyWith(busy: true, error: () => null));
+    emit(state.copyWith(busy: true, error: preserveError ? null : () => null));
     activity();
     final future = () async {
       try {
@@ -580,7 +582,14 @@ final class VaultController extends CubitWithEffects<VaultState, VaultEffect> {
               error is VaultRejectedErrorV1 &&
               (error.kind == VaultFailureKindV1.writeUncertain ||
                   error.kind == VaultFailureKindV1.stale)) {
-            await lock();
+            reportVaultSafely(
+              _reporter,
+              layer: VaultDiagnosticLayer.controller,
+              operation: operation,
+              error: error,
+            );
+            await lock(failure: error);
+            return;
           }
           _fail(operation, error);
         } else {
@@ -605,7 +614,7 @@ final class VaultController extends CubitWithEffects<VaultState, VaultEffect> {
     }
   }
 
-  Future<void> lock({bool notify = false}) async {
+  Future<void> lock({bool notify = false, VaultErrorV1? failure}) async {
     const op = 'VaultController.lock():';
     if (_closing || isClosed || _handle == null) return;
     final epoch = ++_epoch;
@@ -630,7 +639,7 @@ final class VaultController extends CubitWithEffects<VaultState, VaultEffect> {
                 ? _phase(result.value.state)
                 : VaultPhase.unavailable,
             error: _monitorAvailable
-                ? null
+                ? failure
                 : const VaultRejectedErrorV1(VaultFailureKindV1.unavailable),
           ),
         );

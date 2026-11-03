@@ -1,6 +1,8 @@
 import 'dart:io';
 import 'dart:ui' as ui;
 
+import 'package:forui/forui.dart';
+
 import 'package:flutter/rendering.dart';
 
 import 'package:flutter/widgets.dart';
@@ -132,7 +134,13 @@ void main() {
         await _tap(tester, 'account-create');
         await _enter(tester, 'account-name', 'Synthetic native card');
         await _enter(tester, 'account-login', 'fixture@example.invalid');
-        await _enter(tester, 'account-password', 'Synthetic account value');
+        final visibility = find.descendant(
+          of: find.byKey(const ValueKey('account-password')),
+          matching: find.byType(FButton),
+        );
+        await tester.tap(visibility);
+        await _settle(tester);
+        await _enter(tester, 'account-password', 'Synthetic\naccount value');
         await _tap(tester, 'account-group-$groupId');
         await _tap(tester, 'account-save');
         await _until(
@@ -215,7 +223,7 @@ void main() {
       final account = await runtime.vault.readAccount(
         snapshot.accounts.single.id,
       );
-      expect(account!.password, 'Synthetic account value');
+      expect(account!.password, 'Synthetic\naccount value');
       completed = true;
     } finally {
       FlutterError.onError = productErrorHandler;
@@ -246,7 +254,9 @@ Future<void> _enter(WidgetTester tester, String key, String value) async {
   await tester.pump();
   expect(
     tester.widget<EditableText>(field).controller.text,
-    key == 'recovery-phrase' ? value : value.replaceAll('\n', ''),
+    key == 'recovery-phrase' || key == 'account-password'
+        ? value
+        : value.replaceAll('\n', ''),
   );
 }
 

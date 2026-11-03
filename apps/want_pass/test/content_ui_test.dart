@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:forui/forui.dart';
 import 'package:domain_error/domain_error.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:launch_mode/launch_mode.dart';
@@ -58,12 +59,18 @@ void main() {
     await _tap(tester, 'account-create');
     await _enter(tester, 'account-name', 'Fixture account');
     await _enter(tester, 'account-login', 'fixture@example.invalid');
-    await _enter(tester, 'account-password', 'fixture password');
+    await _togglePassword(tester);
+    await _enter(tester, 'account-password', 'fixture\npassword');
+    await _togglePassword(tester);
     await _tap(tester, 'account-group-${first.id}');
     await _tap(tester, 'account-group-${second.id}');
     await _tap(tester, 'account-save');
     await _idle(tester, controller);
     final account = controller.state.content!.accounts.single;
+    final detail = await tester.runAsync(
+      () => controller.readAccount(account.id),
+    );
+    expect(detail!.password, 'fixture\npassword');
     expect(account.groupIds.toSet(), {first.id, second.id});
     await _tap(tester, 'group-edit-${first.id}');
     await _tap(tester, 'group-delete');
@@ -91,6 +98,7 @@ void main() {
     expect(find.text('Fixture account'), findsNothing);
     expect(tester.takeException(), isNull);
     await tester.pumpWidget(const SizedBox.shrink());
+    await tester.runAsync(fixture.close);
     await _pump(tester);
   });
   testWidgets('narrow forms support large text and cancel without saving', (
@@ -127,7 +135,37 @@ void main() {
     expect(fixture.controller.state.content!.groups, isEmpty);
     expect(tester.takeException(), isNull);
     await tester.pumpWidget(const SizedBox.shrink());
+    await tester.runAsync(fixture.close);
     await _pump(tester);
+  });
+
+  testWidgets('mouse activity inside an editor renews the idle deadline', (
+    tester,
+  ) async {
+    final fixture = (await tester.runAsync(_Fixture.create))!;
+    addTearDown(fixture.close);
+    await tester.pumpWidget(
+      MaterialApp(
+        builder: (context, child) => WantTheme(
+          data: WantThemeData.light(),
+          child: WantToaster(child: child!),
+        ),
+        home: Scaffold(body: VaultContentView(controller: fixture.controller)),
+      ),
+    );
+    await _pump(tester);
+    await _tap(tester, 'group-create');
+    await _enter(tester, 'group-name', 'Active editor fixture');
+    // Start the public idle timer in the widget clock.
+    fixture.controller.activity();
+    await tester.pump(const Duration(minutes: 4));
+    await _tap(tester, 'group-name');
+    await tester.pump(const Duration(minutes: 2));
+    expect(fixture.controller.state.phase, VaultPhase.unlocked);
+    expect(find.byKey(const ValueKey('group-name')), findsOneWidget);
+    await _tap(tester, 'content-cancel');
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.runAsync(fixture.close);
   });
   testWidgets('locking discards a late logo selection', (tester) async {
     final logos = _PendingLogoService();
@@ -157,6 +195,7 @@ void main() {
     expect(find.byKey(const ValueKey('group-name')), findsNothing);
     expect(tester.takeException(), isNull);
     await tester.pumpWidget(const SizedBox.shrink());
+    await tester.runAsync(fixture.close);
   });
 }
 
@@ -185,6 +224,16 @@ Future<void> _tap(WidgetTester tester, String key) async {
   final finder = find.byKey(ValueKey(key));
   await tester.ensureVisible(finder);
   await tester.tap(finder);
+  await _pump(tester);
+}
+
+Future<void> _togglePassword(WidgetTester tester) async {
+  final button = find.descendant(
+    of: find.byKey(const ValueKey('account-password')),
+    matching: find.byType(FButton),
+  );
+  await tester.ensureVisible(button);
+  await tester.tap(button);
   await _pump(tester);
 }
 
@@ -238,8 +287,8 @@ final class _Fixture {
 
   Future<void> close() async {
     await controller.close();
-    await events.close();
-    await directory.delete(recursive: true);
+    if (!events.isClosed) await events.close();
+    if (await directory.exists()) await directory.delete(recursive: true);
   }
 }
 

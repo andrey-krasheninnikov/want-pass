@@ -10,6 +10,7 @@ final class VaultSecretInput extends StatefulWidget {
   final bool autofocus;
   final bool last;
   final bool multiline;
+  final bool preserveLineBreaks;
   final Widget? postfix;
   final bool invalid;
   final VoidCallback onSubmitted;
@@ -21,6 +22,7 @@ final class VaultSecretInput extends StatefulWidget {
     required this.autofocus,
     required this.last,
     this.multiline = false,
+    this.preserveLineBreaks = false,
     this.postfix,
     this.invalid = false,
     required this.onSubmitted,
@@ -41,53 +43,71 @@ final class _VaultSecretInputState extends State<VaultSecretInput> {
   @override
   Widget build(BuildContext context) => ValueListenableBuilder<bool>(
     valueListenable: _obscure,
-    builder: (context, obscure, _) => FTextField(
-      label: Text(widget.label),
-      error: widget.invalid ? const SizedBox.shrink() : null,
-      control: FTextFieldControl.managed(controller: widget.controller),
-      enabled: widget.enabled,
-      autofocus: widget.autofocus,
-      obscureText: !widget.multiline && obscure,
-      maxLines: widget.multiline ? 4 : 1,
-      keyboardType: widget.multiline
-          ? TextInputType.multiline
-          : TextInputType.visiblePassword,
-      autocorrect: false,
-      enableSuggestions: false,
-      enableIMEPersonalizedLearning: false,
-      stylusHandwritingEnabled: false,
-      // Empty hints still enable autofill and macOS completion when revealed.
-      autofillHints: null,
-      smartDashesType: SmartDashesType.disabled,
-      smartQuotesType: SmartQuotesType.disabled,
-      textInputAction: widget.last
-          ? TextInputAction.done
-          : TextInputAction.next,
-      onSubmit: widget.last ? (_) => widget.onSubmitted() : null,
-      suffixBuilder: widget.multiline
-          ? null
-          : (context, _, variants) {
-              final labels =
-                  FLocalizations.of(context) ?? FDefaultLocalizations();
-              return Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  ?widget.postfix,
-                  _postfixButton(
-                    label: obscure
-                        ? labels.passwordFieldUnobscureTextButtonSemanticsLabel
-                        : labels.passwordFieldObscureTextButtonSemanticsLabel,
-                    onPressed: variants.contains(FTextFieldVariant.disabled)
-                        ? null
-                        : () => _obscure.value = !obscure,
-                    child: obscure
-                        ? context.theme.icons.eye(context)
-                        : context.theme.icons.eyeClosed(context),
-                  ),
-                ],
-              );
-            },
-    ),
+    builder: (context, obscure, _) {
+      final multiline =
+          widget.multiline || (widget.preserveLineBreaks && !obscure);
+      // Concealed single-line editing strips LF, so reveal before editing these values.
+      return FTextField(
+        label: Text(widget.label),
+        description: widget.preserveLineBreaks && obscure
+            ? Text(
+                Localizations.localeOf(context).languageCode == 'ru'
+                    ? 'Покажите пароль, чтобы изменить его.'
+                    : 'Show the password to edit it.',
+              )
+            : null,
+        readOnly: widget.preserveLineBreaks && obscure,
+        error: widget.invalid ? const SizedBox.shrink() : null,
+        control: FTextFieldControl.managed(controller: widget.controller),
+        enabled: widget.enabled,
+        autofocus: widget.autofocus,
+        obscureText: !widget.multiline && obscure,
+        maxLines: multiline ? 4 : 1,
+        keyboardType: multiline
+            ? TextInputType.multiline
+            : TextInputType.visiblePassword,
+        autocorrect: false,
+        enableSuggestions: false,
+        enableIMEPersonalizedLearning: false,
+        stylusHandwritingEnabled: false,
+        // Empty hints still enable autofill and macOS completion when revealed.
+        autofillHints: null,
+        smartDashesType: SmartDashesType.disabled,
+        smartQuotesType: SmartQuotesType.disabled,
+        textInputAction: multiline
+            ? TextInputAction.newline
+            : widget.last
+            ? TextInputAction.done
+            : TextInputAction.next,
+        onSubmit: widget.last && !multiline
+            ? (_) => widget.onSubmitted()
+            : null,
+        suffixBuilder: widget.multiline
+            ? null
+            : (context, _, variants) {
+                final labels =
+                    FLocalizations.of(context) ?? FDefaultLocalizations();
+                return Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    ?widget.postfix,
+                    _postfixButton(
+                      label: obscure
+                          ? labels
+                                .passwordFieldUnobscureTextButtonSemanticsLabel
+                          : labels.passwordFieldObscureTextButtonSemanticsLabel,
+                      onPressed: variants.contains(FTextFieldVariant.disabled)
+                          ? null
+                          : () => _obscure.value = !obscure,
+                      child: obscure
+                          ? context.theme.icons.eye(context)
+                          : context.theme.icons.eyeClosed(context),
+                    ),
+                  ],
+                );
+              },
+      );
+    },
   );
 }
 

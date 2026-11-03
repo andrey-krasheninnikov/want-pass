@@ -33,7 +33,13 @@ final class _VaultContentViewState extends State<VaultContentView> {
     final route = DialogRoute<void>(
       context: context,
       barrierDismissible: false,
-      builder: builder,
+      builder: (context) => Listener(
+        behavior: HitTestBehavior.translucent,
+        onPointerDown: (_) => widget.controller.activity(),
+        onPointerHover: (_) => widget.controller.activity(),
+        onPointerSignal: (_) => widget.controller.activity(),
+        child: builder(context),
+      ),
     );
     _overlay = route;
     unawaited(
@@ -675,6 +681,7 @@ final class _AccountEditorState extends State<_AccountEditor> {
                   ),
                   VaultSecretInput(
                     key: const ValueKey('account-password'),
+                    preserveLineBreaks: true,
                     label: _text(context, 'Password *', 'Пароль *'),
                     controller: _password,
                     enabled: !state.busy,

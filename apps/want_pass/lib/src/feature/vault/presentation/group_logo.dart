@@ -36,6 +36,7 @@ final class _VaultGroupLogoState extends State<VaultGroupLogo> {
       final codec = await ui.instantiateImageCodec(
         Uint8List.fromList(widget.bytes),
         targetWidth: 64,
+        allowUpscaling: false,
       );
       try {
         final image = (await codec.getNextFrame()).image;

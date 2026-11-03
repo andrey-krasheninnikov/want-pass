@@ -556,9 +556,23 @@ void main() {
         tester.widget<EditableText>(field('master-password')).controller.text,
         _password,
       );
+      final passwordField = tester
+          .widget<EditableText>(field('master-password'))
+          .controller;
+      passwordField.selection = const TextSelection.collapsed(offset: 0);
+      await tester.pump();
+      expect(controller.state.passwordSaved, isTrue);
       await _tapKey(tester, 'vault-create');
       expect(controller.state.setupChallenge, first);
       expect(controller.state.passwordSaved, isTrue);
+      await _tapKey(tester, 'setup-back');
+      await _enter(tester, field('master-password'), '$_password changed');
+      expect(controller.state.passwordSaved, isFalse);
+      await _enter(tester, field('master-password'), _password);
+      await _tapKey(tester, 'vault-create');
+      expect(controller.state.setupChallenge, first);
+      expect(controller.state.passwordSaved, isFalse);
+      await _tapKey(tester, 'password-saved');
       await _tapKey(tester, 'setup-next');
       await _tapKey(tester, 'recovery-qr');
       expect(find.text('Recovery QR'), findsNothing);

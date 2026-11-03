@@ -32,6 +32,7 @@ class _VaultPageState extends State<VaultPage> {
   late bool _includeAppearance;
   int _step = 1, _navigationEpoch = 0;
   bool _recovering = false, _advancing = false;
+  String _lastPasswordText = '';
   DialogRoute<void>? _overlay;
   int get _firstStep => _recovering || _includeAppearance ? 0 : 1;
   String _text(String en, String ru) =>
@@ -53,7 +54,13 @@ class _VaultPageState extends State<VaultPage> {
     });
   }
 
-  void _passwordChanged() => widget.controller.acknowledge(password: false);
+  void _passwordChanged() {
+    final text = _password.text;
+    if (text == _lastPasswordText) return;
+    _lastPasswordText = text;
+    widget.controller.acknowledge(password: false);
+  }
+
   void _phraseChanged() {
     if (mounted) setState(() {});
   }
@@ -85,6 +92,7 @@ class _VaultPageState extends State<VaultPage> {
     ]) {
       field.clear();
     }
+    _lastPasswordText = '';
   }
 
   @override

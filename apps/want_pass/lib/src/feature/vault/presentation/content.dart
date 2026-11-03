@@ -2,11 +2,12 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:forui/forui.dart';
 import 'package:want_allure/want_allure.dart';
 import 'package:want_pass/src/feature/vault/application/_barrel.dart';
 import 'package:want_pass/src/feature/vault/presentation/_barrel.dart';
 import 'package:want_pass_core/want_pass_core.dart';
+
+part 'card_editor.dart';
 
 String _text(BuildContext context, String en, String ru) =>
     Localizations.localeOf(context).languageCode == 'ru' ? ru : en;
@@ -64,16 +65,16 @@ final class _VaultContentViewState extends State<VaultContentView> {
 
   Future<void> _account([String? id]) async {
     final revision = widget.controller.state.content!.revision;
-    final account = id == null ? null : await widget.controller.readAccount(id);
+    final account = id == null ? null : await widget.controller.readCard(id);
     if (!mounted ||
         widget.controller.state.phase != VaultPhase.unlocked ||
         (id != null && account == null)) {
       return;
     }
     _show(
-      (context) => _AccountEditor(
+      (context) => _CardEditor(
         controller: widget.controller,
-        account: account,
+        card: account,
         initialGroupId:
             widget.controller.state.content!.groups.any((g) => g.id == _filter)
             ? _filter
@@ -98,14 +99,16 @@ final class _VaultContentViewState extends State<VaultContentView> {
     );
   }
 
-  void _deleteAccount(AccountV1 account) {
+  void _deleteAccount(CardV1 account) {
     final revision = widget.controller.state.content!.revision;
     _show(
       (context) => _DeleteContentDialog(
         controller: widget.controller,
         group: false,
-        onConfirm: () =>
-            widget.controller.deleteAccount(account.id, revision: revision),
+        onConfirm: () => widget.controller.deleteCard(
+          account.summary.id,
+          revision: revision,
+        ),
         onDone: _closeDialog,
       ),
     );
@@ -145,7 +148,7 @@ final class _VaultContentViewState extends State<VaultContentView> {
               snapshot.groups.any((g) => g.id == _filter)
           ? _filter
           : 'all';
-      final accounts = snapshot.accounts
+      final accounts = snapshot.cards
           .where(
             (a) =>
                 filter == 'all' ||
@@ -220,9 +223,22 @@ final class _VaultContentViewState extends State<VaultContentView> {
                         : () => unawaited(_account(account.id)),
                     child: Align(
                       alignment: Alignment.centerLeft,
-                      child: Text(
-                        account.name,
-                        overflow: TextOverflow.ellipsis,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        spacing: 4,
+                        children: [
+                          Text(account.name, overflow: TextOverflow.ellipsis),
+                          Text(
+                            [
+                              _serviceLabel(context, account.service),
+                              _typeLabel(context, account.cardType),
+                              if (account.environment != null)
+                                _environmentLabel(account.environment!),
+                            ].join(' · '),
+                            overflow: TextOverflow.ellipsis,
+                            style: Theme.of(context).textTheme.bodySmall,
+                          ),
+                        ],
                       ),
                     ),
                   ),
@@ -365,12 +381,12 @@ final class _ContentError extends StatelessWidget {
             error is VaultRejectedErrorV1 &&
                     (error as VaultRejectedErrorV1).kind ==
                         VaultFailureKindV1.unsupported
-                ? 'Check required fields and size limits. Logos must be PNG or JPEG up to 5 MiB and 4096 × 4096.'
+                ? 'Check required fields, supported formats and size limits. Saved values are preserved.'
                 : 'The change could not be saved. Your saved data is preserved.',
             error is VaultRejectedErrorV1 &&
                     (error as VaultRejectedErrorV1).kind ==
                         VaultFailureKindV1.unsupported
-                ? 'Проверьте обязательные поля и ограничения. Логотип: PNG или JPEG до 5 MiB и 4096 × 4096.'
+                ? 'Проверьте обязательные поля, поддерживаемые форматы и ограничения размера. Сохранённые значения не изменены.'
                 : 'Изменение не сохранено. Сохранённые данные не потеряны.',
           ),
           colorRole: 'destructive',
@@ -555,184 +571,6 @@ final class _GroupEditorState extends State<_GroupEditor> {
       ),
     ),
   );
-}
-
-final class _AccountEditor extends StatefulWidget {
-  final VaultController controller;
-  final AccountV1? account;
-  final String? initialGroupId;
-  final BigInt revision;
-  final VoidCallback onDone;
-  final VoidCallback? onDelete;
-  const _AccountEditor({
-    required this.controller,
-    required this.account,
-    this.initialGroupId,
-    required this.revision,
-    required this.onDone,
-    this.onDelete,
-  });
-  @override
-  State<_AccountEditor> createState() => _AccountEditorState();
-}
-
-final class _AccountEditorState extends State<_AccountEditor> {
-  late final _name = TextEditingController(text: widget.account?.name);
-  late final _description = TextEditingController(
-    text: widget.account?.description,
-  );
-  late final _login = TextEditingController(text: widget.account?.login);
-  late final _password = TextEditingController(text: widget.account?.password);
-  late final _groups = <String>{
-    ...?widget.account?.groupIds,
-    if (widget.account == null && widget.initialGroupId != null)
-      widget.initialGroupId!,
-  };
-  @override
-  void dispose() {
-    for (final field in [_name, _description, _login, _password]) {
-      field.clear();
-      field.dispose();
-    }
-    _groups.clear();
-    super.dispose();
-  }
-
-  Future<void> _save() async {
-    final saved = await widget.controller.saveAccount(
-      AccountDraftV1(
-        id: widget.account?.id,
-        name: _name.text,
-        description: _description.text,
-        login: _login.text,
-        password: _password.text,
-        groupIds: List.unmodifiable(_groups),
-      ),
-      revision: widget.revision,
-    );
-    if (mounted && saved) widget.onDone();
-  }
-
-  @override
-  Widget build(BuildContext context) =>
-      BlocBuilder<VaultController, VaultState>(
-        bloc: widget.controller,
-        builder: (context, state) => WantDialog(
-          title: _text(
-            context,
-            widget.account == null ? 'New card' : 'Card',
-            widget.account == null ? 'Новая карточка' : 'Карточка',
-          ),
-          actions: _Actions(
-            children: [
-              WantButton(
-                key: const ValueKey('content-cancel'),
-                variant: WantButtonVariant.secondary,
-                onPressed: widget.onDone,
-                child: Text(_text(context, 'Cancel', 'Отмена')),
-              ),
-              WantButton(
-                key: const ValueKey('account-save'),
-                onPressed: state.busy ? null : () => unawaited(_save()),
-                child: Text(_text(context, 'Save', 'Сохранить')),
-              ),
-            ],
-          ),
-          child: Flexible(
-            child: SingleChildScrollView(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                spacing: 16,
-                children: [
-                  WantInput(
-                    key: const ValueKey('account-name'),
-                    label: Text(_text(context, 'Name *', 'Название *')),
-                    description: Text(
-                      _text(
-                        context,
-                        'Up to 512 UTF-8 bytes',
-                        'До 512 байт UTF-8',
-                      ),
-                    ),
-                    controller: _name,
-                    enabled: !state.busy,
-                    autofocus: true,
-                  ),
-                  WantTextarea(
-                    key: const ValueKey('account-description'),
-                    label: Text(_text(context, 'Description', 'Описание')),
-                    controller: _description,
-                    enabled: !state.busy,
-                  ),
-                  FTextField(
-                    key: const ValueKey('account-login'),
-                    label: Text(
-                      _text(context, 'Login / email *', 'Логин / email *'),
-                    ),
-                    control: FTextFieldControl.managed(controller: _login),
-                    enabled: !state.busy,
-                    autocorrect: false,
-                    enableSuggestions: false,
-                    enableIMEPersonalizedLearning: false,
-                    stylusHandwritingEnabled: false,
-                    autofillHints: null,
-                    smartDashesType: SmartDashesType.disabled,
-                    smartQuotesType: SmartQuotesType.disabled,
-                  ),
-                  VaultSecretInput(
-                    key: const ValueKey('account-password'),
-                    preserveLineBreaks: true,
-                    label: _text(context, 'Password *', 'Пароль *'),
-                    controller: _password,
-                    enabled: !state.busy,
-                    autofocus: false,
-                    last: true,
-                    onSubmitted: () => unawaited(_save()),
-                  ),
-                  WantTypography(
-                    _text(context, 'Groups', 'Группы'),
-                    variant: WantTypographyVariant.h4,
-                  ),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: [
-                      for (final group in state.content?.groups ?? <GroupV1>[])
-                        Semantics(
-                          selected: _groups.contains(group.id),
-                          child: WantButton(
-                            key: ValueKey('account-group-${group.id}'),
-                            variant: _groups.contains(group.id)
-                                ? WantButtonVariant.primary
-                                : WantButtonVariant.secondary,
-                            onPressed: state.busy
-                                ? null
-                                : () => setState(() {
-                                    if (!_groups.add(group.id)) {
-                                      _groups.remove(group.id);
-                                    }
-                                  }),
-                            child: Text(group.name),
-                          ),
-                        ),
-                    ],
-                  ),
-                  if (widget.account != null)
-                    WantButton(
-                      key: const ValueKey('account-delete'),
-                      variant: WantButtonVariant.destructive,
-                      onPressed: state.busy ? null : widget.onDelete,
-                      child: Text(
-                        _text(context, 'Delete card', 'Удалить карточку'),
-                      ),
-                    ),
-                  _ContentError(state.error),
-                ],
-              ),
-            ),
-          ),
-        ),
-      );
 }
 
 final class _DeleteContentDialog extends StatelessWidget {

@@ -109,6 +109,7 @@ void main() {
         const _Reporter(),
         const PlatformRecoveryExportService(_Reporter()),
         const PlatformGroupLogoService(_Reporter()),
+        const PlatformCredentialFileService(_Reporter()),
       );
       final mismatch = await useCase.prepareCreationV1(
         params: PrepareVaultCreationParamsV1(
@@ -648,13 +649,15 @@ void main() {
     await controller.copyRecovery();
     final copied = export.clipboard;
     export.clearing = Completer<void>();
-    await controller.lock();
+    final locking = controller.lock();
+    await Future<void>.delayed(Duration.zero);
     var closed = false;
     final closing = controller.close().then((_) => closed = true);
     await Future<void>.delayed(Duration.zero);
     expect(closed, isFalse);
     expect(export.clipboard, copied);
     export.clearing!.complete();
+    await locking;
     await closing;
     expect(export.clipboard, isEmpty);
     expect(export.clears, 1);
@@ -729,6 +732,58 @@ void main() {
     },
   );
 
+  testWidgets(
+    'credential copies expire after thirty seconds and preserve another clipboard value',
+    (tester) async {
+      final access = _Access()
+        ..accountCopy = 'Login: fixture@example.invalid\nPassword: synthetic';
+      access.handle.exists = true;
+      access.handle.state = VaultAccessStateV1.unlocked;
+      final export = _Export();
+      final events = StreamController<VaultLockSignal>.broadcast();
+      final controller = _controller(access, events.stream, export);
+      await tester.runAsync(controller.init);
+      await controller.copyCard('0123456789abcdef0123456789abcdef');
+      expect(export.clipboard, access.accountCopy);
+      await tester.pump(const Duration(seconds: 29));
+      expect(export.clipboard, access.accountCopy);
+      export.clipboard = 'other application';
+      await tester.pump(const Duration(seconds: 1));
+      expect(export.clipboard, 'other application');
+      await controller.copyCard('0123456789abcdef0123456789abcdef');
+      await tester.pump(const Duration(seconds: 30));
+      expect(export.clipboard, isEmpty);
+      await tester.runAsync(() async {
+        await controller.close();
+        await events.close();
+      });
+    },
+  );
+  test(
+    'lock waits for an admitted credential copy and clears a late write',
+    () async {
+      final access = _Access()..accountCopy = 'synthetic credential';
+      access.handle.exists = true;
+      access.handle.state = VaultAccessStateV1.unlocked;
+      final export = _Export()..writing = Completer<void>();
+      final events = StreamController<VaultLockSignal>.broadcast();
+      final controller = _controller(access, events.stream, export);
+      await controller.init();
+      final copying = controller.copyCard('0123456789abcdef0123456789abcdef');
+      await Future<void>.delayed(Duration.zero);
+      var locked = false;
+      final locking = controller.lock().then((_) => locked = true);
+      await Future<void>.delayed(Duration.zero);
+      expect(locked, isFalse);
+      export.writing!.complete();
+      await copying;
+      await locking;
+      expect(export.clipboard, isEmpty);
+      expect(controller.state.phase, VaultPhase.locked);
+      await controller.close();
+      await events.close();
+    },
+  );
   testWidgets('clipboard expires conditionally and lock clears our copy', (
     tester,
   ) async {
@@ -1162,6 +1217,7 @@ VaultController _controller(
     const _Reporter(),
     export ?? const PlatformRecoveryExportService(_Reporter()),
     const PlatformGroupLogoService(_Reporter()),
+    const PlatformCredentialFileService(_Reporter()),
   ),
   const _Reporter(),
   events,
@@ -1186,6 +1242,79 @@ final class _Handle implements VaultHandleV1 {
 }
 
 final class _Access implements VaultAccessService {
+  String? accountCopy;
+
+  @override
+  FutureDomainResult<CardCatalogV1> cardCatalogV1() async => Result.success(
+    CardCatalogV1(
+      services: const ['github'],
+      presets: [CardPresetV1(cardType: CardTypeV1.account, fields: const [])],
+    ),
+  );
+  @override
+  FutureDomainResult<ContentSnapshotV2> contentV2({
+    required VaultHandleV1 handle,
+  }) async => Result.success(
+    ContentSnapshotV2(revision: BigInt.zero, groups: const [], cards: const []),
+  );
+  @override
+  FutureDomainResult<ContentSnapshotV2> saveGroupV2({
+    required VaultHandleV1 handle,
+    required GroupDraftV1 input,
+    required BigInt revision,
+  }) async => Result.error(
+    contentFailure ??
+        const VaultRejectedErrorV1(VaultFailureKindV1.unavailable),
+  );
+  @override
+  FutureDomainResult<ContentSnapshotV2> deleteGroupV2({
+    required VaultHandleV1 handle,
+    required String id,
+    required BigInt revision,
+  }) async =>
+      const Result.error(VaultRejectedErrorV1(VaultFailureKindV1.unavailable));
+  @override
+  FutureDomainResult<CardV1> cardV1({
+    required VaultHandleV1 handle,
+    required String id,
+  }) async =>
+      const Result.error(VaultRejectedErrorV1(VaultFailureKindV1.unavailable));
+  @override
+  FutureDomainResult<ContentSnapshotV2> saveCardV1({
+    required VaultHandleV1 handle,
+    required CardDraftV1 input,
+    required BigInt revision,
+  }) async =>
+      const Result.error(VaultRejectedErrorV1(VaultFailureKindV1.unavailable));
+  @override
+  FutureDomainResult<ContentSnapshotV2> deleteCardV1({
+    required VaultHandleV1 handle,
+    required String id,
+    required BigInt revision,
+  }) async =>
+      const Result.error(VaultRejectedErrorV1(VaultFailureKindV1.unavailable));
+  @override
+  FutureDomainResult<TotpCodeV1> currentTotpV1({
+    required VaultHandleV1 handle,
+    required String id,
+  }) async =>
+      const Result.error(VaultRejectedErrorV1(VaultFailureKindV1.unavailable));
+  @override
+  FutureDomainResult<String> copyAccountV1({
+    required VaultHandleV1 handle,
+    required String id,
+  }) async => accountCopy == null
+      ? const Result.error(VaultRejectedErrorV1(VaultFailureKindV1.unavailable))
+      : Result.success(accountCopy!);
+  @override
+  FutureDomainResult<void> exportAttachmentV1({
+    required VaultHandleV1 handle,
+    required String id,
+    required String destination,
+    required BigInt revision,
+  }) async =>
+      const Result.error(VaultRejectedErrorV1(VaultFailureKindV1.unavailable));
+
   @override
   FutureDomainResult<ContentSnapshotV1> contentV1({
     required VaultHandleV1 handle,
@@ -1484,6 +1613,7 @@ final class _Export implements RecoveryExportService {
   final selection = Completer<DomainResult<String?>>();
   String clipboard = '';
   Completer<void>? clearing;
+  Completer<void>? writing;
   int clears = 0;
   @override
   FutureDomainResult<String?> selectFileV1() => selection.future;
@@ -1491,6 +1621,7 @@ final class _Export implements RecoveryExportService {
   FutureDomainResult<String?> selectFileV3() => selection.future;
   @override
   FutureDomainResult<void> copyV1(String phrase) async {
+    await writing?.future;
     clipboard = phrase;
     return const Result.success(null);
   }

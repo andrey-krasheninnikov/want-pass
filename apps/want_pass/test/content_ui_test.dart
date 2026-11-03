@@ -58,6 +58,13 @@ void main() {
     final second = controller.state.content!.groups.last;
     await _tap(tester, 'account-create');
     await _enter(tester, 'account-name', 'Fixture account');
+    await _tap(tester, 'card-service');
+    await tester.tap(find.text('GitHub').last);
+    await _pump(tester);
+    await _tap(tester, 'card-environment');
+    await tester.ensureVisible(find.text('production').last);
+    await tester.tap(find.text('production').last);
+    await _pump(tester);
     await _enter(tester, 'account-login', 'fixture@example.invalid');
     await _togglePassword(tester);
     await _enter(tester, 'account-password', 'fixture\npassword');
@@ -66,22 +73,25 @@ void main() {
     await _tap(tester, 'account-group-${second.id}');
     await _tap(tester, 'account-save');
     await _idle(tester, controller);
-    final account = controller.state.content!.accounts.single;
-    final detail = await tester.runAsync(
-      () => controller.readAccount(account.id),
+    final account = controller.state.content!.cards.single;
+    expect(account.environment, EnvironmentV1.production);
+    expect(account.service, 'github');
+    final detail = await tester.runAsync(() => controller.readCard(account.id));
+    expect(
+      detail!.fields.firstWhere((f) => f.id == FieldIdV1.password).value,
+      'fixture\npassword',
     );
-    expect(detail!.password, 'fixture\npassword');
     expect(account.groupIds.toSet(), {first.id, second.id});
     await _tap(tester, 'group-edit-${first.id}');
     await _tap(tester, 'group-delete');
     await _tap(tester, 'delete-cancel');
     expect(controller.state.content!.groups.length, 2);
-    expect(controller.state.content!.accounts.single.groupIds.length, 2);
+    expect(controller.state.content!.cards.single.groupIds.length, 2);
     await _tap(tester, 'group-edit-${first.id}');
     await _tap(tester, 'group-delete');
     await _tap(tester, 'delete-confirm');
     await _idle(tester, controller);
-    expect(controller.state.content!.accounts.single.groupIds, [second.id]);
+    expect(controller.state.content!.cards.single.groupIds, [second.id]);
     await _tap(tester, 'account-${account.id}');
     await _idle(tester, controller);
     expect(find.byKey(const ValueKey('account-password')), findsOneWidget);
@@ -100,6 +110,102 @@ void main() {
     await tester.pumpWidget(const SizedBox.shrink());
     await tester.runAsync(fixture.close);
     await _pump(tester);
+  });
+  testWidgets(
+    'developer preset fields remain concealed and omit account copy all',
+    (tester) async {
+      tester.view.physicalSize = const Size(1200, 1000);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final fixture = (await tester.runAsync(_Fixture.create))!;
+      addTearDown(fixture.close);
+      await tester.pumpWidget(
+        MaterialApp(
+          builder: (context, child) => WantTheme(
+            data: WantThemeData.light(),
+            child: WantToaster(child: child!),
+          ),
+          home: Scaffold(
+            body: VaultContentView(controller: fixture.controller),
+          ),
+        ),
+      );
+      await _pump(tester);
+      await _tap(tester, 'account-create');
+      await _tap(tester, 'card-type');
+      await tester.ensureVisible(find.text('PAT').last);
+      await tester.tap(find.text('PAT').last);
+      await _pump(tester);
+      await _enter(tester, 'account-name', 'Synthetic PAT');
+      await _tap(tester, 'card-service');
+      await tester.ensureVisible(find.text('GitHub').last);
+      await tester.tap(find.text('GitHub').last);
+      await _pump(tester);
+      final toggle = find.descendant(
+        of: find.byKey(const ValueKey('card-field-value')),
+        matching: find.byType(FButton),
+      );
+      await tester.ensureVisible(toggle);
+      await tester.tap(toggle);
+      await _pump(tester);
+      await _enter(tester, 'card-field-value', ' synthetic token ');
+      await _tap(tester, 'account-save');
+      await _idle(tester, fixture.controller);
+      final card = fixture.controller.state.content!.cards.single;
+      expect(card.cardType, CardTypeV1.pat);
+      await _tap(tester, 'account-${card.id}');
+      await _idle(tester, fixture.controller);
+      expect(find.byKey(const ValueKey('card-copy-all')), findsNothing);
+      final input = tester.widget<EditableText>(
+        find.descendant(
+          of: find.byKey(const ValueKey('card-field-value')),
+          matching: find.byType(EditableText),
+        ),
+      );
+      expect(input.obscureText, isTrue);
+      expect(input.autocorrect, isFalse);
+      expect(input.enableSuggestions, isFalse);
+      await tester.runAsync(fixture.controller.lock);
+      await _pump(tester);
+      await tester.pumpWidget(const SizedBox.shrink());
+    },
+  );
+  testWidgets('lock discards a late secret file selection', (tester) async {
+    final files = _PendingFileService();
+    final fixture = (await tester.runAsync(
+      () => _Fixture.create(files: files),
+    ))!;
+    addTearDown(fixture.close);
+    await tester.pumpWidget(
+      MaterialApp(
+        builder: (context, child) => WantTheme(
+          data: WantThemeData.light(),
+          child: WantToaster(child: child!),
+        ),
+        home: Scaffold(body: VaultContentView(controller: fixture.controller)),
+      ),
+    );
+    await _pump(tester);
+    await _tap(tester, 'account-create');
+    await _tap(tester, 'card-type');
+    await tester.ensureVisible(find.text('Secure file').last);
+    await tester.tap(find.text('Secure file').last);
+    await _pump(tester);
+    await _tap(tester, 'card-file-select');
+    expect(fixture.controller.state.busy, isTrue);
+    await tester.runAsync(fixture.controller.lock);
+    await _pump(tester);
+    files.reply.complete(
+      const Result.success(
+        AttachmentDraftV1(name: 'synthetic.bin', bytes: [0, 1, 255]),
+      ),
+    );
+    await _pump(tester);
+    expect(find.byKey(const ValueKey('card-file-select')), findsNothing);
+    expect(fixture.controller.state.content, isNull);
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox.shrink());
   });
   testWidgets('narrow forms support large text and cancel without saving', (
     tester,
@@ -137,6 +243,81 @@ void main() {
     await tester.pumpWidget(const SizedBox.shrink());
     await tester.runAsync(fixture.close);
     await _pump(tester);
+  });
+
+  testWidgets('expired OTP is hidden before the next refresh', (tester) async {
+    final fixture = (await tester.runAsync(_Fixture.create))!;
+    addTearDown(fixture.close);
+    final controller = fixture.controller;
+    await tester.runAsync(
+      () => controller.saveCard(
+        const CardDraftV1(
+          name: 'OTP fixture',
+          description: '',
+          service: 'github',
+          cardType: CardTypeV1.account,
+          groupIds: [],
+          fields: [
+            CardFieldDraftV1(
+              id: FieldIdV1.login,
+              value: 'fixture@example.invalid',
+            ),
+            CardFieldDraftV1(
+              id: FieldIdV1.password,
+              value: 'Synthetic password',
+            ),
+            CardFieldDraftV1(
+              id: FieldIdV1.totpSeed,
+              value: 'GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ',
+            ),
+            CardFieldDraftV1(id: FieldIdV1.totpPeriod, value: '1'),
+          ],
+        ),
+      ),
+    );
+    await tester.pumpWidget(
+      MaterialApp(
+        builder: (context, child) => WantTheme(
+          data: WantThemeData.light(),
+          child: WantToaster(child: child!),
+        ),
+        home: Scaffold(body: VaultContentView(controller: controller)),
+      ),
+    );
+    await _pump(tester);
+    final id = controller.state.content!.cards.single.id;
+    await _tap(tester, 'account-$id');
+    await _idle(tester, controller);
+    for (
+      var i = 0;
+      i < 300 && find.textContaining(RegExp(r'^\d{6}$')).evaluate().isEmpty;
+      i++
+    ) {
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 10)),
+      );
+      await tester.pump(const Duration(milliseconds: 10));
+    }
+    expect(find.textContaining(RegExp(r'^\d{6}$')), findsOneWidget);
+    final code = (await tester.runAsync(() => controller.readTotp(id)))!;
+    final until =
+        code.validUntil.difference(DateTime.now().toUtc()) +
+        const Duration(milliseconds: 100);
+    if (until > Duration.zero) {
+      await tester.runAsync(() => Future<void>.delayed(until));
+    }
+    await tester.enterText(
+      find.descendant(
+        of: find.byKey(const ValueKey('account-name')),
+        matching: find.byType(EditableText),
+      ),
+      'Edited OTP fixture',
+    );
+    await tester.pump();
+    final expired = find.textContaining(RegExp(r'^\d{6}$')).evaluate().length;
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.runAsync(fixture.close);
+    expect(expired, 0);
   });
 
   testWidgets('mouse activity inside an editor renews the idle deadline', (
@@ -252,7 +433,10 @@ final class _Fixture {
   final StreamController<VaultLockSignal> events;
   final VaultController controller;
   const _Fixture(this.directory, this.events, this.controller);
-  static Future<_Fixture> create({GroupLogoService? logos}) async {
+  static Future<_Fixture> create({
+    GroupLogoService? logos,
+    CredentialFileService? files,
+  }) async {
     final directory = await Directory.systemTemp.createTemp(
       'want-pass-content-ui-',
     );
@@ -268,6 +452,7 @@ final class _Fixture {
         reporter,
         const PlatformRecoveryExportService(reporter),
         logos ?? const PlatformGroupLogoService(reporter),
+        files ?? const PlatformCredentialFileService(reporter),
       ),
       reporter,
       events.stream,
@@ -317,4 +502,13 @@ final _logo = List<int>.unmodifiable(
 final class _FixedLogoService implements GroupLogoService {
   @override
   FutureDomainResult<List<int>?> selectV1() async => Result.success(_logo);
+}
+
+final class _PendingFileService implements CredentialFileService {
+  final reply = Completer<DomainResult<AttachmentDraftV1?>>();
+  @override
+  FutureDomainResult<AttachmentDraftV1?> selectAttachmentV1() => reply.future;
+  @override
+  FutureDomainResult<String?> selectDestinationV1(String name) async =>
+      const Result.success(null);
 }

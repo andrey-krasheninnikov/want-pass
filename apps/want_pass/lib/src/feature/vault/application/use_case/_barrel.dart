@@ -1,3 +1,4 @@
+export 'card_dto.dart';
 export 'content_dto.dart';
 export 'dto.dart';
 export 'use_case.dart';

@@ -133,6 +133,9 @@ void main() {
         final groupId = runtime.vault.state.content!.groups.single.id;
         await _tap(tester, 'account-create');
         await _enter(tester, 'account-name', 'Synthetic native card');
+        await _tap(tester, 'card-service');
+        await tester.tap(find.text('GitHub').last);
+        await _settle(tester);
         await _enter(tester, 'account-login', 'fixture@example.invalid');
         final visibility = find.descendant(
           of: find.byKey(const ValueKey('account-password')),
@@ -146,7 +149,7 @@ void main() {
         await _until(
           tester,
           () =>
-              runtime.vault.state.content!.accounts.isNotEmpty &&
+              runtime.vault.state.content!.cards.isNotEmpty &&
               !runtime.vault.state.busy,
         );
         await _tap(tester, 'vault-dial');
@@ -219,11 +222,13 @@ void main() {
         snapshot.groups.single.description,
         'Synthetic native description',
       );
-      expect(snapshot.accounts.single.groupIds, [snapshot.groups.single.id]);
-      final account = await runtime.vault.readAccount(
-        snapshot.accounts.single.id,
+      expect(snapshot.cards.single.groupIds, [snapshot.groups.single.id]);
+      final account = await runtime.vault.readCard(snapshot.cards.single.id);
+      expect(
+        account!.fields.firstWhere((f) => f.id == FieldIdV1.password).value,
+        'Synthetic\naccount value',
       );
-      expect(account!.password, 'Synthetic\naccount value');
+      expect(account.summary.service, 'github');
       completed = true;
     } finally {
       FlutterError.onError = productErrorHandler;
@@ -245,12 +250,12 @@ Future<void> _enter(WidgetTester tester, String key, String value) async {
   await tester.ensureVisible(field);
   await _settle(tester);
   await tester.tap(field);
-  await tester.pump();
+  await tester.enterText(field, value);
   expect(
     tester.state<EditableTextState>(field).widget.focusNode.hasFocus,
     isTrue,
+    reason: 'Input focus: $key',
   );
-  tester.testTextInput.enterText(value);
   await tester.pump();
   expect(
     tester.widget<EditableText>(field).controller.text,

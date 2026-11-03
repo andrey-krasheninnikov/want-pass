@@ -108,6 +108,74 @@ final class _VaultHandle implements VaultHandleV1 {
 
 final class _VaultAccess implements VaultAccessService {
   @override
+  FutureDomainResult<CardCatalogV1> cardCatalogV1() async => Result.success(
+    CardCatalogV1(
+      services: const ['github'],
+      presets: [CardPresetV1(cardType: CardTypeV1.account, fields: const [])],
+    ),
+  );
+  @override
+  FutureDomainResult<ContentSnapshotV2> contentV2({
+    required VaultHandleV1 handle,
+  }) async => Result.success(
+    ContentSnapshotV2(revision: BigInt.zero, groups: const [], cards: const []),
+  );
+  @override
+  FutureDomainResult<ContentSnapshotV2> saveGroupV2({
+    required VaultHandleV1 handle,
+    required GroupDraftV1 input,
+    required BigInt revision,
+  }) async =>
+      const Result.error(VaultRejectedErrorV1(VaultFailureKindV1.unavailable));
+  @override
+  FutureDomainResult<ContentSnapshotV2> deleteGroupV2({
+    required VaultHandleV1 handle,
+    required String id,
+    required BigInt revision,
+  }) async =>
+      const Result.error(VaultRejectedErrorV1(VaultFailureKindV1.unavailable));
+  @override
+  FutureDomainResult<CardV1> cardV1({
+    required VaultHandleV1 handle,
+    required String id,
+  }) async =>
+      const Result.error(VaultRejectedErrorV1(VaultFailureKindV1.unavailable));
+  @override
+  FutureDomainResult<ContentSnapshotV2> saveCardV1({
+    required VaultHandleV1 handle,
+    required CardDraftV1 input,
+    required BigInt revision,
+  }) async =>
+      const Result.error(VaultRejectedErrorV1(VaultFailureKindV1.unavailable));
+  @override
+  FutureDomainResult<ContentSnapshotV2> deleteCardV1({
+    required VaultHandleV1 handle,
+    required String id,
+    required BigInt revision,
+  }) async =>
+      const Result.error(VaultRejectedErrorV1(VaultFailureKindV1.unavailable));
+  @override
+  FutureDomainResult<TotpCodeV1> currentTotpV1({
+    required VaultHandleV1 handle,
+    required String id,
+  }) async =>
+      const Result.error(VaultRejectedErrorV1(VaultFailureKindV1.unavailable));
+  @override
+  FutureDomainResult<String> copyAccountV1({
+    required VaultHandleV1 handle,
+    required String id,
+  }) async =>
+      const Result.error(VaultRejectedErrorV1(VaultFailureKindV1.unavailable));
+  @override
+  FutureDomainResult<void> exportAttachmentV1({
+    required VaultHandleV1 handle,
+    required String id,
+    required String destination,
+    required BigInt revision,
+  }) async =>
+      const Result.error(VaultRejectedErrorV1(VaultFailureKindV1.unavailable));
+
+  @override
   FutureDomainResult<ContentSnapshotV1> contentV1({
     required VaultHandleV1 handle,
   }) async => Result.success(
@@ -325,6 +393,7 @@ void main() {
         observer,
         PlatformRecoveryExportService(observer),
         PlatformGroupLogoService(observer),
+        PlatformCredentialFileService(observer),
       ),
       observer,
       vaultEvents,

@@ -11,6 +11,7 @@ final class VaultSecretInput extends StatefulWidget {
   final bool last;
   final bool multiline;
   final bool preserveLineBreaks;
+  final bool concealed;
   final Widget? postfix;
   final bool invalid;
   final VoidCallback onSubmitted;
@@ -23,6 +24,7 @@ final class VaultSecretInput extends StatefulWidget {
     required this.last,
     this.multiline = false,
     this.preserveLineBreaks = false,
+    this.concealed = true,
     this.postfix,
     this.invalid = false,
     required this.onSubmitted,
@@ -32,7 +34,7 @@ final class VaultSecretInput extends StatefulWidget {
 }
 
 final class _VaultSecretInputState extends State<VaultSecretInput> {
-  final _obscure = ValueNotifier(true);
+  late final _obscure = ValueNotifier(widget.concealed);
 
   @override
   void dispose() {
@@ -49,19 +51,19 @@ final class _VaultSecretInputState extends State<VaultSecretInput> {
       // Concealed single-line editing strips LF, so reveal before editing these values.
       return FTextField(
         label: Text(widget.label),
-        description: widget.preserveLineBreaks && obscure
+        description: widget.concealed && widget.preserveLineBreaks && obscure
             ? Text(
                 Localizations.localeOf(context).languageCode == 'ru'
-                    ? 'Покажите пароль, чтобы изменить его.'
-                    : 'Show the password to edit it.',
+                    ? 'Покажите значение, чтобы изменить его.'
+                    : 'Show the value to edit it.',
               )
             : null,
-        readOnly: widget.preserveLineBreaks && obscure,
+        readOnly: widget.concealed && widget.preserveLineBreaks && obscure,
         error: widget.invalid ? const SizedBox.shrink() : null,
         control: FTextFieldControl.managed(controller: widget.controller),
         enabled: widget.enabled,
         autofocus: widget.autofocus,
-        obscureText: !widget.multiline && obscure,
+        obscureText: widget.concealed && !widget.multiline && obscure,
         maxLines: multiline ? 4 : 1,
         keyboardType: multiline
             ? TextInputType.multiline
@@ -82,7 +84,7 @@ final class _VaultSecretInputState extends State<VaultSecretInput> {
         onSubmit: widget.last && !multiline
             ? (_) => widget.onSubmitted()
             : null,
-        suffixBuilder: widget.multiline
+        suffixBuilder: widget.multiline || !widget.concealed
             ? null
             : (context, _, variants) {
                 final labels =

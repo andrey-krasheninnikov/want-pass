@@ -196,7 +196,7 @@ final class _CardEditorState extends State<_CardEditor> {
               FieldIdV1.totpDigits,
               FieldIdV1.totpPeriod,
             ].contains(field.id) &&
-            (!_totp || _values[FieldIdV1.totpSeed]!.text.isEmpty)) {
+            !_totp) {
           continue;
         }
         if ([
@@ -554,7 +554,7 @@ final class _CardEditorState extends State<_CardEditor> {
                     WantButton(
                       key: const ValueKey('card-file-download'),
                       variant: WantButtonVariant.secondary,
-                      onPressed: state.busy
+                      onPressed: state.busy || _attachment != null
                           ? null
                           : () => unawaited(
                               widget.controller.downloadAttachment(

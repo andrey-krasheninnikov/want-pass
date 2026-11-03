@@ -565,3 +565,187 @@ fn pem_key_pairs_must_match_and_protected_containers_remain_explicit() {
             .protected_container
     );
 }
+
+fn damaged_openssh(pem: &str, component: usize, first_byte: bool) -> String {
+    use base64::{Engine, engine::general_purpose::STANDARD};
+    fn string_range(bytes: &[u8], cursor: &mut usize) -> std::ops::Range<usize> {
+        let length = u32::from_be_bytes(bytes[*cursor..*cursor + 4].try_into().unwrap()) as usize;
+        let start = *cursor + 4;
+        *cursor = start + length;
+        start..*cursor
+    }
+    let mut bytes = STANDARD
+        .decode(
+            pem.lines()
+                .filter(|line| !line.starts_with("-----"))
+                .collect::<String>(),
+        )
+        .unwrap();
+    assert!(bytes.starts_with(b"openssh-key-v1\0"));
+    let mut cursor = b"openssh-key-v1\0".len();
+    let cipher = string_range(&bytes, &mut cursor);
+    assert_eq!(&bytes[cipher], b"none");
+    string_range(&bytes, &mut cursor);
+    string_range(&bytes, &mut cursor);
+    assert_eq!(
+        u32::from_be_bytes(bytes[cursor..cursor + 4].try_into().unwrap()),
+        1
+    );
+    cursor += 4;
+    string_range(&bytes, &mut cursor);
+    let block = string_range(&bytes, &mut cursor);
+    cursor = block.start + 8;
+    string_range(&bytes, &mut cursor);
+    for _ in 0..component {
+        string_range(&bytes, &mut cursor);
+    }
+    let value = string_range(&bytes, &mut cursor);
+    bytes[if first_byte {
+        value.start
+    } else {
+        value.end - 1
+    }] ^= 1;
+    let encoded = STANDARD.encode(bytes);
+    format!(
+        "-----BEGIN OPENSSH PRIVATE KEY-----\n{}\n-----END OPENSSH PRIVATE KEY-----\n",
+        encoded
+            .as_bytes()
+            .chunks(70)
+            .map(|s| std::str::from_utf8(s).unwrap())
+            .collect::<Vec<_>>()
+            .join("\n")
+    )
+}
+
+#[test]
+fn clear_openssh_private_material_must_match_its_public_key() {
+    let (_directory, vault) = create();
+    for (kind, public, private, component, first) in [
+        (
+            CardTypeV1::Ed25519,
+            include_str!("fixtures/synthetic_ed25519.pub"),
+            include_str!("fixtures/synthetic_ed25519"),
+            1,
+            true,
+        ),
+        (
+            CardTypeV1::Rsa,
+            include_str!("fixtures/synthetic_rsa.pub"),
+            include_str!("fixtures/synthetic_rsa"),
+            2,
+            false,
+        ),
+        (
+            CardTypeV1::Rsa,
+            include_str!("fixtures/synthetic_rsa.pub"),
+            include_str!("fixtures/synthetic_rsa"),
+            3,
+            false,
+        ),
+    ] {
+        let mut input = account();
+        input.card_type = kind;
+        input.fields = vec![
+            CardValueV1 {
+                id: FieldIdV1::PublicKey,
+                value: public.into(),
+            },
+            CardValueV1 {
+                id: FieldIdV1::PrivateKey,
+                value: damaged_openssh(private, component, first),
+            },
+        ];
+        assert!(vault.save_card_v1(input, 0, vault.generation()).is_err());
+        assert_eq!(vault.content_v2(vault.generation()).unwrap().revision, 0);
+    }
+}
+
+#[test]
+fn protected_private_keys_do_not_exempt_public_material_validation() {
+    use ed25519_dalek::pkcs8::{EncodePrivateKey, EncodePublicKey};
+    use ssh_key::LineEnding;
+    let (_directory, vault) = create();
+    let key = ed25519_dalek::SigningKey::from_bytes(&[7; 32]);
+    let mut input = account();
+    input.card_type = CardTypeV1::Ed25519;
+    input.fields = vec![
+        CardValueV1 {
+            id: FieldIdV1::PublicKey,
+            value: key
+                .verifying_key()
+                .to_public_key_pem(LineEnding::LF)
+                .unwrap(),
+        },
+        CardValueV1 {
+            id: FieldIdV1::PrivateKey,
+            value: key.to_pkcs8_pem(LineEnding::LF).unwrap().to_string(),
+        },
+    ];
+    let saved = vault.save_card_v1(input, 0, vault.generation()).unwrap();
+    let mut modulus = vec![0x80; 1024];
+    modulus[1023] |= 1;
+    let public = rsa::RsaPublicKey::new_with_max_size(
+        rsa::BigUint::from_bytes_be(&modulus),
+        rsa::BigUint::from(65537u32),
+        8192,
+    )
+    .unwrap();
+    let mut large = account();
+    large.card_type = CardTypeV1::Rsa;
+    large.fields = vec![
+        CardValueV1 {
+            id: FieldIdV1::PublicKey,
+            value: public.to_public_key_pem(LineEnding::LF).unwrap(),
+        },
+        CardValueV1 {
+            id: FieldIdV1::PrivateKey,
+            value: include_str!("fixtures/synthetic_protected_pkcs8.pem").into(),
+        },
+    ];
+    let saved = vault
+        .save_card_v1(large, saved.revision, vault.generation())
+        .unwrap();
+    use base64::{Engine, engine::general_purpose::STANDARD};
+    let mut der = STANDARD
+        .decode(
+            include_str!("fixtures/synthetic_certificate_public.pem")
+                .lines()
+                .filter(|line| !line.starts_with("-----"))
+                .collect::<String>(),
+        )
+        .unwrap();
+    let null = der.windows(2).position(|bytes| bytes == [5, 0]).unwrap();
+    der[null] = 4;
+    let mut parameters = account();
+    parameters.card_type = CardTypeV1::Rsa;
+    parameters.fields = vec![
+        CardValueV1 {
+            id: FieldIdV1::PublicKey,
+            value: format!(
+                "-----BEGIN PUBLIC KEY-----\n{}\n-----END PUBLIC KEY-----\n",
+                STANDARD.encode(der)
+            ),
+        },
+        CardValueV1 {
+            id: FieldIdV1::PrivateKey,
+            value: include_str!("fixtures/synthetic_protected_pkcs8.pem").into(),
+        },
+    ];
+    assert!(
+        vault
+            .save_card_v1(parameters, saved.revision, vault.generation())
+            .is_err()
+    );
+    let mut invalid = account();
+    invalid.card_type = CardTypeV1::Rsa;
+    invalid.fields=vec![CardValueV1{id:FieldIdV1::PublicKey,value:"-----BEGIN PUBLIC KEY-----\nMBowDQYJKoZIhvcNAQEBBQADCQAwBgIBAAIBAw==\n-----END PUBLIC KEY-----\n".into()},CardValueV1{id:FieldIdV1::PrivateKey,value:include_str!("fixtures/synthetic_protected_pkcs8.pem").into()}];
+    assert!(
+        vault
+            .save_card_v1(invalid, saved.revision, vault.generation())
+            .is_err()
+    );
+    assert_eq!(
+        vault.content_v2(vault.generation()).unwrap().revision,
+        saved.revision
+    );
+}

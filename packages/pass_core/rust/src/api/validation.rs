@@ -237,6 +237,12 @@ fn matching_public(private: &str, public_der: &[u8]) -> Result<(), VaultFailure>
     }
     Ok(())
 }
+fn ssh_number(value: &ssh_key::Mpint) -> Result<rsa::BigUint, VaultFailure> {
+    value
+        .as_positive_bytes()
+        .map(rsa::BigUint::from_bytes_be)
+        .ok_or(VaultFailure::Unsupported)
+}
 fn key_pair(kind: C, public: &str, private: &str) -> Result<bool, VaultFailure> {
     let rsa = kind == C::Rsa;
     let oid = if rsa {
@@ -257,6 +263,47 @@ fn key_pair(kind: C, public: &str, private: &str) -> Result<bool, VaultFailure> 
         {
             return rejected();
         }
+        if rsa {
+            let public = public.key_data().rsa().ok_or(VaultFailure::Unsupported)?;
+            rsa::RsaPublicKey::new_with_max_size(
+                ssh_number(&public.n)?,
+                ssh_number(&public.e)?,
+                public.n.as_bytes().len() * 8,
+            )
+            .map_err(|_| VaultFailure::Unsupported)?;
+            if !key.is_encrypted() {
+                let pair = key.key_data().rsa().ok_or(VaultFailure::Unsupported)?;
+                let checked = rsa::RsaPrivateKey::from_components(
+                    ssh_number(&pair.public.n)?,
+                    ssh_number(&pair.public.e)?,
+                    ssh_number(&pair.private.d)?,
+                    vec![ssh_number(&pair.private.p)?, ssh_number(&pair.private.q)?],
+                )
+                .map_err(|_| VaultFailure::Unsupported)?;
+                let coefficient = zeroize::Zeroizing::new(
+                    checked.crt_coefficient().ok_or(VaultFailure::Unsupported)?,
+                );
+                let supplied = zeroize::Zeroizing::new(ssh_number(&pair.private.iqmp)?);
+                if *coefficient != *supplied {
+                    return rejected();
+                }
+            }
+        } else {
+            let public = public
+                .key_data()
+                .ed25519()
+                .ok_or(VaultFailure::Unsupported)?;
+            let checked = ed25519_dalek::VerifyingKey::from_bytes(public.as_ref())
+                .map_err(|_| VaultFailure::Unsupported)?;
+            if !key.is_encrypted() {
+                let pair = key.key_data().ed25519().ok_or(VaultFailure::Unsupported)?;
+                if ed25519_dalek::SigningKey::from_bytes(pair.private.as_ref()).verifying_key()
+                    != checked
+                {
+                    return rejected();
+                }
+            }
+        }
         return Ok(key.is_encrypted());
     }
     let (label, der) =
@@ -268,6 +315,27 @@ fn key_pair(kind: C, public: &str, private: &str) -> Result<bool, VaultFailure> 
         pkcs8::SubjectPublicKeyInfoRef::from_der(&der).map_err(|_| VaultFailure::Unsupported)?;
     if key.algorithm.oid.to_string() != oid {
         return rejected();
+    }
+    use rsa::pkcs8::DecodePublicKey;
+    if rsa {
+        if key.algorithm.parameters != Some(pkcs8::der::asn1::Null.into()) {
+            return rejected();
+        }
+        let bytes = key
+            .subject_public_key
+            .as_bytes()
+            .ok_or(VaultFailure::Unsupported)?;
+        let public = <rsa::pkcs1::RsaPublicKey<'_> as rsa::pkcs1::der::Decode>::from_der(bytes)
+            .map_err(|_| VaultFailure::Unsupported)?;
+        rsa::RsaPublicKey::new_with_max_size(
+            rsa::BigUint::from_bytes_be(public.modulus.as_bytes()),
+            rsa::BigUint::from_bytes_be(public.public_exponent.as_bytes()),
+            bytes.len() * 8,
+        )
+        .map_err(|_| VaultFailure::Unsupported)?;
+    } else {
+        ed25519_dalek::VerifyingKey::from_public_key_pem(public)
+            .map_err(|_| VaultFailure::Unsupported)?;
     }
     let protected = private_key(private, Some(oid))?;
     if !protected {

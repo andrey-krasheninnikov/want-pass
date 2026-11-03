@@ -15,14 +15,13 @@ final class ContentSnapshotV2 extends Equatable {
     required List<GroupV1> groups,
     required List<CardSummaryV1> cards,
   }) {
-    if (revision.isNegative ||
-        groups.length > 10000 ||
-        cards.length > 100000 ||
-        groups.map((g) => g.id).toSet().length != groups.length ||
+    if (revision.isNegative || groups.length > 10000 || cards.length > 100000) {
+      throw const VaultRejectedErrorV1(VaultFailureKindV1.unsupported);
+    }
+    final groupIds = groups.map((g) => g.id).toSet();
+    if (groupIds.length != groups.length ||
         cards.map((c) => c.id).toSet().length != cards.length ||
-        cards.any(
-          (c) => c.groupIds.any((id) => !groups.any((g) => g.id == id)),
-        )) {
+        cards.any((c) => c.groupIds.any((id) => !groupIds.contains(id)))) {
       throw const VaultRejectedErrorV1(VaultFailureKindV1.unsupported);
     }
     return ContentSnapshotV2._(

@@ -245,6 +245,126 @@ void main() {
     await _pump(tester);
   });
 
+  testWidgets(
+    'checked TOTP with an empty seed preserves the saved configuration',
+    (tester) async {
+      final fixture = (await tester.runAsync(_Fixture.create))!;
+      addTearDown(fixture.close);
+      final controller = fixture.controller;
+      const seed = 'GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ';
+      await tester.runAsync(
+        () => controller.saveCard(
+          const CardDraftV1(
+            name: 'TOTP edit fixture',
+            description: '',
+            service: 'github',
+            cardType: CardTypeV1.account,
+            groupIds: [],
+            fields: [
+              CardFieldDraftV1(
+                id: FieldIdV1.login,
+                value: 'fixture@example.invalid',
+              ),
+              CardFieldDraftV1(
+                id: FieldIdV1.password,
+                value: 'Synthetic password',
+              ),
+              CardFieldDraftV1(id: FieldIdV1.totpSeed, value: seed),
+            ],
+          ),
+        ),
+      );
+      await tester.pumpWidget(
+        MaterialApp(
+          builder: (context, child) => WantTheme(
+            data: WantThemeData.light(),
+            child: WantToaster(child: child!),
+          ),
+          home: Scaffold(body: VaultContentView(controller: controller)),
+        ),
+      );
+      await _pump(tester);
+      final id = controller.state.content!.cards.single.id;
+      await _tap(tester, 'account-$id');
+      await _idle(tester, controller);
+      final toggle = find.descendant(
+        of: find.byKey(const ValueKey('card-field-totpSeed')),
+        matching: find.byType(FButton),
+      );
+      await tester.ensureVisible(toggle);
+      await tester.tap(toggle);
+      await _pump(tester);
+      await _enter(tester, 'card-field-totpSeed', '');
+      await _tap(tester, 'account-save');
+      await _idle(tester, controller);
+      final error = controller.state.error;
+      final editing = find
+          .byKey(const ValueKey('account-save'))
+          .evaluate()
+          .isNotEmpty;
+      final saved = await tester.runAsync(() => controller.readCard(id));
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.runAsync(fixture.close);
+      expect(error, isA<VaultRejectedErrorV1>());
+      expect(editing, isTrue);
+      expect(
+        saved!.fields
+            .where((f) => f.id == FieldIdV1.totpSeed)
+            .firstOrNull
+            ?.value,
+        seed,
+      );
+    },
+  );
+
+  testWidgets(
+    'pending replacement attachment cannot export the previous file',
+    (tester) async {
+      final fixture = (await tester.runAsync(
+        () => _Fixture.create(files: _ReplacementFileService()),
+      ))!;
+      addTearDown(fixture.close);
+      final controller = fixture.controller;
+      await tester.runAsync(
+        () => controller.saveCard(
+          const CardDraftV1(
+            name: 'File edit fixture',
+            description: '',
+            service: 'other',
+            cardType: CardTypeV1.file,
+            groupIds: [],
+            fields: [],
+            attachment: AttachmentDraftV1(name: 'saved.bin', bytes: [1, 2, 3]),
+          ),
+        ),
+      );
+      await tester.pumpWidget(
+        MaterialApp(
+          builder: (context, child) => WantTheme(
+            data: WantThemeData.light(),
+            child: WantToaster(child: child!),
+          ),
+          home: Scaffold(body: VaultContentView(controller: controller)),
+        ),
+      );
+      await _pump(tester);
+      await _tap(
+        tester,
+        'account-${controller.state.content!.cards.single.id}',
+      );
+      await _idle(tester, controller);
+      final download = find.byKey(const ValueKey('card-file-download'));
+      expect(tester.widget<WantButton>(download).onPressed, isNotNull);
+      await _tap(tester, 'card-file-select');
+      await _idle(tester, controller);
+      expect(find.text('replacement.bin'), findsOneWidget);
+      final action = tester.widget<WantButton>(download).onPressed;
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.runAsync(fixture.close);
+      expect(action, isNull);
+    },
+  );
+
   testWidgets('expired OTP is hidden before the next refresh', (tester) async {
     final fixture = (await tester.runAsync(_Fixture.create))!;
     addTearDown(fixture.close);
@@ -508,6 +628,17 @@ final class _PendingFileService implements CredentialFileService {
   final reply = Completer<DomainResult<AttachmentDraftV1?>>();
   @override
   FutureDomainResult<AttachmentDraftV1?> selectAttachmentV1() => reply.future;
+  @override
+  FutureDomainResult<String?> selectDestinationV1(String name) async =>
+      const Result.success(null);
+}
+
+final class _ReplacementFileService implements CredentialFileService {
+  @override
+  FutureDomainResult<AttachmentDraftV1?> selectAttachmentV1() async =>
+      const Result.success(
+        AttachmentDraftV1(name: 'replacement.bin', bytes: [4, 5]),
+      );
   @override
   FutureDomainResult<String?> selectDestinationV1(String name) async =>
       const Result.success(null);

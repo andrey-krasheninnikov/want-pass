@@ -46,4 +46,44 @@ void main() {
     expect(() => summary.copyWith(service: ''), throwsA(isA<VaultErrorV1>()));
     expect(() => card.copyWith(fields: const []), throwsA(isA<VaultErrorV1>()));
   });
+  test(
+    'content snapshots retain group memberships and reject dangling references',
+    () {
+      const id = '0123456789abcdef0123456789abcdef';
+      final groups = [
+        GroupV1(
+          id: id,
+          name: 'Synthetic group',
+          description: '',
+          icon: 'folder',
+          logo: [],
+        ),
+      ];
+      final cards = [
+        CardSummaryV1(
+          id: id,
+          name: 'Synthetic card',
+          service: 'github',
+          groupIds: [id],
+          cardType: CardTypeV1.account,
+          templateVersion: 1,
+        ),
+      ];
+      final snapshot = ContentSnapshotV2(
+        revision: BigInt.zero,
+        groups: groups,
+        cards: cards,
+      );
+      groups.clear();
+      cards.clear();
+      expect(snapshot.cards.single.groupIds, [id]);
+      expect(() => snapshot.copyWith(groups: []), throwsA(isA<VaultErrorV1>()));
+      expect(
+        () => snapshot.copyWith(
+          groups: [snapshot.groups.single, snapshot.groups.single],
+        ),
+        throwsA(isA<VaultErrorV1>()),
+      );
+    },
+  );
 }

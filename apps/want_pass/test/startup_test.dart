@@ -673,6 +673,34 @@ void main() {
   );
 
   test(
+    'vault diagnostics retain card operation names and redact untrusted text',
+    () {
+      for (final operation in [
+        'RustVaultAccessService.saveCardV1():',
+        'VaultUseCaseImpl.saveCardV1():',
+        'VaultController.copyCard():',
+        'PlatformCredentialFileService.selectAttachmentV1():',
+      ]) {
+        observer.reportVault(
+          layer: VaultDiagnosticLayer.application,
+          operation: operation,
+          error: const VaultRejectedErrorV1(VaultFailureKindV1.storage),
+        );
+        expect(talker.history.last.message, 'application $operation storage');
+      }
+      observer.reportVault(
+        layer: VaultDiagnosticLayer.application,
+        operation: 'Synthetic private input',
+        error: const VaultUnexpectedErrorV1(),
+      );
+      expect(
+        talker.history.last.message,
+        'application unknownOperation unexpectedError',
+      );
+    },
+  );
+
+  test(
     'arbitrary states, effects and errors are not formatted or retained',
     () async {
       final probe = _ProbeCubit();

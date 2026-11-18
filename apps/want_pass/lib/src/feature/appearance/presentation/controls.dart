@@ -39,14 +39,27 @@ class AppearanceControls extends StatelessWidget {
                 label: ru ? 'Тема' : 'Theme',
                 child: WantDropdownMenu(
                   key: const ValueKey('appearance-theme'),
-                  label: Icon(switch (settings.theme) {
-                    AppearanceThemeV1.system =>
-                      Theme.of(context).brightness == Brightness.dark
-                          ? WantIcons.moon
-                          : WantIcons.sun,
-                    AppearanceThemeV1.light => WantIcons.sun,
-                    AppearanceThemeV1.dark => WantIcons.moon,
-                  }),
+                  label: SizedBox.square(
+                    dimension: 24,
+                    child: AnimatedSwitcher(
+                      duration:
+                          WantTheme.reducedMotionOf(context) ||
+                              MediaQuery.highContrastOf(context)
+                          ? Duration.zero
+                          : const Duration(milliseconds: 180),
+                      switchInCurve: Curves.easeInOutCubic,
+                      switchOutCurve: Curves.easeInOutCubic,
+                      child: Icon(
+                        WantTheme.of(context).forui.colors.brightness ==
+                                Brightness.dark
+                            ? WantIcons.moon
+                            : WantIcons.sun,
+                        key: ValueKey(
+                          WantTheme.of(context).forui.colors.brightness,
+                        ),
+                      ),
+                    ),
+                  ),
                   items: [
                     for (final theme in AppearanceThemeV1.values)
                       WantMenuItem(

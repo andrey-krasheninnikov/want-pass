@@ -42,6 +42,11 @@ A group uses a built-in folder, company, work, code, home or key icon, or a loca
 
 Группа использует встроенную иконку папки, компании, работы, кода, дома или ключа либо локальный PNG/JPEG. Исходник ограничен 5 MiB и 4096 на 4096 пикселей. Платформенный адаптер преобразует изображение в PNG до 256 на 256 пикселей без сохранения исходного пути и метаданных; native-хранилище ограничивает результат 512 KiB и проверяет PNG header и размеры. Расшифрованные изображения принадлежат виджетам и освобождаются без помещения в глобальный кэш изображений.
 
+The group icon picker stores a colored preset as a PNG in the existing logo field. The PNG text marker `WantPassGroupIcon` records the preset ID and palette choice for editing. The native icon ID and document schema stay compatible with existing vaults. Imported images retain their colors and are normalized before storage.
+
+Выбор цвета встроенной иконки сохраняется как PNG в существующем поле логотипа. Метка PNG `WantPassGroupIcon` содержит идентификатор иконки и цвет для повторного редактирования. Идентификатор иконки и схема документа совместимы с существующими сейфами. Загруженные изображения сохраняют исходные цвета и нормализуются перед записью.
+
+
 Editors and image selection are invalidated on lock. Password fields remain concealed by default and disable autofill, correction and keyboard learning. The released Want Input does not expose all required secret-entry controls, so credential editors use Forui under WantTheme pending [Want Allure #22](https://github.com/andrey-krasheninnikov/want-allure/issues/22). Diagnostics carry only fixed operation identifiers and error categories. Dart strings and OS input buffers cannot promise reliable memory erasure.
 
 Блокировка закрывает редакторы и отменяет результаты выбора изображения. Поля пароля скрыты по умолчанию, отключают autofill, исправления и обучение клавиатуры. Выпущенный Want Input не предоставляет все необходимые настройки секретного ввода, поэтому credentials вводятся через Forui под WantTheme до [Want Allure #22](https://github.com/andrey-krasheninnikov/want-allure/issues/22). Диагностика содержит только фиксированные идентификаторы операций и категории ошибок. Надёжное обнуление Dart-строк и буферов ввода ОС не гарантируется.

@@ -102,8 +102,12 @@ After changing the Rust bridge API, install `flutter_rust_bridge_codegen 2.13.0`
 
 ## Groups and cards / Группы и карточки
 
-After unlocking, create groups with a name, description and a built-in icon or local PNG/JPEG. Create account cards with a login/email, password and any number of groups. Deleting a group preserves every card. All content, including logos and memberships, is encrypted in the vault. Services, environments and history follow in their own roadmap tasks.
+After unlocking, create groups and any of 19 secret-card presets. Every card requires a built-in service and may have an environment and several groups. Accounts support TOTP, recovery codes and reserve logins. Copy-all includes login, password and current OTP; other sensitive values have separate copy actions. Developer presets store locally validated values without configuring or executing tools. Files are limited to 20 MiB within the 64-MiB encrypted vault.
 
-После разблокировки создавайте группы с названием, описанием и встроенной иконкой либо локальным PNG/JPEG. Карточка учётной записи содержит логин/email, пароль и любое число групп. Удаление группы сохраняет все карточки. Содержимое, включая логотипы и связи, зашифровано в сейфе. Сервисы, окружения и история реализуются отдельными задачами roadmap.
+После разблокировки создавайте группы и карточки 19 типов. Сервис обязателен; окружение и несколько групп необязательны. Аккаунты поддерживают TOTP, recovery-коды и резервные логины. «Скопировать всё» включает логин, пароль и текущий OTP; остальные чувствительные поля копируются отдельно. Пресеты разработчика хранят значения с локальной проверкой формата без настройки и выполнения инструментов. Файл ограничен 20 MiB, зашифрованный сейф целиком ограничен 64 MiB.
 
-See / См. [ADR 0010](docs/adr/0010-encrypted-groups-and-account-cards.md).
+Schema-2 cards intentionally have no migration from the earlier schema-1 development data. Unsupported content is preserved and rejected rather than overwritten. Use a new vault for this acceptance run. The agreed stand reset removes only the current vault and preserves appearance preferences; the existing `make clean-data` command still resets both.
+
+Карточки schema-2 намеренно не мигрируют прежние данные schema-1 для разработки. Неподдержанное содержимое сохраняется и отклоняется без перезаписи. Для этой приёмки нужен новый сейф. Согласованный сброс стенда удаляет только текущий сейф и сохраняет оформление; существующая команда `make clean-data` по-прежнему сбрасывает оба вида данных.
+
+See / См. [ADR 0011](docs/adr/0011-versioned-secret-cards.md) for supported formats and limits; [ADR 0010](docs/adr/0010-encrypted-groups-and-account-cards.md) for groups and the earlier document contract.

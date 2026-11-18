@@ -55,12 +55,12 @@ struct Document {
 }
 #[derive(Serialize, Deserialize, Zeroize, ZeroizeOnDrop)]
 #[serde(deny_unknown_fields)]
-struct StoredGroup {
-    id: String,
-    name: String,
-    description: String,
-    icon: String,
-    logo: Vec<u8>,
+pub(super) struct StoredGroup {
+    pub(super) id: String,
+    pub(super) name: String,
+    pub(super) description: String,
+    pub(super) icon: String,
+    pub(super) logo: Vec<u8>,
 }
 #[derive(Serialize, Deserialize, Zeroize, ZeroizeOnDrop)]
 #[serde(deny_unknown_fields)]
@@ -72,13 +72,13 @@ struct StoredAccount {
     password: String,
     group_ids: Vec<String>,
 }
-fn bounded(value: &str, limit: usize, required: bool) -> Result<(), VaultFailure> {
+pub(super) fn bounded(value: &str, limit: usize, required: bool) -> Result<(), VaultFailure> {
     if value.len() > limit || (required && value.trim().is_empty()) || value.contains('\0') {
         return Err(VaultFailure::Unsupported);
     }
     Ok(())
 }
-fn validate_logo(icon: &str, logo: &[u8]) -> Result<(), VaultFailure> {
+pub(super) fn validate_logo(icon: &str, logo: &[u8]) -> Result<(), VaultFailure> {
     if !["folder", "building", "briefcase", "code", "home", "key"].contains(&icon) {
         return Err(VaultFailure::Unsupported);
     }
@@ -96,7 +96,7 @@ fn validate_logo(icon: &str, logo: &[u8]) -> Result<(), VaultFailure> {
     }
     Ok(())
 }
-fn new_id() -> Result<String, VaultFailure> {
+pub(super) fn new_id() -> Result<String, VaultFailure> {
     Ok(format::random::<16>()?
         .iter()
         .map(|b| format!("{b:02x}"))
@@ -340,6 +340,25 @@ impl Vault {
         generation: u64,
         operation: impl FnOnce(&mut Document) -> Result<(), VaultFailure>,
     ) -> Result<ContentSnapshotV1, VaultFailure> {
+        self.update_document(generation, |bytes| {
+            let mut document = Document::decode(bytes)?;
+            if document.revision != revision {
+                return Err(VaultFailure::Stale);
+            }
+            operation(&mut document)?;
+            document.revision = revision.checked_add(1).ok_or(VaultFailure::Unsupported)?;
+            let encoded = Zeroizing::new(
+                serde_json::to_vec(&document).map_err(|_| VaultFailure::Unsupported)?,
+            );
+            Document::decode(&encoded)?;
+            Ok((encoded, document.snapshot()))
+        })
+    }
+    pub(super) fn update_document<T>(
+        &self,
+        generation: u64,
+        operation: impl FnOnce(&[u8]) -> Result<(Zeroizing<Vec<u8>>, T), VaultFailure>,
+    ) -> Result<T, VaultFailure> {
         let _job = self.job.try_lock().map_err(|_| VaultFailure::Busy)?;
         let (opened, bytes, store) = {
             let state = self.state.lock().map_err(|_| VaultFailure::Unavailable)?;
@@ -357,16 +376,7 @@ impl Vault {
                 std::sync::Arc::clone(&state.store),
             )
         };
-        let mut document = Document::decode(&opened.document)?;
-        if document.revision != revision {
-            return Err(VaultFailure::Stale);
-        }
-        operation(&mut document)?;
-        document.revision = revision.checked_add(1).ok_or(VaultFailure::Unsupported)?;
-        let encoded =
-            Zeroizing::new(serde_json::to_vec(&document).map_err(|_| VaultFailure::Unsupported)?);
-        // Validate cardinality and references before committing anything.
-        Document::decode(&encoded)?;
+        let (encoded, value) = operation(&opened.document)?;
         let candidate = format::replace_document(&bytes, &opened, &encoded)?;
         let _publication = self
             .export_publication
@@ -391,6 +401,6 @@ impl Vault {
         }
         let active = state.active.as_mut().ok_or(VaultFailure::Locked)?;
         active.document = encoded;
-        Ok(document.snapshot())
+        Ok(value)
     }
 }

@@ -107,6 +107,10 @@ final class _VaultUnlockFormState extends State<VaultUnlockForm> {
               null,
             final error => error,
           };
+          final showHalo =
+              state.passwordValid == true &&
+              !busy &&
+              !MediaQuery.highContrastOf(context);
           final submit = WantButton(
             key: const ValueKey('vault-unlock'),
             size: WantButtonSize.icon,
@@ -191,29 +195,24 @@ final class _VaultUnlockFormState extends State<VaultUnlockForm> {
                         Positioned.fill(
                           child: IgnorePointer(
                             child: ExcludeSemantics(
-                              child: AnimatedOpacity(
-                                opacity:
-                                    state.passwordValid == true &&
-                                        !busy &&
-                                        !MediaQuery.highContrastOf(context)
-                                    ? 1
-                                    : 0,
+                              // Paint the shadow's alpha directly for Impeller.
+                              child: AnimatedContainer(
                                 duration: WantTheme.reducedMotionOf(context)
                                     ? Duration.zero
                                     : const Duration(milliseconds: 180),
-                                child: DecoratedBox(
-                                  decoration: BoxDecoration(
-                                    borderRadius: BorderRadius.circular(999),
-                                    boxShadow: [
-                                      BoxShadow(
-                                        color: WantTheme.of(context)
-                                            .color('primary')
-                                            .withValues(alpha: .25),
-                                        blurRadius: 24,
-                                        spreadRadius: 2,
-                                      ),
-                                    ],
-                                  ),
+                                decoration: BoxDecoration(
+                                  borderRadius: BorderRadius.circular(999),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: WantTheme.of(context)
+                                          .color('primary')
+                                          .withValues(
+                                            alpha: showHalo ? .25 : 0,
+                                          ),
+                                      blurRadius: 24,
+                                      spreadRadius: 2,
+                                    ),
+                                  ],
                                 ),
                               ),
                             ),

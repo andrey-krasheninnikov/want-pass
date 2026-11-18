@@ -255,11 +255,18 @@ final class _CopyableHint extends StatefulWidget {
 final class _CopyableHintState extends State<_CopyableHint> {
   bool _copying = false;
   bool? _copied;
+  Timer? _copyFeedback;
 
   Future<void> _copy() async {
     setState(() => _copying = true);
     final copied = await widget.copy();
     if (!mounted) return;
+    _copyFeedback?.cancel();
+    if (copied) {
+      _copyFeedback = Timer(const Duration(seconds: 3), () {
+        setState(() => _copied = null);
+      });
+    }
     setState(() {
       _copying = false;
       _copied = copied;
@@ -267,8 +274,15 @@ final class _CopyableHintState extends State<_CopyableHint> {
   }
 
   @override
+  void dispose() {
+    _copyFeedback?.cancel();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     final ru = Localizations.localeOf(context).languageCode == 'ru';
+    final copied = _copied == true;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       mainAxisSize: MainAxisSize.min,
@@ -285,21 +299,42 @@ final class _CopyableHintState extends State<_CopyableHint> {
             spacing: 8,
             children: [
               Expanded(child: Text(widget.text)),
-              const ExcludeSemantics(
-                child: Icon(Icons.copy_outlined, size: 16),
+              Semantics(
+                liveRegion: copied,
+                label: copied
+                    ? (ru ? 'Подсказка скопирована' : 'Hint copied')
+                    : null,
+                child: SizedBox.square(
+                  dimension: 16,
+                  child: AnimatedSwitcher(
+                    duration: WantTheme.reducedMotionOf(context)
+                        ? Duration.zero
+                        : const Duration(milliseconds: 180),
+                    switchInCurve: Curves.easeOutCubic,
+                    switchOutCurve: Curves.easeInCubic,
+                    child: copied
+                        ? Icon(
+                            Icons.check_rounded,
+                            key: const ValueKey('hint-copied'),
+                            color: WantTheme.of(context).color('success-text'),
+                            size: 16,
+                          )
+                        : const Icon(
+                            Icons.copy_outlined,
+                            key: ValueKey('hint-copy'),
+                            size: 16,
+                          ),
+                  ),
+                ),
               ),
             ],
           ),
         ),
-        if (_copied case final copied?)
+        if (_copied == false)
           WantTypography(
-            copied
-                ? (ru ? 'Подсказка скопирована' : 'Hint copied')
-                : (ru
-                      ? 'Не удалось скопировать подсказку'
-                      : 'Could not copy the hint'),
+            ru ? 'Не удалось скопировать подсказку' : 'Could not copy the hint',
             variant: WantTypographyVariant.caption,
-            colorRole: copied ? 'muted-foreground' : 'destructive',
+            colorRole: 'destructive',
             liveRegion: true,
           ),
       ],

@@ -37,7 +37,8 @@ class _VaultPageState extends State<VaultPage> {
   late final PageController _pages;
   late bool _includeAppearance;
   int _step = 1, _navigationEpoch = 0;
-  bool _recovering = false, _advancing = false;
+  bool _recovering = false, _advancing = false, _sliding = false;
+  int _phraseArrival = 0;
   String _lastPasswordText = '';
   DialogRoute<void>? _overlay;
   int get _firstStep => _recovering || _includeAppearance ? 0 : 1;
@@ -146,32 +147,46 @@ class _VaultPageState extends State<VaultPage> {
     super.dispose();
   }
 
-  void _go(int step) {
-    _navigationEpoch++;
+  void _go(int step, {bool retry = false}) {
+    final epoch = ++_navigationEpoch;
     widget.controller.dismissFailure();
     _hideOverlay();
     FocusScope.of(context).unfocus();
     if (step != 1) _obscurePasswords.value = true;
-    setState(() => _step = step);
-    if (_pages.hasClients) {
-      if (WantTheme.reducedMotionOf(context)) {
-        _pages.jumpToPage(step);
-      } else {
-        unawaited(
-          _pages.animateToPage(
-            step,
-            duration: const Duration(milliseconds: 260),
-            curve: const Cubic(.32, .72, 0, 1),
-          ),
-        );
-      }
+    final animate =
+        _pages.hasClients &&
+        !retry &&
+        TickerMode.valuesOf(context).enabled &&
+        !WantTheme.reducedMotionOf(context);
+    setState(() {
+      _step = step;
+      _sliding = animate;
+      if (retry) _phraseArrival++;
+    });
+    if (animate) {
+      unawaited(
+        _pages
+            .animateToPage(
+              step,
+              duration: const Duration(milliseconds: 360),
+              curve: Curves.easeInOutCubic,
+            )
+            .then((_) {
+              if (!mounted || epoch != _navigationEpoch) return;
+              setState(() => _sliding = false);
+              _headingFocus.requestFocus();
+            }),
+      );
+    } else {
+      if (_pages.hasClients) _pages.jumpToPage(step);
+      if (!retry) _headingFocus.requestFocus();
     }
-    _headingFocus.requestFocus();
   }
 
   bool _canAdvance(VaultState state) =>
       !state.busy &&
       !_advancing &&
+      !_sliding &&
       widget.appearance?.state.busy != true &&
       switch (_step) {
         0 => !_recovering || _phrase.text.trim().isNotEmpty,
@@ -415,14 +430,14 @@ class _VaultPageState extends State<VaultPage> {
       children: children,
     ),
   );
-  String _title(VaultState state) {
+  String _title(VaultState state, [int? step]) {
     if (state.phase == VaultPhase.loading) {
       return _text('Opening vault', 'Открытие сейфа');
     }
     if (state.phase == VaultPhase.unavailable) {
       return _text('Vault unavailable', 'Сейф недоступен');
     }
-    return switch (_step) {
+    return switch (step ?? _step) {
       0 =>
         _recovering
             ? _text('Recovery phrase', 'Фраза восстановления')
@@ -497,6 +512,7 @@ class _VaultPageState extends State<VaultPage> {
     widget.controller.dismissFailure();
     setState(() {
       _recovering = true;
+      _sliding = false;
       _step = 0;
     });
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -509,35 +525,42 @@ class _VaultPageState extends State<VaultPage> {
   }
 
   Widget _ambient(VaultState state, bool setup, {required Widget child}) =>
-      setup
-      ? WantBackgroundMotion(
-          controller: _background,
-          showPauseControl: false,
-          alternateWithLightning: true,
-          pauseLabel: _text('Pause background', 'Остановить фон'),
-          resumeLabel: _text('Resume background', 'Включить фон'),
-          child: child,
-        )
-      : state.phase == VaultPhase.locked
-      ? VaultFilaments(child: child)
-      : child;
+      VaultFilaments(
+        enabled: !setup && state.phase == VaultPhase.locked,
+        backdrop: setup
+            ? WantBackgroundMotion(
+                controller: _background,
+                showPauseControl: false,
+                alternateWithLightning: true,
+                transitionDuration: const Duration(milliseconds: 1600),
+                pauseLabel: _text('Pause background', 'Остановить фон'),
+                resumeLabel: _text('Resume background', 'Включить фон'),
+                child: const SizedBox.expand(),
+              )
+            : null,
+        child: child,
+      );
+
   Widget _arrival(Object view, Widget child) {
-    final reduced = WantTheme.reducedMotionOf(context);
+    final reduced =
+        WantTheme.reducedMotionOf(context) ||
+        !TickerMode.valuesOf(context).enabled;
     return TweenAnimationBuilder<double>(
       key: ValueKey(view),
       tween: Tween(begin: 0, end: 1),
-      curve: Curves.easeOutCubic,
-      duration: reduced ? Duration.zero : const Duration(milliseconds: 260),
+      curve: Curves.easeInOutCubic,
+      duration: reduced ? Duration.zero : const Duration(milliseconds: 320),
       child: child,
-      builder: (context, progress, child) => reduced
-          ? child!
-          : Opacity(
-              opacity: progress,
-              child: Transform.translate(
-                offset: Offset(0, (1 - progress) * 8),
-                child: child,
-              ),
-            ),
+      builder: (context, progress, child) {
+        final value = reduced ? 1.0 : progress;
+        return Opacity(
+          opacity: value,
+          child: Transform.translate(
+            offset: Offset(0, (1 - value) * 5),
+            child: child,
+          ),
+        );
+      },
     );
   }
 
@@ -556,7 +579,7 @@ class _VaultPageState extends State<VaultPage> {
     switch (effect) {
       case VaultRecoveryReset():
         if (widget.controller.state.phase != VaultPhase.confirmation) return;
-        _go(3);
+        _go(3, retry: true);
         _dialog(
           (context) => WantDialog(
             title: _text('Check the phrase again', 'Сверьте фразу ещё раз'),
@@ -604,51 +627,108 @@ class _VaultPageState extends State<VaultPage> {
     }
   }
 
-  Widget _progress() {
+  Widget _setupChrome(VaultState state) {
     final total = 6 - _firstStep;
     final theme = WantTheme.of(context);
-    return Column(
-      spacing: 8,
-      children: [
-        Row(
-          spacing: 4,
+    final primary = theme.color('primary');
+    final complete = Color.alphaBlend(
+      primary.withValues(alpha: .92),
+      theme.color('card'),
+    );
+    return ListenableBuilder(
+      listenable: _pages,
+      builder: (context, _) {
+        final page = (_pages.hasClients ? _pages.page ?? _step : _step)
+            .clamp(_firstStep, 5)
+            .toDouble();
+        final from = page.floor();
+        final to = page.ceil();
+        final mix = page - from;
+
+        Widget labels(
+          String Function(int) label,
+          WantTypographyVariant variant, {
+          required Alignment alignment,
+        }) => Stack(
+          alignment: alignment,
           children: [
-            for (var i = _firstStep; i < 6; i++)
-              Expanded(
-                child: Semantics(
-                  label: _text(
-                    'Step ${i - _firstStep + 1} of $total',
-                    'Шаг ${i - _firstStep + 1} из $total',
-                  ),
-                  selected: i == _step,
-                  child: AnimatedContainer(
-                    key: ValueKey('setup-segment-$i'),
-                    height: 6,
-                    duration: WantTheme.reducedMotionOf(context)
-                        ? Duration.zero
-                        : const Duration(milliseconds: 180),
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(12),
-                      color: i == _step
-                          ? theme.color('primary')
-                          : i < _step
-                          ? Color.alphaBlend(
-                              theme.color('primary').withValues(alpha: .92),
-                              theme.color('card'),
-                            )
-                          : theme.color('muted-foreground'),
-                    ),
-                  ),
-                ),
+            Opacity(
+              opacity: 1 - mix,
+              child: WantTypography(label(from), variant: variant),
+            ),
+            if (from != to)
+              Opacity(
+                opacity: mix,
+                child: WantTypography(label(to), variant: variant),
               ),
           ],
-        ),
-        WantAnimatedText(
-          '${_step - _firstStep + 1} / $total',
-          key: const ValueKey('setup-counter'),
-          liveRegion: true,
-        ),
-      ],
+        );
+
+        String counter(int step) => '${step - _firstStep + 1} / $total';
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          spacing: 12,
+          children: [
+            Row(
+              spacing: 4,
+              children: [
+                for (var i = _firstStep; i < 6; i++)
+                  Expanded(
+                    child: Semantics(
+                      label: _text(
+                        'Step ${i - _firstStep + 1} of $total',
+                        'Шаг ${i - _firstStep + 1} из $total',
+                      ),
+                      selected: i == _step,
+                      child: Container(
+                        key: ValueKey('setup-segment-$i'),
+                        height: 6,
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(12),
+                          color: page < i
+                              ? Color.lerp(
+                                  theme.color('muted-foreground'),
+                                  primary,
+                                  (1 + page - i).clamp(0, 1).toDouble(),
+                                )
+                              : Color.lerp(
+                                  primary,
+                                  complete,
+                                  (page - i).clamp(0, 1).toDouble(),
+                                ),
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+            Semantics(
+              label: counter(_step),
+              liveRegion: true,
+              excludeSemantics: true,
+              child: labels(
+                counter,
+                WantTypographyVariant.caption,
+                alignment: Alignment.center,
+              ),
+            ),
+            Focus(
+              focusNode: _headingFocus,
+              child: Semantics(
+                header: true,
+                label: _title(state, _step),
+                excludeSemantics: true,
+                child: labels(
+                  (step) => _title(state, step),
+                  WantTypographyVariant.h2,
+                  alignment: Alignment.centerLeft,
+                ),
+              ),
+            ),
+          ],
+        );
+      },
     );
   }
 
@@ -665,7 +745,7 @@ class _VaultPageState extends State<VaultPage> {
       ),
       colorRole: 'muted-foreground',
     );
-    return [
+    final slides = [
       _slide(
         _recovering
             ? [
@@ -871,6 +951,10 @@ class _VaultPageState extends State<VaultPage> {
           ],
       ]),
     ];
+    if (_phraseArrival > 0) {
+      slides[3] = _arrival(_phraseArrival, slides[3]);
+    }
+    return slides;
   }
 
   @override
@@ -1006,40 +1090,29 @@ class _VaultPageState extends State<VaultPage> {
                                           CrossAxisAlignment.stretch,
                                       spacing: 12,
                                       children: [
-                                        if (setup) _progress(),
-                                        if (setup ||
-                                            state.phase == VaultPhase.loading ||
+                                        if (setup)
+                                          _setupChrome(state)
+                                        else if (state.phase ==
+                                                VaultPhase.loading ||
                                             state.phase ==
                                                 VaultPhase.unavailable)
-                                          Focus(
-                                            focusNode: _headingFocus,
-                                            child: Semantics(
-                                              header: true,
-                                              child: AnimatedSwitcher(
-                                                duration:
-                                                    WantTheme.reducedMotionOf(
-                                                      context,
-                                                    )
-                                                    ? Duration.zero
-                                                    : const Duration(
-                                                        milliseconds: 260,
-                                                      ),
-                                                child: WantTypography(
-                                                  _title(state),
-                                                  key: ValueKey(_title(state)),
-                                                  variant:
-                                                      WantTypographyVariant.h2,
-                                                ),
-                                              ),
+                                          Semantics(
+                                            header: true,
+                                            child: WantTypography(
+                                              _title(state),
+                                              variant: WantTypographyVariant.h2,
                                             ),
                                           ),
                                         if (setup)
                                           Expanded(
-                                            child: PageView(
-                                              controller: _pages,
-                                              physics:
-                                                  const NeverScrollableScrollPhysics(),
-                                              children: _slides(state),
+                                            child: IgnorePointer(
+                                              ignoring: _sliding,
+                                              child: PageView(
+                                                controller: _pages,
+                                                physics:
+                                                    const NeverScrollableScrollPhysics(),
+                                                children: _slides(state),
+                                              ),
                                             ),
                                           )
                                         else if (state.phase ==

@@ -23,6 +23,7 @@ dependencies:
   talker_bloc_effects: 0.1.0
   want_allure: 1.2.2
   forui: 0.27.7
+  ditredi: 2.0.2
   file_selector: 1.1.0
   qr_flutter: 4.1.0
   want_pass_core: ^0.1.0

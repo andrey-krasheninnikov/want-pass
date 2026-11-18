@@ -3,10 +3,25 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
+import 'package:want_pass/src/feature/vault/presentation/_barrel.dart';
 
-void presentWantPass(Widget app) {
+Future<void> presentWantPass(Widget app) async {
+  final ready = Completer<void>();
+  final stream = vaultSplashLogo.resolve(ImageConfiguration.empty);
+  final listener = ImageStreamListener(
+    (image, _) {
+      image.dispose();
+      if (!ready.isCompleted) ready.complete();
+    },
+    onError: (_, _) {
+      if (!ready.isCompleted) ready.complete();
+    },
+  );
+  stream.addListener(listener);
+  await ready.future;
   runApp(app);
   WidgetsBinding.instance.addPostFrameCallback((_) {
+    stream.removeListener(listener);
     unawaited(signalWantPassFirstFrame());
   });
 }

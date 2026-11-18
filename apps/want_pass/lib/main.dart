@@ -9,7 +9,7 @@ Future<void> main() async {
   LaunchMode.initializeAutomatically();
   try {
     final runtime = await AppRuntime.bootstrap();
-    presentWantPass(
+    await presentWantPass(
       WantPassApp(
         startup: runtime.startup,
         vault: runtime.vault,
@@ -20,7 +20,7 @@ Future<void> main() async {
   } on Object {
     final ru =
         WidgetsBinding.instance.platformDispatcher.locale.languageCode == 'ru';
-    presentWantPass(
+    await presentWantPass(
       MaterialApp(
         debugShowCheckedModeBanner: false,
         home: WantTheme(

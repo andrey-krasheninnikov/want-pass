@@ -7,7 +7,14 @@ import 'package:want_allure/want_allure.dart';
 
 final class VaultFilaments extends StatefulWidget {
   final Widget child;
-  const VaultFilaments({super.key, required this.child});
+  final bool enabled;
+  final Widget? backdrop;
+  const VaultFilaments({
+    super.key,
+    required this.enabled,
+    required this.child,
+    this.backdrop,
+  });
   @override
   State<VaultFilaments> createState() => _VaultFilamentsState();
 }
@@ -19,7 +26,8 @@ final class _VaultFilamentsState extends State<VaultFilaments>
   late final Ticker _ticker;
   ui.FragmentShader? _shader;
   Offset _pointer = Offset.zero;
-  double _base = 0, _lastPaint = 0;
+  double _base = 0;
+  bool _loading = false;
   bool _active = true;
   @override
   void initState() {
@@ -29,20 +37,21 @@ final class _VaultFilamentsState extends State<VaultFilaments>
         WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed;
     WidgetsBinding.instance.addObserver(this);
     _ticker = createTicker((elapsed) {
-      final now = elapsed.inMicroseconds / 1000000;
-      if (now - _lastPaint < 1 / 30) return;
-      _lastPaint = now;
-      _time.value = _base + now;
+      _time.value =
+          _base + elapsed.inMicroseconds / Duration.microsecondsPerSecond;
     });
-    _load();
   }
 
   Future<void> _load() async {
+    _loading = true;
     try {
       final program = await (_program ??= ui.FragmentProgram.fromAsset(
         'shaders/filaments.frag',
       ));
-      if (mounted) setState(() => _shader = program.fragmentShader());
+      if (mounted) {
+        setState(() => _shader = program.fragmentShader());
+        _sync();
+      }
     } on Object {
       _program = null;
     }
@@ -50,13 +59,14 @@ final class _VaultFilamentsState extends State<VaultFilaments>
 
   void _sync() {
     final running =
+        widget.enabled &&
+        _shader != null &&
         _active &&
         TickerMode.valuesOf(context).enabled &&
         !WantTheme.reducedMotionOf(context) &&
         !MediaQuery.highContrastOf(context);
     if (running && !_ticker.isActive) {
       _base = _time.value;
-      _lastPaint = 0;
       _ticker.start();
     } else if (!running && _ticker.isActive) {
       _ticker.stop();
@@ -67,6 +77,14 @@ final class _VaultFilamentsState extends State<VaultFilaments>
   void didChangeDependencies() {
     super.didChangeDependencies();
     _sync();
+    if (widget.enabled && !_loading) _load();
+  }
+
+  @override
+  void didUpdateWidget(covariant VaultFilaments oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.enabled != oldWidget.enabled) _sync();
+    if (widget.enabled && !_loading) _load();
   }
 
   @override
@@ -87,8 +105,8 @@ final class _VaultFilamentsState extends State<VaultFilaments>
   @override
   Widget build(BuildContext context) {
     final theme = WantTheme.of(context);
-    final decoration = MediaQuery.highContrastOf(context)
-        ? const SizedBox.expand()
+    final decoration = !widget.enabled || MediaQuery.highContrastOf(context)
+        ? widget.backdrop ?? const SizedBox.expand()
         : RepaintBoundary(
             child: ExcludeSemantics(
               child: IgnorePointer(

@@ -1,6 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:want_allure/want_allure.dart';
 
+const vaultSplashLogo = ResizeImage(
+  AssetImage('assets/brand/logo-dark.png'),
+  width: 480,
+);
+
 final class VaultMoment extends StatefulWidget {
   final bool startup;
   final String title;
@@ -61,7 +66,7 @@ final class _VaultMomentState extends State<VaultMoment>
       return;
     }
     _progress.duration = _motion
-        ? Duration(milliseconds: widget.startup ? 950 : 820)
+        ? Duration(milliseconds: widget.startup ? 1200 : 900)
         : Duration(milliseconds: widget.startup ? 0 : 400);
     _progress.forward();
   }
@@ -73,88 +78,92 @@ final class _VaultMomentState extends State<VaultMoment>
     super.dispose();
   }
 
+  double _phase(double progress, double begin, double end) => Curves
+      .easeInOutCubic
+      .transform(((progress - begin) / (end - begin)).clamp(0, 1).toDouble());
+
   @override
   Widget build(BuildContext context) {
     final theme = WantTheme.of(context);
+    const logo = Image(
+      image: vaultSplashLogo,
+      width: 160,
+      height: 160,
+      excludeFromSemantics: true,
+    );
+    final title = WantTypography(
+      widget.title,
+      variant: WantTypographyVariant.h3,
+    );
+    final waveVisible = _motion && !MediaQuery.highContrastOf(context);
     return ColoredBox(
       color: theme.color('background'),
       child: ClipRect(
         child: AnimatedBuilder(
           animation: _progress,
-          builder: (context, _) {
-            final t = _motion ? _progress.value : 1.0;
-            final reveal = Curves.easeOutCubic.transform(
-              (t / .28).clamp(0, 1).toDouble(),
-            );
-            final fade = (1 - ((t - .67) / .33).clamp(0, 1)).toDouble();
-            if (widget.startup) {
-              const asset = 'assets/brand/logo-dark.png';
-              final wave = Curves.easeOutCubic.transform(t);
-              return Stack(
-                fit: StackFit.expand,
-                alignment: Alignment.center,
-                children: [
-                  if (_motion && !MediaQuery.highContrastOf(context))
-                    Center(
-                      child: Opacity(
-                        opacity: .34 * (1 - wave),
-                        child: Transform.scale(
-                          scale: 1 + wave * 4.6,
-                          child: Image.asset(
-                            asset,
-                            width: 160,
-                            height: 160,
-                            excludeFromSemantics: true,
-                          ),
-                        ),
-                      ),
-                    ),
-                  Center(
-                    child: Image.asset(
-                      asset,
-                      width: 160,
-                      height: 160,
-                      excludeFromSemantics: true,
-                    ),
-                  ),
-                  Align(
-                    alignment: Alignment.center,
-                    child: Transform.translate(
-                      offset: Offset(0, 106 + (1 - reveal) * 6),
-                      child: Opacity(
-                        opacity: reveal * fade,
-                        child: WantTypography(
-                          widget.title,
-                          variant: WantTypographyVariant.h3,
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              );
-            }
-            return Center(
-              child: Semantics(
-                liveRegion: true,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  spacing: 12,
-                  children: [
-                    ExcludeSemantics(
-                      child: Transform.scale(
-                        scale: .82 + reveal * .18,
+          child: widget.startup
+              ? title
+              : Semantics(
+                  liveRegion: true,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    spacing: 12,
+                    children: [
+                      ExcludeSemantics(
                         child: Icon(
                           Icons.check_circle_outline,
                           color: theme.color('success'),
                           size: 56,
                         ),
                       ),
+                      title,
+                    ],
+                  ),
+                ),
+          builder: (context, child) {
+            final t = _progress.value;
+            if (widget.startup) {
+              final wave = _phase(t, .03, .92);
+              final waveOpacity =
+                  _phase(t, .04, .24) * (1 - _phase(t, .24, .90)) * .23;
+              final wordmark = _phase(t, .16, .43) * (1 - _phase(t, .65, .92));
+              return Stack(
+                fit: StackFit.expand,
+                children: [
+                  if (waveVisible && waveOpacity > 0)
+                    Center(
+                      child: Opacity(
+                        opacity: waveOpacity,
+                        child: Transform.scale(
+                          scale: 1 + wave * 2.6,
+                          child: logo,
+                        ),
+                      ),
                     ),
-                    WantTypography(
-                      widget.title,
-                      variant: WantTypographyVariant.h3,
+                  Center(
+                    child: Opacity(
+                      opacity: _motion ? 1 - _phase(t, .78, 1) : 1,
+                      child: logo,
                     ),
-                  ],
+                  ),
+                  if (_motion)
+                    Center(
+                      child: Transform.translate(
+                        offset: const Offset(0, 106),
+                        child: Opacity(opacity: wordmark, child: child),
+                      ),
+                    ),
+                ],
+              );
+            }
+            final reveal = _phase(t, 0, .34);
+            final exit = 1 - _phase(t, .62, 1);
+            return Center(
+              child: Opacity(
+                opacity: _motion ? reveal * exit : 1,
+                child: Transform.scale(
+                  scale: _motion ? .94 + reveal * .06 : 1,
+                  child: child,
                 ),
               ),
             );

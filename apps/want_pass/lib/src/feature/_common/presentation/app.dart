@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:forui/forui.dart'
+    show FAccessibility, FAccessibilityMotion, FBasicTheme, FThemeData;
 import 'package:want_pass/src/feature/appearance/application/_barrel.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:want_allure/want_allure.dart';
@@ -28,6 +30,8 @@ class WantPassApp extends StatefulWidget {
 
 class _WantPassAppState extends State<WantPassApp> {
   late bool _intro = widget.playStartupIntro;
+  final _light = WantThemeData.light(), _dark = WantThemeData.dark();
+  final _materialLight = ThemeData.light(), _materialDark = ThemeData.dark();
 
   @override
   Widget build(BuildContext context) {
@@ -50,19 +54,81 @@ class _WantPassAppState extends State<WantPassApp> {
       AppearanceThemeV1.light => ThemeMode.light,
       AppearanceThemeV1.dark => ThemeMode.dark,
     },
-    theme: ThemeData.light(),
-    darkTheme: ThemeData.dark(),
+    theme: _materialLight,
+    darkTheme: _materialDark,
+    themeAnimationStyle: AnimationStyle.noAnimation,
     supportedLocales: const [Locale('en'), Locale('ru')],
     localizationsDelegates: const [
       ...GlobalMaterialLocalizations.delegates,
       ...FLocalizations.localizationsDelegates,
     ],
-    builder: (context, child) => WantTheme(
-      data: Theme.of(context).brightness == Brightness.dark
-          ? WantThemeData.dark()
-          : WantThemeData.light(),
-      child: WantToaster(child: child!),
-    ),
+    builder: (context, child) {
+      final target = Theme.of(context).brightness == Brightness.dark
+          ? 1.0
+          : 0.0;
+      final reduced =
+          MediaQuery.disableAnimationsOf(context) ||
+          MediaQuery.accessibleNavigationOf(context) ||
+          WidgetsBinding
+              .instance
+              .platformDispatcher
+              .accessibilityFeatures
+              .reduceMotion;
+      final animate =
+          !reduced &&
+          TickerMode.valuesOf(context).enabled &&
+          !MediaQuery.highContrastOf(context);
+      return TweenAnimationBuilder<double>(
+        tween: Tween(begin: target, end: target),
+        duration: animate ? const Duration(milliseconds: 360) : Duration.zero,
+        curve: Curves.easeInOutCubic,
+        child: WantToaster(child: child!),
+        builder: (context, value, child) {
+          final progress = animate ? value : target;
+          final theme = switch (progress) {
+            0 => _light,
+            1 => _dark,
+            _ => WantThemeData(
+              colors: {
+                for (final role in _light.colors.keys)
+                  role: Color.lerp(
+                    _light.color(role),
+                    _dark.color(role),
+                    progress,
+                  )!,
+              },
+              forui: FThemeData.lerp(_light.forui, _dark.forui, progress),
+            ),
+          };
+          return Theme(
+            data: ThemeData.lerp(_materialLight, _materialDark, progress),
+            child: WantTheme(
+              data: theme,
+              reduceMotion: reduced,
+              child: FBasicTheme(
+                data: theme.forui,
+                accessibility: FAccessibility(
+                  accessibleNavigation: MediaQuery.accessibleNavigationOf(
+                    context,
+                  ),
+                  motion: reduced
+                      ? FAccessibilityMotion.disabled
+                      : FAccessibilityMotion.all,
+                  focusHighlight: true,
+                ),
+                child: DefaultTextStyle(
+                  style: theme.forui.typography.body.sm.copyWith(
+                    fontSize: 16,
+                    height: 1.7,
+                  ),
+                  child: child!,
+                ),
+              ),
+            ),
+          );
+        },
+      );
+    },
     home: BlocProvider.value(
       value: widget.startup,
       child: BlocBuilder<StartupController, StartupState>(

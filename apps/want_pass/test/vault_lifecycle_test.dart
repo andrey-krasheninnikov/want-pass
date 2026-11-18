@@ -2,6 +2,7 @@ import 'package:want_pass/src/feature/vault/infrastructure/_barrel.dart';
 
 import 'dart:async';
 
+import 'package:ditredi/ditredi.dart';
 import 'package:flutter/foundation.dart';
 
 import 'dart:convert';
@@ -34,7 +35,14 @@ const _challenge = VaultRecoveryChallengeV1(
 void main() {
   final binding = TestWidgetsFlutterBinding.ensureInitialized();
   setUpAll(() async {
-    expect(await rootBundle.loadString('assets/brand/lock.svg'), isNotEmpty);
+    for (final asset in [
+      'lock.svg',
+      'lock-body.obj',
+      'lock-shackle.obj',
+      'lock.mtl',
+    ]) {
+      expect(await rootBundle.loadString('assets/brand/$asset'), isNotEmpty);
+    }
   });
   setUp(() {
     binding.platformDispatcher.accessibilityFeaturesTestValue =
@@ -168,8 +176,7 @@ void main() {
         .firstWhere((widget) => widget.transform.storage[0] > 1);
     expect(wave.transform.storage[0], greaterThan(1));
     expect(completions, 0);
-    await tester.pump(const Duration(milliseconds: 650));
-    await tester.pump();
+    await tester.pumpAndSettle();
     expect(completions, 1);
     await tester.pumpWidget(const SizedBox.shrink());
   });
@@ -250,23 +257,20 @@ void main() {
         image.dispose();
       }
     }))!;
-    final target = find.descendant(
-      of: find.byType(WantSvg3D),
-      matching: find.byType(GestureDetector),
-    );
-    for (var i = 0; i < 30 && target.evaluate().isEmpty; i++) {
+    final model = find.byType(DiTreDi);
+    for (var i = 0; i < 30 && model.evaluate().isEmpty; i++) {
       await tester.runAsync(
         () => Future<void>.delayed(const Duration(milliseconds: 10)),
       );
       await tester.pump();
     }
-    expect(target, findsOneWidget);
+    expect(model, findsOneWidget);
     final mouse = await tester.createGesture(kind: ui.PointerDeviceKind.mouse);
     await mouse.addPointer(location: const Offset(1, 1));
     await mouse.moveTo(tester.getCenter(find.byType(VaultPadlock)));
     await tester.pumpAndSettle();
     final before = await pixels();
-    await tester.drag(target, const Offset(60, 0));
+    await tester.drag(model, const Offset(60, 0));
     await tester.pumpAndSettle();
     expect(presses, 0);
     expect(listEquals(before, await pixels()), isFalse);
@@ -1489,6 +1493,73 @@ void main() {
     await events.close();
   });
 
+  testWidgets('theme retargets from current colors without clearing input', (
+    tester,
+  ) async {
+    await _loadFonts(tester);
+    tester.platformDispatcher.platformBrightnessTestValue = Brightness.light;
+    addTearDown(tester.platformDispatcher.clearPlatformBrightnessTestValue);
+    final access = _Access();
+    access.handle.state = VaultAccessStateV1.locked;
+    final events = StreamController<VaultLockSignal>.broadcast();
+    final controller = _controller(access, events.stream);
+    final startup = StartupController(_Startup(), const _Reporter());
+    final appearance = AppearanceController(
+      AppearanceUseCaseImpl(_AppearancePreferences(), const _Reporter()),
+      const _Reporter(),
+    );
+    await tester.runAsync(() async {
+      await startup.init();
+      await controller.init();
+      await appearance.init();
+    });
+    await tester.pumpWidget(
+      WantPassApp(startup: startup, vault: controller, appearance: appearance),
+    );
+    await tester.pumpAndSettle();
+    final field = find.byType(EditableText);
+    await tester.enterText(field, 'Synthetic unfinished input');
+    final editor = tester.state<EditableTextState>(field);
+    final light = WantThemeData.light().color('background');
+    final dark = WantThemeData.dark().color('background');
+    Color background() =>
+        WantTheme.of(tester.element(field)).color('background');
+    expect(background(), light);
+
+    tester.platformDispatcher.accessibilityFeaturesTestValue =
+        const FakeAccessibilityFeatures();
+    tester.platformDispatcher.platformBrightnessTestValue = Brightness.dark;
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 120));
+    final midway = background();
+    expect(midway, isNot(light));
+    expect(midway, isNot(dark));
+    expect(FTheme.of(tester.element(field)).colors.background, midway);
+
+    tester.platformDispatcher.platformBrightnessTestValue = Brightness.light;
+    await tester.pump();
+    expect(background(), midway);
+    await tester.pump(const Duration(milliseconds: 360));
+    expect(background(), light);
+    expect(tester.state<EditableTextState>(field), same(editor));
+    expect(editor.widget.controller.text, 'Synthetic unfinished input');
+    expect(editor.widget.focusNode.hasFocus, isTrue);
+
+    tester.platformDispatcher.accessibilityFeaturesTestValue =
+        const FakeAccessibilityFeatures(disableAnimations: true);
+    tester.platformDispatcher.platformBrightnessTestValue = Brightness.dark;
+    await tester.pump();
+    expect(background(), dark);
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.runAsync(() async {
+      await controller.close();
+      await startup.close();
+      await appearance.close();
+      await events.close();
+    });
+  });
+
   testWidgets(
     'header appearance menus persist and fit narrow enlarged Russian layout',
     (tester) async {
@@ -1544,7 +1615,7 @@ void main() {
           closeTo(segmentWidth, .01),
         );
       }
-      final future = tester.widget<AnimatedContainer>(
+      final future = tester.widget<Container>(
         find.byKey(const ValueKey('setup-segment-5')),
       );
       expect(
@@ -1577,8 +1648,29 @@ void main() {
       await tester.tap(find.text('Светлая'));
       await tester.pumpAndSettle();
       expect(appearance.state.settings.theme, AppearanceThemeV1.light);
+      tester.platformDispatcher.accessibilityFeaturesTestValue =
+          const FakeAccessibilityFeatures();
+      await tester.pump();
       await tester.tap(find.byKey(const ValueKey('setup-next')));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+      final pages = tester.widget<PageView>(find.byType(PageView)).controller!;
+      final intermediate = pages.page!;
+      expect(intermediate, greaterThan(0));
+      expect(intermediate, lessThan(1));
+      await tester.tap(find.byKey(const ValueKey('setup-back')));
+      await tester.pump();
+      expect(pages.page, closeTo(intermediate, .001));
+      await tester.pump(const Duration(milliseconds: 360));
+      expect(pages.page, 0);
+      tester.platformDispatcher.accessibilityFeaturesTestValue =
+          const FakeAccessibilityFeatures(disableAnimations: true);
       await tester.pumpAndSettle();
+      final next = find.byKey(const ValueKey('setup-next'));
+      expect(tester.widget<WantButton>(next).onPressed, isNotNull);
+      await tester.tap(next);
+      await tester.pumpAndSettle();
+      expect(pages.page, 1);
       expect(appearance.state.settings.configured, isTrue);
       tester.view.physicalSize = const Size(320, 800);
       tester.platformDispatcher.textScaleFactorTestValue = 1.8;

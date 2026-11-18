@@ -1,6 +1,8 @@
 import 'dart:math' as math;
 
+import 'package:ditredi/ditredi.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:forui/forui.dart';
 import 'package:want_allure/want_allure.dart';
 
@@ -27,8 +29,16 @@ final class _VaultPadlockState extends State<VaultPadlock>
   );
   late final _press = AnimationController(
     vsync: this,
-    duration: const Duration(milliseconds: 100),
+    duration: const Duration(milliseconds: 240),
   );
+  final _camera = DiTreDiController(
+    rotationX: 8,
+    rotationY: -20,
+    lightStrength: .7,
+    ambientLightStrength: .65,
+  );
+  final _hinge = Matrix4.identity();
+  late final Future<Widget> _scene;
   bool _active = true;
   bool get _motion =>
       _active &&
@@ -41,6 +51,39 @@ final class _VaultPadlockState extends State<VaultPadlock>
         WidgetsBinding.instance.lifecycleState == null ||
         WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed;
     WidgetsBinding.instance.addObserver(this);
+    _opening.addListener(_poseShackle);
+    _poseShackle();
+    _scene = _loadScene();
+  }
+
+  Future<Widget> _loadScene() async {
+    final models = await Future.wait([
+      ObjParser().loadFromResources('assets/brand/lock-body.obj'),
+      ObjParser().loadFromResources('assets/brand/lock-shackle.obj'),
+    ]);
+    return RepaintBoundary(
+      child: DiTreDi(
+        figures: [
+          Group3D(models[0]),
+          TransformModifier3D(Group3D(models[1]), _hinge),
+        ],
+        controller: _camera,
+      ),
+    );
+  }
+
+  void _poseShackle() {
+    final value = _opening.value;
+    _hinge
+      ..setIdentity()
+      ..translateByDouble(-.375, .1875 + value / 12, 0, 1)
+      ..rotateZ(value * 25 * math.pi / 180)
+      ..translateByDouble(.375, -.1875, 0, 1);
+    _camera.update();
+  }
+
+  void _rotate(double degrees) {
+    _camera.update(rotationY: (_camera.rotationY + degrees) % 360);
   }
 
   @override
@@ -81,22 +124,18 @@ final class _VaultPadlockState extends State<VaultPadlock>
     WidgetsBinding.instance.removeObserver(this);
     _opening.dispose();
     _press.dispose();
+    _camera.dispose();
     super.dispose();
   }
 
   void _tap() {
-    if (_motion) {
-      _press.forward(from: 0).then((_) {
-        if (mounted) _press.reverse();
-      });
-    }
+    if (_motion) _press.forward(from: 0);
     widget.onPressed?.call();
   }
 
   @override
   Widget build(BuildContext context) {
-    final color = WantTheme.of(context)
-        .color(widget.opened ? 'success' : 'warning');
+    final theme = WantTheme.of(context);
     final ru = Localizations.localeOf(context).languageCode == 'ru';
     return Semantics(
       hint: ru
@@ -104,75 +143,87 @@ final class _VaultPadlockState extends State<VaultPadlock>
           : 'Drag left and right or use the arrow keys to rotate.',
       child: SizedBox.square(
         dimension: 64,
-        child: FButton.icon(
-          variant: FButtonVariant.ghost,
-          style: FButtonStyleDelta.delta(
-            decoration: FVariants.from(const BoxDecoration(), variants: {}),
-            tappableStyle: const FTappableStyleDelta.delta(
-              pressedEnterDuration: Duration.zero,
-              pressedExitDuration: Duration.zero,
+        child: Focus(
+          canRequestFocus: false,
+          onKeyEvent: (_, event) {
+            if (event is! KeyDownEvent && event is! KeyRepeatEvent) {
+              return KeyEventResult.ignored;
+            }
+            if (event.logicalKey == LogicalKeyboardKey.arrowLeft) {
+              _rotate(-15);
+            } else if (event.logicalKey == LogicalKeyboardKey.arrowRight) {
+              _rotate(15);
+            } else {
+              return KeyEventResult.ignored;
+            }
+            return KeyEventResult.handled;
+          },
+          child: FButton.icon(
+            variant: FButtonVariant.ghost,
+            style: FButtonStyleDelta.delta(
+              decoration: FVariants.from(const BoxDecoration(), variants: {}),
+              tappableStyle: const FTappableStyleDelta.delta(
+                pressedEnterDuration: Duration.zero,
+                pressedExitDuration: Duration.zero,
+              ),
             ),
-          ),
-          semanticsLabel: widget.label,
-          onPress: widget.onPressed == null ? null : _tap,
-          child: AnimatedBuilder(
-            animation: Listenable.merge([_opening, _press]),
-            builder: (context, _) {
-              final opening = _opening.value;
-              return Transform.rotate(
-                angle: math.sin(_press.value * math.pi) * .08,
-                child: SizedBox.square(
-                  dimension: 44,
-                  child: Stack(
-                    children: [
-                      if (!MediaQuery.highContrastOf(context))
-                        Positioned.fill(
-                          child: IgnorePointer(
-                            child: AnimatedContainer(
-                              duration: _motion
-                                  ? const Duration(milliseconds: 420)
-                                  : Duration.zero,
-                              margin: const EdgeInsets.all(11),
+            semanticsLabel: widget.label,
+            onPress: widget.onPressed == null ? null : _tap,
+            child: AnimatedBuilder(
+              animation: Listenable.merge([_opening, _press]),
+              child: MouseRegion(
+                cursor: SystemMouseCursors.grab,
+                child: GestureDetector(
+                  onHorizontalDragUpdate: (event) =>
+                      _rotate(event.delta.dx * .6),
+                  child: FutureBuilder<Widget>(
+                    future: _scene,
+                    builder: (context, snapshot) =>
+                        snapshot.data ??
+                        Icon(
+                          widget.opened
+                              ? Icons.lock_open_outlined
+                              : Icons.lock_outline,
+                          color: theme.color('primary'),
+                        ),
+                  ),
+                ),
+              ),
+              builder: (context, child) {
+                final color = Color.lerp(
+                  theme.color('warning'),
+                  theme.color('success'),
+                  _opening.value,
+                )!;
+                return Transform.rotate(
+                  angle: math.pow(math.sin(_press.value * math.pi), 2) * .045,
+                  child: SizedBox.square(
+                    dimension: 44,
+                    child: Stack(
+                      fit: StackFit.expand,
+                      children: [
+                        if (!MediaQuery.highContrastOf(context))
+                          IgnorePointer(
+                            child: DecoratedBox(
                               decoration: BoxDecoration(
                                 shape: BoxShape.circle,
                                 boxShadow: [
                                   BoxShadow(
-                                    color: color.withValues(alpha: .28),
+                                    color: color.withValues(alpha: .24),
                                     blurRadius: 18,
-                                    spreadRadius: 2,
+                                    spreadRadius: 1,
                                   ),
                                 ],
                               ),
                             ),
                           ),
-                        ),
-                      Positioned.fill(
-                        child: Transform.scale(
-                          scale: 1.8,
-                          child: WantSvg3D.builder(
-                            svgBuilder: (context) async {
-                              final svg = await DefaultAssetBundle.of(context)
-                                  .loadString('assets/brand/lock.svg');
-                              return svg.replaceFirst(
-                                'id="shackle"',
-                                'id="shackle" transform="translate(0 ${-opening}) rotate(${-25 * opening} 7.5 9.75)"',
-                              );
-                            },
-                            semanticsLabel: ru
-                                ? 'Повернуть замок'
-                                : 'Rotate lock',
-                            depth: .24,
-                            autoRotate: false,
-                            paused: !_active,
-                            glow: false,
-                          ),
-                        ),
-                      ),
-                    ],
+                        child!,
+                      ],
+                    ),
                   ),
-                ),
-              );
-            },
+                );
+              },
+            ),
           ),
         ),
       ),

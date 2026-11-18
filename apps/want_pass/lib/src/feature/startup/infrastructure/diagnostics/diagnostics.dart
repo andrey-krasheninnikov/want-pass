@@ -113,6 +113,7 @@ final class SafeBlocObserver extends BlocObserver
       'VaultController.validateRecovery():' ||
       'PlatformRecoveryExportService.selectFileV3():' ||
       'RustVaultAccessService.validateRecoveryV3():' ||
+      'RustVaultAccessService.resetApplicationV1():' ||
       'RustVaultAccessService.prepareCreationV3():' ||
       'RustVaultAccessService.prepareRecoveryV3():' ||
       'RustVaultAccessService.regenerateRecoveryV3():' ||
@@ -122,6 +123,7 @@ final class SafeBlocObserver extends BlocObserver
       'VaultUseCaseImpl.confirmSetupV3():' ||
       'VaultUseCaseImpl.regenerateRecoveryV3():' ||
       'VaultUseCaseImpl.validateRecoveryV3():' ||
+      'VaultUseCaseImpl.resetApplicationV1():' ||
       'VaultUseCaseImpl.exportRecoveryV3():' ||
       'VaultUseCaseImpl.selectRecoveryFileV3():' ||
       'PlatformRecoveryExportService.clearClipboardV1():' ||
@@ -170,6 +172,7 @@ final class SafeBlocObserver extends BlocObserver
       'VaultController.confirm():' ||
       'VaultController.unlock():' ||
       'VaultController.lock():' ||
+      'VaultController.resetApplication():' ||
       'VaultController.activity():' ||
       'VaultController._monitorLost():' ||
       'VaultController.close():' ||
@@ -298,6 +301,7 @@ final class SafeBlocObserver extends BlocObserver
       'VaultController.validateRecovery():' ||
       'PlatformRecoveryExportService.selectFileV3():' ||
       'RustVaultAccessService.validateRecoveryV3():' ||
+      'RustVaultAccessService.resetApplicationV1():' ||
       'RustVaultAccessService.prepareCreationV3():' ||
       'RustVaultAccessService.prepareRecoveryV3():' ||
       'RustVaultAccessService.regenerateRecoveryV3():' ||
@@ -307,6 +311,7 @@ final class SafeBlocObserver extends BlocObserver
       'VaultUseCaseImpl.confirmSetupV3():' ||
       'VaultUseCaseImpl.regenerateRecoveryV3():' ||
       'VaultUseCaseImpl.validateRecoveryV3():' ||
+      'VaultUseCaseImpl.resetApplicationV1():' ||
       'VaultUseCaseImpl.exportRecoveryV3():' ||
       'VaultUseCaseImpl.selectRecoveryFileV3():' ||
       'AppearanceController.close():' ||

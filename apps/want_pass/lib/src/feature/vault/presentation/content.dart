@@ -178,66 +178,46 @@ final class _GroupEditorState extends State<_GroupEditor> {
   }
 
   @override
-  Widget build(BuildContext context) =>
-      BlocBuilder<VaultController, VaultState>(
-        bloc: widget.controller,
-        builder: (context, state) {
-          if (state.phase != VaultPhase.unlocked) {
-            return const SizedBox.shrink();
-          }
-          final busy = _saving || state.busy;
-          return _EditorFrame(
-            embedded: widget.embedded,
-            title: _text(
-              context,
-              widget.group == null ? 'New group' : 'Group',
-              widget.group == null ? 'Новая группа' : 'Группа',
+  Widget build(
+    BuildContext context,
+  ) => BlocBuilder<VaultController, VaultState>(
+    bloc: widget.controller,
+    builder: (context, state) {
+      if (state.phase != VaultPhase.unlocked) {
+        return const SizedBox.shrink();
+      }
+      final busy = _saving || state.busy;
+      return _EditorFrame(
+        embedded: widget.embedded,
+        title: _text(
+          context,
+          widget.group == null ? 'New group' : 'Group',
+          widget.group == null ? 'Новая группа' : 'Группа',
+        ),
+        actions: _Actions(
+          children: [
+            WantButton(
+              key: const ValueKey('content-cancel'),
+              variant: WantButtonVariant.secondary,
+              onPressed: busy ? null : widget.onCancel ?? widget.onDone,
+              child: Text(_text(context, 'Cancel', 'Отмена')),
             ),
-            actions: _Actions(
+            WantButton(
+              key: const ValueKey('group-save'),
+              onPressed: busy ? null : () => unawaited(_save()),
+              child: Text(_text(context, 'Save', 'Сохранить')),
+            ),
+          ],
+        ),
+        child: Flexible(
+          child: SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              spacing: 16,
               children: [
-                WantButton(
-                  key: const ValueKey('content-cancel'),
-                  variant: WantButtonVariant.secondary,
-                  onPressed: busy ? null : widget.onCancel ?? widget.onDone,
-                  child: Text(_text(context, 'Cancel', 'Отмена')),
-                ),
-                WantButton(
-                  key: const ValueKey('group-save'),
-                  onPressed: busy ? null : () => unawaited(_save()),
-                  child: Text(_text(context, 'Save', 'Сохранить')),
-                ),
-              ],
-            ),
-            child: Flexible(
-              child: SingleChildScrollView(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  spacing: 16,
+                Row(
+                  spacing: 8,
                   children: [
-                    WantInput(
-                      key: const ValueKey('group-name'),
-                      label: Text(_text(context, 'Name *', 'Название *')),
-                      description: Text(
-                        _text(
-                          context,
-                          'Up to 512 UTF-8 bytes',
-                          'До 512 байт UTF-8',
-                        ),
-                      ),
-                      controller: _name,
-                      enabled: !busy,
-                      autofocus: true,
-                      onSubmitted: (_) => unawaited(_save()),
-                    ),
-                    WantTextarea(
-                      key: const ValueKey('group-description'),
-                      label: Text(_text(context, 'Description', 'Описание')),
-                      description: Text(
-                        _text(context, 'Up to 16 KiB', 'До 16 KiB'),
-                      ),
-                      controller: _description,
-                      enabled: !busy,
-                    ),
                     _GroupIconPicker(
                       icon: _icon,
                       image: _logo,
@@ -250,33 +230,60 @@ final class _GroupEditorState extends State<_GroupEditor> {
                         _tone = tone;
                       }),
                     ),
-                    if (_iconError)
-                      WantTypography(
-                        _text(
-                          context,
-                          'Could not prepare the group icon.',
-                          'Не удалось подготовить иконку группы.',
-                        ),
-                        colorRole: 'destructive',
-                        liveRegion: true,
-                      ),
-                    if (widget.group != null)
-                      WantButton(
-                        key: const ValueKey('group-delete'),
-                        variant: WantButtonVariant.destructive,
-                        onPressed: busy ? null : widget.onDelete,
-                        child: Text(
-                          _text(context, 'Delete group', 'Удалить группу'),
+                    Expanded(
+                      child: Semantics(
+                        label: _text(context, 'Group name', 'Название группы'),
+                        child: WantInput(
+                          key: const ValueKey('group-name'),
+                          hint: _text(context, 'Name *', 'Название *'),
+                          controller: _name,
+                          enabled: !busy,
+                          autofocus: true,
+                          onSubmitted: (_) => unawaited(_save()),
                         ),
                       ),
-                    _ContentError(state.error),
+                    ),
                   ],
                 ),
-              ),
+                Text(
+                  _text(context, 'Up to 512 UTF-8 bytes', 'До 512 байт UTF-8'),
+                ),
+                WantTextarea(
+                  key: const ValueKey('group-description'),
+                  label: Text(_text(context, 'Description', 'Описание')),
+                  description: Text(
+                    _text(context, 'Up to 16 KiB', 'До 16 KiB'),
+                  ),
+                  controller: _description,
+                  enabled: !busy,
+                ),
+                if (_iconError)
+                  WantTypography(
+                    _text(
+                      context,
+                      'Could not prepare the group icon.',
+                      'Не удалось подготовить иконку группы.',
+                    ),
+                    colorRole: 'destructive',
+                    liveRegion: true,
+                  ),
+                if (widget.group != null)
+                  WantButton(
+                    key: const ValueKey('group-delete'),
+                    variant: WantButtonVariant.destructive,
+                    onPressed: busy ? null : widget.onDelete,
+                    child: Text(
+                      _text(context, 'Delete group', 'Удалить группу'),
+                    ),
+                  ),
+                _ContentError(state.error),
+              ],
             ),
-          );
-        },
+          ),
+        ),
       );
+    },
+  );
 }
 
 final class _DeleteContentDialog extends StatelessWidget {

@@ -9,6 +9,8 @@ import 'package:domain_error/domain_error.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:launch_mode/launch_mode.dart';
 import 'package:want_allure/want_allure.dart';
+import 'package:want_pass/src/feature/appearance/application/_barrel.dart';
+import 'package:want_pass/src/feature/appearance/infrastructure/_barrel.dart';
 import 'package:want_pass/src/feature/vault/application/_barrel.dart';
 import 'package:want_pass/src/feature/vault/infrastructure/_barrel.dart';
 import 'package:want_pass/src/feature/vault/presentation/_barrel.dart';
@@ -553,6 +555,106 @@ void main() {
     },
   );
 
+  testWidgets('sidebar, saved widths and authenticated local reset', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1280, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final fixture = (await tester.runAsync(
+      () => _Fixture.create(application: true),
+    ))!;
+    const reporter = _Reporter();
+    final preferences = FileAppearancePreferencesService(
+      fixture.directory.path,
+      reporter,
+    );
+    final appearance = AppearanceController(
+      AppearanceUseCaseImpl(preferences, reporter),
+      reporter,
+    );
+    addTearDown(() async {
+      await tester.runAsync(appearance.close);
+      await _closeFixture(tester, fixture);
+    });
+    await tester.runAsync(() async {
+      await appearance.init();
+      await appearance.save(
+        const AppearanceSettingsV1(
+          theme: AppearanceThemeV1.dark,
+          configured: true,
+        ),
+      );
+    });
+    final controller = fixture.controller;
+    await tester.pumpWidget(
+      MaterialApp(
+        builder: (context, child) =>
+            WantTheme(data: WantThemeData.light(), child: child!),
+        home: Scaffold(
+          body: VaultContentView(
+            controller: controller,
+            appearance: appearance,
+          ),
+        ),
+      ),
+    );
+    await _pump(tester);
+
+    const services = ValueKey('vault-tab-services');
+    final servicesLabel = find.descendant(
+      of: find.byKey(services),
+      matching: find.text('Services'),
+    );
+    expect(servicesLabel, findsNothing);
+
+    final groups = find.byKey(const ValueKey('vault-pane-divider-0'));
+    final details = find.byKey(const ValueKey('vault-pane-divider-1'));
+    final groupBefore = tester.getCenter(groups).dx;
+    final detailsBefore = tester.getCenter(details).dx;
+    await tester.drag(groups, const Offset(52, 0));
+    await _pump(tester);
+    expect(tester.getCenter(groups).dx, greaterThan(groupBefore));
+    expect(tester.getCenter(details).dx, closeTo(detailsBefore, 1));
+    for (var i = 0; i < 20 && appearance.state.busy; i++) {
+      await _pump(tester);
+    }
+    final saved = (await tester.runAsync(preferences.loadV1))!.value;
+    expect(saved.layout.groupFraction, greaterThan(.2));
+    expect(saved.theme, AppearanceThemeV1.dark);
+
+    await _tap(tester, 'vault-menu-toggle');
+    expect(servicesLabel, findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byKey(services),
+        matching: find.text('${controller.state.catalog!.services.length}'),
+      ),
+      findsOneWidget,
+    );
+    await _tap(tester, 'vault-tab-general');
+    await _tap(tester, 'vault-reset-open');
+    final confirm = find.byKey(const ValueKey('vault-reset-confirm'));
+    expect(tester.widget<WantButton>(confirm).onPressed, isNull);
+    await _enter(tester, 'vault-reset-phrase', 'Invalid fixture phrase');
+    await _tap(tester, 'vault-reset-confirm');
+    await _idle(tester, controller);
+    expect(find.text('Check your recovery phrase.'), findsOneWidget);
+    expect(controller.state.phase, VaultPhase.unlocked);
+    final file = File('${fixture.directory.path}/appearance.json');
+    expect(file.existsSync(), isTrue);
+
+    await _enter(tester, 'vault-reset-phrase', fixture.recoveryJson);
+    await _tap(tester, 'vault-reset-confirm');
+    await _idle(tester, controller);
+    expect(controller.state.phase, VaultPhase.missing);
+    expect(appearance.state.settings, const AppearanceSettingsV1());
+    expect(file.existsSync(), isFalse);
+    expect(find.byKey(const ValueKey('vault-reset-phrase')), findsNothing);
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
+
   testWidgets('locking discards a late logo selection', (tester) async {
     final logos = _PendingLogoService();
     final fixture = (await tester.runAsync(
@@ -931,17 +1033,27 @@ final class _Fixture {
   final Directory directory;
   final StreamController<VaultLockSignal> events;
   final VaultController controller;
-  const _Fixture(this.directory, this.events, this.controller);
+  final String recoveryJson;
+  const _Fixture(
+    this.directory,
+    this.events,
+    this.controller,
+    this.recoveryJson,
+  );
   static Future<_Fixture> create({
     GroupLogoService? logos,
     CredentialFileService? files,
+    bool application = false,
   }) async {
     final directory = await Directory.systemTemp.createTemp(
       'want-pass-content-ui-',
     );
     const reporter = _Reporter();
     final access = await initializeVaultAccess(
-      directory: '${directory.path}/vault',
+      directory: application
+          ? await directory.resolveSymbolicLinks()
+          : '${directory.path}/vault',
+      application: application,
       reporter: reporter,
     );
     final events = StreamController<VaultLockSignal>.broadcast();
@@ -966,7 +1078,15 @@ final class _Fixture {
     await controller.confirm(
       challenge.positions.map((i) => challenge.words[i]).toList(),
     );
-    return _Fixture(directory, events, controller);
+    return _Fixture(
+      directory,
+      events,
+      controller,
+      jsonEncode({
+        for (final (index, word) in challenge.words.indexed)
+          '${index + 1}': word,
+      }),
+    );
   }
 
   Future<void> close() async {
@@ -976,8 +1096,16 @@ final class _Fixture {
   }
 }
 
-final class _Reporter implements VaultReporter {
+final class _Reporter implements VaultReporter, StartupReporter {
   const _Reporter();
+  @override
+  void report({
+    required StartupDiagnosticLayer layer,
+    required String operation,
+    required StartupDiagnosticEvent event,
+    StartupErrorV1? error,
+  }) {}
+
   @override
   void reportVault({
     required VaultDiagnosticLayer layer,

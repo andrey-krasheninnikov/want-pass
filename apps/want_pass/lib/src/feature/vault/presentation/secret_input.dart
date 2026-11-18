@@ -134,19 +134,28 @@ final class VaultSecretAction extends StatelessWidget {
   final String label;
   final VoidCallback? onPressed;
   final Widget child;
+  final double size;
+  final bool flush;
   const VaultSecretAction({
     super.key,
     required this.label,
     required this.onPressed,
     required this.child,
+    this.size = 44,
+    this.flush = false,
   });
   @override
   Widget build(BuildContext context) => SizedBox.square(
-    dimension: 44,
+    dimension: size,
     child: FButton.icon(
       variant: FButtonVariant.ghost,
       style: FButtonStyleDelta.delta(
         decoration: FVariants.from(const BoxDecoration(), variants: {}),
+        iconContentStyle: flush
+            ? const FButtonIconContentStyleDelta.delta(
+                padding: EdgeInsetsGeometryDelta.value(EdgeInsets.zero),
+              )
+            : null,
       ),
       semanticsLabel: label,
       onPress: onPressed,

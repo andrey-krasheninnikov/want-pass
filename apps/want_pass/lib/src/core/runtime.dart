@@ -107,10 +107,13 @@ final class AppRuntime {
         core.startupAccessService,
       );
       container.registerSingleton<StartupReporter>(observer);
+      final directory =
+          preferencesDirectory ?? (await getApplicationSupportDirectory()).path;
       final access =
           vaultAccess ??
           await initializeVaultAccess(
-            directory: '${(await getApplicationSupportDirectory()).path}/vault',
+            directory: directory,
+            application: true,
             reporter: observer,
           );
       final events = vaultLockEvents ?? await createVaultLockEvents(observer);
@@ -121,7 +124,7 @@ final class AppRuntime {
         instanceName: 'vaultLockEvents',
       );
       container.registerSingleton<String>(
-        preferencesDirectory ?? (await getApplicationSupportDirectory()).path,
+        directory,
         instanceName: 'preferencesDirectory',
       );
       await configureDependencies(container);

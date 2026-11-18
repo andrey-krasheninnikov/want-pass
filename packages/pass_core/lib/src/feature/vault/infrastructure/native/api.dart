@@ -4,6 +4,7 @@ import 'package:want_pass_core/src/feature/vault/infrastructure/_barrel.dart';
 
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
+// These functions are ignored because they are not marked as `pub`: `from_store`
 // These types are ignored because they are neither used by any `pub` functions nor (for structs and enums) marked `#[frb(unignore)]`: `Draft`, `State`
 // These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_receiver_is_total_eq`, `assert_receiver_is_total_eq`, `clone`, `clone`, `eq`, `eq`, `fmt`, `fmt`
 
@@ -127,6 +128,11 @@ abstract class Vault implements RustOpaqueInterface {
   static Future<Vault> open({required String directory}) =>
       VaultRustLib.instance.api.crateApiVaultOpen(directory: directory);
 
+  static Future<Vault> openApplicationV1({required String directory}) =>
+      VaultRustLib.instance.api.crateApiVaultOpenApplicationV1(
+        directory: directory,
+      );
+
   Future<RecoveryChallenge> prepareCreation({
     required String password,
     required BigInt generation,
@@ -161,6 +167,11 @@ abstract class Vault implements RustOpaqueInterface {
   });
 
   Future<RecoveryChallengeV3> regenerateRecoveryV3({
+    required BigInt generation,
+  });
+
+  Future<void> resetApplicationV1({
+    required String phrase,
     required BigInt generation,
   });
 

@@ -68,6 +68,9 @@ abstract interface class VaultUseCase {
   FutureDomainResult<PrepareVaultSetupResultV3> regenerateRecoveryV3({
     required RegenerateVaultRecoveryParamsV3 params,
   });
+  FutureDomainResult<void> resetApplicationV1({
+    required ResetVaultApplicationParamsV1 params,
+  });
   FutureDomainResult<ValidateVaultRecoveryResultV3> validateRecoveryV3({
     required ValidateVaultRecoveryParamsV3 params,
   });

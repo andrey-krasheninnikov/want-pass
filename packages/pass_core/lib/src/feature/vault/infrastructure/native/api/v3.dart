@@ -4,7 +4,7 @@ import 'package:want_pass_core/src/feature/vault/infrastructure/_barrel.dart';
 
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `challenge`, `parse_phrase`, `recovery_json`
+// These functions are ignored because they are not marked as `pub`: `challenge`, `parse_phrase`, `recovery_json`, `reset_application_after_validation`
 
 Future<bool> validatePasswordV3({required String password}) =>
     VaultRustLib.instance.api.crateApiV3ValidatePasswordV3(password: password);

@@ -656,6 +656,28 @@ final class VaultUseCaseImpl implements VaultUseCase {
   }
 
   @override
+  FutureDomainResult<void> resetApplicationV1({
+    required ResetVaultApplicationParamsV1 params,
+  }) async {
+    const op = 'VaultUseCaseImpl.resetApplicationV1():';
+    final result = await _access.resetApplicationV1(
+      handle: params.handle,
+      phrase: params.phrase,
+    );
+    if (result.isError) {
+      reportVaultSafely(
+        _reporter,
+        layer: VaultDiagnosticLayer.application,
+        operation: op,
+        error: result.error is VaultErrorV1
+            ? result.error as VaultErrorV1
+            : const VaultUnexpectedErrorV1(),
+      );
+    }
+    return result;
+  }
+
+  @override
   FutureDomainResult<ValidateVaultRecoveryResultV3> validateRecoveryV3({
     required ValidateVaultRecoveryParamsV3 params,
   }) async {

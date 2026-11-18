@@ -361,6 +361,19 @@ final class ValidateVaultRecoveryParamsV3 extends Equatable {
   String toString() => 'ValidateVaultRecoveryParamsV3(<redacted>)';
 }
 
+final class ResetVaultApplicationParamsV1 extends Equatable {
+  final VaultHandleV1 handle;
+  final String phrase;
+  const ResetVaultApplicationParamsV1({
+    required this.handle,
+    required this.phrase,
+  });
+  @override
+  List<Object?> get props => [handle, phrase];
+  @override
+  String toString() => 'ResetVaultApplicationParamsV1(<redacted>)';
+}
+
 final class ExportRecoveryParamsV3 extends Equatable {
   final VaultHandleV1 handle;
   final String destination;

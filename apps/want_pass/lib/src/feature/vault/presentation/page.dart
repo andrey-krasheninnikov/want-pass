@@ -226,6 +226,7 @@ class _VaultPageState extends State<VaultPage> {
                       ? AppearanceLanguageV1.ru
                       : AppearanceLanguageV1.en),
               configured: true,
+              layout: current.layout,
             ),
           );
           if (appearance.state.failed) return;
@@ -1060,13 +1061,15 @@ class _VaultPageState extends State<VaultPage> {
                                 children: [
                                   VaultSecretAction(
                                     key: const ValueKey('want-pass-website'),
+                                    size: 48,
+                                    flush: true,
                                     label: _text(
                                       'Open Want Pass website',
                                       'Открыть сайт Want Pass',
                                     ),
                                     onPressed: () => unawaited(_openWebsite()),
                                     child: SizedBox.square(
-                                      dimension: 48,
+                                      dimension: 40,
                                       child: WantSvg3D.asset(
                                         'assets/brand/logo.svg',
                                         semanticsLabel: 'Want Pass',
@@ -1109,7 +1112,8 @@ class _VaultPageState extends State<VaultPage> {
                                     ),
                                 ],
                               ),
-                              if (widget.appearance case final appearance?)
+                              if (widget.appearance case final appearance?
+                                  when state.phase != VaultPhase.unavailable)
                                 AppearanceControls(controller: appearance),
                             ],
                           ),

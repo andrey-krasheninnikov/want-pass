@@ -29,9 +29,9 @@ final class _VaultContentViewState extends State<VaultContentView>
   Completer<void>? _availability;
   int _navigation = 0;
   _VaultSection _section = _VaultSection.secrets;
-  final _sectionKeys = {
-    for (final section in _VaultSection.values) section: GlobalKey(),
-  };
+  bool _menuExpanded = false, _dockMenu = false;
+  late WorkspaceLayoutV1 _paneWidths =
+      widget.appearance?.state.settings.layout ?? const WorkspaceLayoutV1();
   bool get _browsing => _available && _section == _VaultSection.secrets;
   bool get _available =>
       mounted &&
@@ -399,6 +399,35 @@ final class _VaultContentViewState extends State<VaultContentView>
     }),
   );
 
+  Future<void> _showReset() async {
+    final appearance = widget.appearance;
+    if (appearance == null ||
+        _overlay != null ||
+        !_available ||
+        widget.controller.state.busy) {
+      return;
+    }
+    final route = DialogRoute<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => _withActivity(
+        _ResetVaultDialog(
+          controller: widget.controller,
+          onReset: (phrase) => appearance.resetWith(
+            (restoreDefaults) => widget.controller.resetApplication(
+              phrase,
+              onReset: restoreDefaults,
+            ),
+          ),
+        ),
+      ),
+    );
+    _overlay = route;
+    await Navigator.of(context).push(route);
+    await route.completed;
+    if (identical(_overlay, route)) _overlay = null;
+  }
+
   Future<void> _newGroupDialog() async {
     if (_overlay != null || !_browsing) return;
     final snapshot = widget.controller.state.content!;
@@ -451,66 +480,183 @@ final class _VaultContentViewState extends State<VaultContentView>
   }
 
   void _selectSection(_VaultSection section) {
-    if (section == _section || _overlay != null) return;
+    if (_overlay != null) return;
+    if (section == _section) {
+      if (_menuExpanded && !_dockMenu) {
+        setState(() => _menuExpanded = false);
+      }
+      return;
+    }
     unawaited(
       _navigate(() {
         _stopEditing();
         _section = section;
+        if (!_dockMenu) _menuExpanded = false;
         _epoch++;
         _debounce?.cancel();
         _rowTimer?.cancel();
         _logins.clear();
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (!_available || section != _section) return;
-          if (_sectionKeys[section]!.currentContext case final context?) {
-            unawaited(
-              Scrollable.ensureVisible(
-                context,
-                alignmentPolicy: ScrollPositionAlignmentPolicy.keepVisibleAtEnd,
-              ),
-            );
-          }
           _refresh();
         });
       }),
     );
   }
 
-  Widget _sectionBar() => SingleChildScrollView(
-    scrollDirection: Axis.horizontal,
-    child: Semantics(
-      role: ui.SemanticsRole.tabBar,
-      container: true,
-      child: Row(
-        spacing: 6,
-        children: [
-          for (final section in _VaultSection.values)
-            Semantics(
-              key: _sectionKeys[section],
-              role: ui.SemanticsRole.tab,
-              container: true,
-              excludeSemantics: true,
-              selected: _section == section,
-              label: section.label(context),
-              onTap: () => _selectSection(section),
-              child: WantButton(
-                key: ValueKey('vault-tab-${section.name}'),
-                variant: _section == section
-                    ? WantButtonVariant.secondary
-                    : WantButtonVariant.ghost,
-                onPressed: () => _selectSection(section),
-                child: Row(
-                  spacing: 8,
+  Widget _menu(VaultState state, double width) {
+    final catalog = state.catalog!;
+    final toggleLabel = _menuExpanded
+        ? _text(context, 'Collapse menu', 'Свернуть меню')
+        : _text(context, 'Expand menu', 'Развернуть меню');
+
+    int? count(_VaultSection section) => switch (section) {
+      _VaultSection.secrets => state.content!.cards.length,
+      _VaultSection.services => catalog.services.length,
+      _VaultSection.types => catalog.presets.length,
+      _VaultSection.environments => EnvironmentV1.values.length,
+      _VaultSection.resources || _VaultSection.integrations => 0,
+      _VaultSection.ai || _VaultSection.general => null,
+    };
+
+    return SizedBox(
+      width: width,
+      child: ColoredBox(
+        color: WantTheme.of(context).color('background'),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 6),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Align(
+                alignment: AlignmentDirectional.centerStart,
+                child: Tooltip(
+                  message: toggleLabel,
+                  excludeFromSemantics: true,
+                  child: WantButton(
+                    key: const ValueKey('vault-menu-toggle'),
+                    pill: false,
+                    size: WantButtonSize.icon,
+                    variant: WantButtonVariant.ghost,
+                    semanticsLabel: toggleLabel,
+                    onPressed: () =>
+                        setState(() => _menuExpanded = !_menuExpanded),
+                    child: Icon(_menuExpanded ? Icons.menu_open : Icons.menu),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 8),
+              Expanded(
+                child: ListView(
+                  padding: EdgeInsets.zero,
                   children: [
-                    ExcludeSemantics(child: Icon(section.icon, size: 16)),
-                    Text(section.label(context)),
+                    for (final section in _VaultSection.values)
+                      _menuItem(section, count(section)),
                   ],
                 ),
               ),
-            ),
-        ],
+            ],
+          ),
+        ),
       ),
-    ),
+    );
+  }
+
+  Widget _menuItem(_VaultSection section, int? count) {
+    final label = section.label(context);
+    final icon = Icon(section.icon, size: 20);
+    final selected = section == _section;
+    return Tooltip(
+      message: label,
+      excludeFromSemantics: true,
+      child: Semantics(
+        selected: selected,
+        child: WantButton(
+          key: ValueKey('vault-tab-${section.name}'),
+          pill: false,
+          size: _menuExpanded ? WantButtonSize.medium : WantButtonSize.icon,
+          variant: selected
+              ? WantButtonVariant.secondary
+              : WantButtonVariant.ghost,
+          semanticsLabel: !_menuExpanded ? label : null,
+          onPressed: () => _selectSection(section),
+          child: _menuExpanded
+              ? Row(
+                  spacing: 8,
+                  children: [
+                    icon,
+                    Expanded(
+                      child: Text(
+                        label,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    if (count != null)
+                      Text(
+                        '$count',
+                        style: TextStyle(
+                          color: WantTheme.of(context)
+                              .color('muted-foreground'),
+                        ),
+                      ),
+                  ],
+                )
+              : icon,
+        ),
+      ),
+    );
+  }
+
+  Widget _withMenu(VaultState state, Widget child) => LayoutBuilder(
+    builder: (context, box) {
+      const collapsedWidth = 56.0;
+      _dockMenu =
+          box.maxWidth >= 1000 &&
+          MediaQuery.textScalerOf(context).scale(16) <= 24;
+      final menuWidth = _menuExpanded
+          ? (box.maxWidth - 44).clamp(collapsedWidth, 244.0).toDouble()
+          : collapsedWidth;
+      final overlay = _menuExpanded && !_dockMenu;
+      final leftInset = (_dockMenu ? menuWidth : collapsedWidth) + 8;
+      return Stack(
+        fit: StackFit.expand,
+        children: [
+          Padding(
+            padding: EdgeInsetsDirectional.only(start: leftInset),
+            child: ExcludeFocus(
+              excluding: overlay,
+              child: ExcludeSemantics(excluding: overlay, child: child),
+            ),
+          ),
+          if (overlay)
+            ModalBarrier(
+              color: WantTheme.of(context)
+                  .color('foreground')
+                  .withValues(alpha: .14),
+              dismissible: true,
+              semanticsLabel: _text(context, 'Collapse menu', 'Свернуть меню'),
+              onDismiss: () => setState(() => _menuExpanded = false),
+            ),
+          PositionedDirectional(
+            start: 0,
+            top: 0,
+            bottom: 0,
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                border: BorderDirectional(
+                  end: BorderSide(color: WantTheme.of(context).color('border')),
+                ),
+              ),
+              child: Padding(
+                padding: const EdgeInsetsDirectional.only(end: 1),
+                child: _menu(state, menuWidth - 1),
+              ),
+            ),
+          ),
+        ],
+      );
+    },
   );
 
   Future<void> _editCard() async {
@@ -762,6 +908,7 @@ final class _VaultContentViewState extends State<VaultContentView>
     selected: _search.text.isEmpty && _group == id,
     child: WantButton(
       key: ValueKey('group-filter-$id'),
+      pill: false,
       variant: _search.text.isEmpty && _group == id
           ? WantButtonVariant.secondary
           : WantButtonVariant.ghost,
@@ -908,9 +1055,10 @@ final class _VaultContentViewState extends State<VaultContentView>
             concealed: false,
             onSubmitted: _openSelected,
           );
-          final actions = Row(
-            mainAxisSize: MainAxisSize.min,
+          final actions = Wrap(
+            alignment: WrapAlignment.end,
             spacing: 8,
+            runSpacing: 8,
             children: [
               _filters(state),
               WantButton(
@@ -1116,16 +1264,14 @@ final class _VaultContentViewState extends State<VaultContentView>
   Widget _layout(VaultState state) => LayoutBuilder(
     builder: (context, box) {
       final scaled = MediaQuery.textScalerOf(context).scale(16) > 24;
-      final wide = box.maxWidth >= 1120 && !scaled;
-      final dual = box.maxWidth >= 760 && !scaled;
+      final wide = box.maxWidth >= 1060 && !scaled;
+      final dual = box.maxWidth >= 696 && !scaled;
       final navigation = _panel(_nav(state));
       final list = _panel(_list(state));
       final details = _panel(_details(state));
-      final separator = VerticalDivider(
-        width: 1,
-        thickness: 1,
-        color: WantTheme.of(context).color('border'),
-      );
+      final panes = wide || dual
+          ? _resizablePanes(box.maxWidth, wide, navigation, list, details)
+          : (_compactDetail || _editing ? details : list);
       return Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         spacing: 12,
@@ -1152,30 +1298,8 @@ final class _VaultContentViewState extends State<VaultContentView>
                   ),
               ],
             ),
-          Expanded(
-            child: wide
-                ? Row(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      SizedBox(width: 224, child: navigation),
-                      separator,
-                      SizedBox(width: 340, child: list),
-                      separator,
-                      Expanded(child: details),
-                    ],
-                  )
-                : dual
-                ? Row(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      SizedBox(width: box.maxWidth * .4, child: list),
-                      separator,
-                      Expanded(child: details),
-                    ],
-                  )
-                : (_compactDetail || _editing ? details : list),
-          ),
-          if (box.maxWidth >= 760 && !scaled)
+          Expanded(child: panes),
+          if (dual)
             WantTypography(
               _text(
                 context,
@@ -1189,6 +1313,88 @@ final class _VaultContentViewState extends State<VaultContentView>
       );
     },
   );
+  Widget _resizablePanes(
+    double width,
+    bool wide,
+    Widget navigation,
+    Widget list,
+    Widget details,
+  ) {
+    const divider = 12.0;
+    const groupMin = 176.0, listMin = 240.0, detailsMin = 320.0;
+    final usable = width - divider * (wide ? 2 : 1);
+    (double, double) widths(WorkspaceLayoutV1 preferences) {
+      final groups = wide
+          ? (usable * preferences.groupFraction)
+                .clamp(groupMin, usable - listMin - detailsMin)
+                .toDouble()
+          : 0.0;
+      final fraction = wide
+          ? preferences.listFraction
+          : preferences.dualListFraction;
+      final secrets = (usable * fraction)
+          .clamp(listMin, usable - groups - detailsMin)
+          .toDouble();
+      return (groups, secrets);
+    }
+
+    final (groups, secrets) = widths(_paneWidths);
+
+    void resize(int boundary, double delta) {
+      final preferences = _paneWidths;
+      final (groups, secrets) = widths(preferences);
+      if (boundary == 0) {
+        delta = delta.clamp(groupMin - groups, secrets - listMin).toDouble();
+      } else {
+        delta = delta
+            .clamp(listMin - secrets, usable - groups - secrets - detailsMin)
+            .toDouble();
+      }
+      if (delta == 0) return;
+      setState(() {
+        _paneWidths = WorkspaceLayoutV1(
+          groupFraction: boundary == 0
+              ? (groups + delta) / usable
+              : preferences.groupFraction,
+          listFraction: wide
+              ? (secrets + (boundary == 0 ? -delta : delta)) / usable
+              : preferences.listFraction,
+          dualListFraction: wide
+              ? preferences.dualListFraction
+              : (secrets + delta) / usable,
+        );
+      });
+    }
+
+    void save() {
+      if (widget.appearance case final appearance?
+          when appearance.state.settings.layout != _paneWidths) {
+        unawaited(appearance.saveLayout(_paneWidths));
+      }
+    }
+
+    Widget handle(int boundary, String label) => _PaneDivider(
+      key: ValueKey('vault-pane-divider-$boundary'),
+      width: divider,
+      label: label,
+      onDelta: (delta) => resize(boundary, delta),
+      onDone: save,
+    );
+
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (wide) ...[
+          SizedBox(width: groups, child: navigation),
+          handle(0, _text(context, 'Resize groups', 'Изменить ширину групп')),
+        ],
+        SizedBox(width: secrets, child: list),
+        handle(1, _text(context, 'Resize secrets', 'Изменить ширину секретов')),
+        Expanded(child: details),
+      ],
+    );
+  }
+
   Widget _withActivity(Widget child) => Listener(
     behavior: HitTestBehavior.translucent,
     onPointerDown: (_) => widget.controller.activity(),
@@ -1242,62 +1448,133 @@ final class _VaultContentViewState extends State<VaultContentView>
       final mac = Theme.of(context).platform == TargetPlatform.macOS;
       SingleActivator key(LogicalKeyboardKey k, {bool shift = false}) =>
           SingleActivator(k, meta: mac, control: !mac, shift: shift);
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        spacing: 8,
-        children: [
-          _sectionBar(),
-          Expanded(
-            child: _section == _VaultSection.secrets
-                ? CallbackShortcuts(
-                    bindings: {
-                      key(LogicalKeyboardKey.keyK): _focusSearch,
-                      key(LogicalKeyboardKey.keyF): _focusSearch,
-                      key(LogicalKeyboardKey.keyN): _newCard,
-                      key(LogicalKeyboardKey.keyN, shift: true): _groupForm,
-                      key(LogicalKeyboardKey.keyE): () =>
-                          unawaited(_editCard()),
-                      key(LogicalKeyboardKey.keyS): () {
-                        if (_editing && !state.busy) {
-                          unawaited(
-                            _editingGroup
-                                ? _groupEditor.currentState!._save()
-                                : _cardEditor.currentState!._save(),
-                          );
-                        }
-                      },
-                      key(LogicalKeyboardKey.keyL): () =>
-                          unawaited(widget.controller.lock()),
-                      key(LogicalKeyboardKey.keyC, shift: true): () =>
-                          _copy(FieldIdV1.password),
-                      key(LogicalKeyboardKey.keyU, shift: true): () =>
-                          _copy(FieldIdV1.login),
-                      key(LogicalKeyboardKey.keyT, shift: true): () =>
-                          _copy(null, otp: true),
-                      if (!_editing) ...{
-                        const SingleActivator(
-                          LogicalKeyboardKey.arrowDown,
-                        ): () =>
-                            _move(1),
-                        const SingleActivator(LogicalKeyboardKey.arrowUp): () =>
-                            _move(-1),
-                        const SingleActivator(LogicalKeyboardKey.enter):
-                            _openSelected,
-                      },
-                      const SingleActivator(LogicalKeyboardKey.escape): _escape,
+      return _withActivity(
+        _withMenu(
+          state,
+          _section == _VaultSection.secrets
+              ? CallbackShortcuts(
+                  bindings: {
+                    key(LogicalKeyboardKey.keyK): _focusSearch,
+                    key(LogicalKeyboardKey.keyF): _focusSearch,
+                    key(LogicalKeyboardKey.keyN): _newCard,
+                    key(LogicalKeyboardKey.keyN, shift: true): _groupForm,
+                    key(LogicalKeyboardKey.keyE): () => unawaited(_editCard()),
+                    key(LogicalKeyboardKey.keyS): () {
+                      if (_editing && !state.busy) {
+                        unawaited(
+                          _editingGroup
+                              ? _groupEditor.currentState!._save()
+                              : _cardEditor.currentState!._save(),
+                        );
+                      }
                     },
-                    child: _withActivity(_layout(state)),
-                  )
-                : _VaultSectionView(
-                    key: ValueKey(_section),
-                    section: _section,
-                    catalog: state.catalog!,
-                    appearance: widget.appearance,
-                  ),
-          ),
-        ],
+                    key(LogicalKeyboardKey.keyL): () =>
+                        unawaited(widget.controller.lock()),
+                    key(LogicalKeyboardKey.keyC, shift: true): () =>
+                        _copy(FieldIdV1.password),
+                    key(LogicalKeyboardKey.keyU, shift: true): () =>
+                        _copy(FieldIdV1.login),
+                    key(LogicalKeyboardKey.keyT, shift: true): () =>
+                        _copy(null, otp: true),
+                    if (!_editing) ...{
+                      const SingleActivator(LogicalKeyboardKey.arrowDown): () =>
+                          _move(1),
+                      const SingleActivator(LogicalKeyboardKey.arrowUp): () =>
+                          _move(-1),
+                      const SingleActivator(LogicalKeyboardKey.enter):
+                          _openSelected,
+                    },
+                    const SingleActivator(LogicalKeyboardKey.escape): _escape,
+                  },
+                  child: _layout(state),
+                )
+              : _VaultSectionView(
+                  key: ValueKey(_section),
+                  section: _section,
+                  catalog: state.catalog!,
+                  appearance: widget.appearance,
+                  onReset: state.busy ? null : _showReset,
+                ),
+        ),
       );
     },
+  );
+}
+
+final class _PaneDivider extends StatefulWidget {
+  final double width;
+  final String label;
+  final ValueChanged<double> onDelta;
+  final VoidCallback onDone;
+
+  const _PaneDivider({
+    super.key,
+    required this.width,
+    required this.label,
+    required this.onDelta,
+    required this.onDone,
+  });
+
+  @override
+  State<_PaneDivider> createState() => _PaneDividerState();
+}
+
+final class _PaneDividerState extends State<_PaneDivider> {
+  bool _focused = false, _hovered = false, _dragging = false;
+
+  void _step(double delta) {
+    widget.onDelta(delta);
+    widget.onDone();
+  }
+
+  void _finish() {
+    setState(() => _dragging = false);
+    widget.onDone();
+  }
+
+  @override
+  Widget build(BuildContext context) => Semantics(
+    label: widget.label,
+    onIncrease: () => _step(16),
+    onDecrease: () => _step(-16),
+    child: Focus(
+      onFocusChange: (value) => setState(() => _focused = value),
+      onKeyEvent: (_, event) {
+        if (event is! KeyDownEvent && event is! KeyRepeatEvent) {
+          return KeyEventResult.ignored;
+        }
+        if (event.logicalKey == LogicalKeyboardKey.arrowLeft) {
+          _step(-16);
+        } else if (event.logicalKey == LogicalKeyboardKey.arrowRight) {
+          _step(16);
+        } else {
+          return KeyEventResult.ignored;
+        }
+        return KeyEventResult.handled;
+      },
+      child: MouseRegion(
+        cursor: SystemMouseCursors.resizeLeftRight,
+        onEnter: (_) => setState(() => _hovered = true),
+        onExit: (_) => setState(() => _hovered = false),
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onHorizontalDragStart: (_) => setState(() => _dragging = true),
+          onHorizontalDragUpdate: (event) => widget.onDelta(event.delta.dx),
+          onHorizontalDragEnd: (_) => _finish(),
+          onHorizontalDragCancel: _finish,
+          child: SizedBox(
+            width: widget.width,
+            child: VerticalDivider(
+              width: widget.width,
+              thickness: _focused || _hovered || _dragging ? 2 : 1,
+              color: WantTheme.of(
+                context,
+              ).color(_focused || _hovered || _dragging ? 'primary' : 'border'),
+            ),
+          ),
+        ),
+      ),
+    ),
   );
 }
 
@@ -1338,6 +1615,7 @@ final class _WorkspaceRowState extends State<_WorkspaceRow> {
   Widget build(BuildContext context) => Semantics(
     selected: widget.selected,
     child: WantButton(
+      pill: false,
       variant: widget.selected
           ? WantButtonVariant.secondary
           : WantButtonVariant.ghost,

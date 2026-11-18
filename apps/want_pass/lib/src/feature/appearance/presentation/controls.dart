@@ -25,6 +25,7 @@ class AppearanceControls extends StatelessWidget {
                   theme: theme ?? settings.theme,
                   language: locale ?? language,
                   configured: settings.configured,
+                  layout: settings.layout,
                 ),
               ),
             );

@@ -11,12 +11,19 @@ import 'package:want_pass_core/src/feature/vault/infrastructure/_barrel.dart'
 final class RustVaultAccessService implements VaultAccessService {
   final String _directory;
   final VaultReporter _reporter;
-  const RustVaultAccessService(this._directory, this._reporter);
+  final bool _application;
+  const RustVaultAccessService(
+    this._directory,
+    this._reporter, {
+    this._application = false,
+  });
   @override
   FutureDomainResult<VaultHandleV1> openV1() async {
     const op = 'RustVaultAccessService.openV1():';
     final result = await captureResult<VaultHandleV1>(() async {
-      final value = await native.Vault.open(directory: _directory);
+      final value = _application
+          ? await native.Vault.openApplicationV1(directory: _directory)
+          : await native.Vault.open(directory: _directory);
       return _NativeVaultHandle(value, _reporter);
     }, mapToDomainError: _mapNativeError);
     if (result.isError) {
@@ -279,6 +286,31 @@ final class RustVaultAccessService implements VaultAccessService {
     const op = 'RustVaultAccessService.validateRecoveryV3():';
     final result = await captureResult<void>(() async {
       await (handle as _NativeVaultHandle)._vault.validateRecoveryV3(
+        phrase: phrase,
+        generation: handle._vault.generation(),
+      );
+    }, mapToDomainError: _mapNativeError);
+    if (result.isError) {
+      reportVaultSafely(
+        _reporter,
+        layer: VaultDiagnosticLayer.infrastructure,
+        operation: op,
+        error: result.error is VaultErrorV1
+            ? result.error as VaultErrorV1
+            : const VaultUnexpectedErrorV1(),
+      );
+    }
+    return result;
+  }
+
+  @override
+  FutureDomainResult<void> resetApplicationV1({
+    required VaultHandleV1 handle,
+    required String phrase,
+  }) async {
+    const op = 'RustVaultAccessService.resetApplicationV1():';
+    final result = await captureResult<void>(() async {
+      await (handle as _NativeVaultHandle)._vault.resetApplicationV1(
         phrase: phrase,
         generation: handle._vault.generation(),
       );

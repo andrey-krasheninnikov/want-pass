@@ -142,7 +142,7 @@ final class _VaultPadlockState extends State<VaultPadlock>
           ? 'Перетаскивайте влево и вправо или используйте стрелки для вращения.'
           : 'Drag left and right or use the arrow keys to rotate.',
       child: SizedBox.square(
-        dimension: 64,
+        dimension: 48,
         child: Focus(
           canRequestFocus: false,
           onKeyEvent: (_, event) {
@@ -162,6 +162,9 @@ final class _VaultPadlockState extends State<VaultPadlock>
             variant: FButtonVariant.ghost,
             style: FButtonStyleDelta.delta(
               decoration: FVariants.from(const BoxDecoration(), variants: {}),
+              iconContentStyle: const FButtonIconContentStyleDelta.delta(
+                padding: EdgeInsetsGeometryDelta.value(EdgeInsets.zero),
+              ),
               tappableStyle: const FTappableStyleDelta.delta(
                 pressedEnterDuration: Duration.zero,
                 pressedExitDuration: Duration.zero,
@@ -191,7 +194,7 @@ final class _VaultPadlockState extends State<VaultPadlock>
               ),
               builder: (context, child) => Transform.rotate(
                 angle: math.pow(math.sin(_press.value * math.pi), 2) * .045,
-                child: SizedBox.square(dimension: 44, child: child),
+                child: SizedBox.square(dimension: 40, child: child),
               ),
             ),
           ),

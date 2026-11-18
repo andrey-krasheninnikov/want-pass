@@ -54,6 +54,10 @@ abstract interface class VaultAccessService {
     required VaultHandleV1 handle,
     required String destination,
   });
+  FutureDomainResult<void> resetApplicationV1({
+    required VaultHandleV1 handle,
+    required String phrase,
+  });
   FutureDomainResult<void> validateRecoveryV3({
     required VaultHandleV1 handle,
     required String phrase,

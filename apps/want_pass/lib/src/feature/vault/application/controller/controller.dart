@@ -34,6 +34,7 @@ final class VaultController extends CubitWithEffects<VaultState, VaultEffect> {
   Future<void>? _initFuture;
   Future<void>? _closeFuture;
   Future<void>? _operation;
+  Future<bool>? _resetOperation;
   Future<void>? _totpOperation;
   bool _closing = false;
   bool _monitorAvailable = true;
@@ -714,6 +715,67 @@ final class VaultController extends CubitWithEffects<VaultState, VaultEffect> {
     }
   }
 
+  Future<bool> resetApplication(
+    String phrase, {
+    required void Function() onReset,
+  }) async {
+    const op = 'VaultController.resetApplication():';
+    final handle = _handle;
+    if (_closing ||
+        !_monitorAvailable ||
+        state.phase != VaultPhase.unlocked ||
+        state.busy ||
+        handle == null ||
+        !LaunchMode.isInitialized ||
+        !LaunchMode.isForeground) {
+      return false;
+    }
+    final epoch = _epoch;
+    emit(state.copyWith(busy: true, error: () => null));
+    activity();
+    final operation = () async {
+      try {
+        final result = await _useCase.resetApplicationV1(
+          params: ResetVaultApplicationParamsV1(handle: handle, phrase: phrase),
+        );
+        if (_closing) return false;
+        if (result.isError) {
+          if (epoch == _epoch) {
+            final error = _error(result.error);
+            _fail(
+              op,
+              error,
+              unavailable:
+                  error is VaultRejectedErrorV1 &&
+                  error.kind == VaultFailureKindV1.writeUncertain,
+            );
+          }
+          return false;
+        }
+        onReset();
+        await _clearClipboard();
+        if (!_closing && epoch == _epoch) {
+          _epoch++;
+          _idle?.cancel();
+          _idleClock.stop();
+          emit(const VaultState(phase: VaultPhase.missing));
+        }
+        return true;
+      } on Object {
+        if (!_closing && epoch == _epoch) {
+          _fail(op, const VaultUnexpectedErrorV1(), unavailable: true);
+        }
+        return false;
+      }
+    }();
+    _resetOperation = operation;
+    try {
+      return await operation;
+    } finally {
+      if (identical(_resetOperation, operation)) _resetOperation = null;
+    }
+  }
+
   Future<void> lock({bool notify = false, VaultErrorV1? failure}) async {
     const op = 'VaultController.lock():';
     if (_closing || isClosed || _handle == null) return;
@@ -729,6 +791,7 @@ final class VaultController extends CubitWithEffects<VaultState, VaultEffect> {
       final result = await _useCase.lockV1(
         params: LockVaultParamsV1(handle: _handle!),
       );
+      await _resetOperation;
       await _exportOperation;
       await _clearClipboard();
       if (_closing || epoch != _epoch) return;
@@ -1392,6 +1455,7 @@ final class VaultController extends CubitWithEffects<VaultState, VaultEffect> {
       }
     }
     await _operation;
+    await _resetOperation;
     await _totpOperation;
     await Future.wait(_browseOperations.toList());
     await Future.wait(_passwordOperations.toList());

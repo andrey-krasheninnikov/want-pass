@@ -120,23 +120,21 @@ final class _GroupIconPickerState extends State<_GroupIconPicker> {
       bytes: widget.image,
       tint: widget.tone.tint,
     ),
-    triggerBuilder: (context, toggle, child) => Align(
-      alignment: AlignmentDirectional.centerStart,
+    triggerBuilder: (context, toggle, child) => Tooltip(
+      message: _text(context, 'Choose group icon', 'Выбрать иконку группы'),
+      excludeFromSemantics: true,
       child: WantButton(
         key: const ValueKey('group-icon-picker'),
         variant: WantButtonVariant.secondary,
-        onPressed: widget.enabled ? toggle : null,
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          spacing: 8,
-          children: [
-            child,
-            Flexible(
-              child: Text(_text(context, 'Group icon', 'Иконка группы')),
-            ),
-            const Icon(Icons.expand_more, size: 18),
-          ],
+        size: WantButtonSize.icon,
+        pill: false,
+        semanticsLabel: _text(
+          context,
+          'Choose group icon',
+          'Выбрать иконку группы',
         ),
+        onPressed: widget.enabled ? toggle : null,
+        child: child,
       ),
     ),
     contentBuilder: (context, close) => ConstrainedBox(

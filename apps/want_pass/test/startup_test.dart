@@ -279,6 +279,13 @@ final class _VaultAccess implements VaultAccessService {
     required String password,
   }) => unlockV1(handle: handle, password: password);
   @override
+  FutureDomainResult<void> resetApplicationV1({
+    required VaultHandleV1 handle,
+    required String phrase,
+  }) async =>
+      const Result.error(VaultRejectedErrorV1(VaultFailureKindV1.unavailable));
+
+  @override
   FutureDomainResult<void> validateRecoveryV3({
     required VaultHandleV1 handle,
     required String phrase,

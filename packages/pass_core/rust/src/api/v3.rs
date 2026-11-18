@@ -129,6 +129,60 @@ impl Vault {
         }
         Ok(())
     }
+    pub fn reset_application_v1(
+        &self,
+        phrase: String,
+        generation: u64,
+    ) -> Result<(), VaultFailure> {
+        self.reset_application_after_validation(phrase, generation, || {})
+    }
+
+    fn reset_application_after_validation(
+        &self,
+        phrase: String,
+        generation: u64,
+        after_validation: impl FnOnce(),
+    ) -> Result<(), VaultFailure> {
+        let input = Zeroizing::new(phrase);
+        let phrase = parse_phrase(&input)?;
+        let _job = self.job.try_lock().map_err(|_| VaultFailure::Busy)?;
+        let bytes = {
+            let state = self.state.lock().map_err(|_| VaultFailure::Unavailable)?;
+            if state.closed || self.generation() != generation {
+                return Err(VaultFailure::Stale);
+            }
+            if state.active.is_none() {
+                return Err(VaultFailure::Locked);
+            }
+            state.store.read()?.ok_or(VaultFailure::Missing)?
+        };
+        drop(format::open_recovery(&bytes, &phrase)?);
+        after_validation();
+        self.wait_for_exports_v2()?;
+        let mut state = self.state.lock().map_err(|_| VaultFailure::Unavailable)?;
+        let expected = digest(&bytes);
+        if state.closed
+            || state.active.is_none()
+            || self.generation() != generation
+            || state.store.read()?.as_deref().map(digest) != Some(expected)
+        {
+            return Err(VaultFailure::Stale);
+        }
+        let plan = state.store.plan_reset()?;
+        self.epoch
+            .compare_exchange(
+                generation,
+                generation.wrapping_add(1),
+                Ordering::SeqCst,
+                Ordering::SeqCst,
+            )
+            .map_err(|_| VaultFailure::Stale)?;
+        state.active = None;
+        state.draft = None;
+        state.draft_v2 = None;
+        state.store.reset_application(&plan)
+    }
+
     pub fn prepare_creation_v3(
         &self,
         password: String,
@@ -243,6 +297,74 @@ mod tests {
     }
 
     use super::*;
+    #[test]
+    fn application_reset_requires_current_recovery_and_session() {
+        use std::fs;
+        let temp = tempfile::tempdir().unwrap();
+        let root = temp.path().canonicalize().unwrap();
+        let path = root.to_str().unwrap().to_owned();
+        let vault = Vault::open_application_v1(path.clone()).unwrap();
+        let password = "Synthetic reset password 2026!";
+        let draft = vault
+            .prepare_creation_v3(password.into(), vault.generation())
+            .unwrap();
+        let answers = draft
+            .positions
+            .iter()
+            .map(|i| draft.words[*i as usize].clone())
+            .collect();
+        vault
+            .confirm_v3(
+                answers,
+                password.into(),
+                String::new(),
+                String::new(),
+                draft.revision,
+            )
+            .unwrap();
+        for name in ["appearance.json", "appearance.tmp", "user-export.json"] {
+            fs::write(root.join(name), b"disposable fixture").unwrap();
+        }
+        let other = format::words(&[42; 32]).unwrap().join(" ");
+        assert_eq!(
+            vault.reset_application_v1(other, vault.generation()),
+            Err(VaultFailure::Credentials)
+        );
+        assert_eq!(
+            vault.reset_application_after_validation(
+                draft.json.clone(),
+                vault.generation(),
+                || {
+                    vault.lock().unwrap();
+                }
+            ),
+            Err(VaultFailure::Stale)
+        );
+        for name in ["vault/vault.wpass", "appearance.json", "appearance.tmp"] {
+            assert!(root.join(name).exists());
+        }
+        vault
+            .unlock_v3(password.into(), vault.generation())
+            .unwrap();
+        vault
+            .reset_application_v1(draft.json, vault.generation())
+            .unwrap();
+        assert_eq!(vault.status().unwrap(), VaultStatus::Missing);
+        for name in ["vault/vault.wpass", "appearance.json", "appearance.tmp"] {
+            assert!(!root.join(name).exists());
+        }
+        assert!(root.join("user-export.json").exists());
+        assert!(matches!(
+            Vault::open_application_v1(path.clone()),
+            Err(VaultFailure::Busy)
+        ));
+        vault.close().unwrap();
+        assert_eq!(
+            Vault::open_application_v1(path).unwrap().status().unwrap(),
+            VaultStatus::Missing
+        );
+    }
+
     #[test]
     fn json_is_strict_and_allows_repeated_words() {
         let words = format::words(&[0; 32]).unwrap();

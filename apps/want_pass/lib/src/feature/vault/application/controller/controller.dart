@@ -451,6 +451,56 @@ final class VaultController extends CubitWithEffects<VaultState, VaultEffect> {
     if (identical(_exportOperation, operation)) _exportOperation = null;
   }
 
+  Future<bool> copyPasswordHint() async {
+    const op = 'VaultController.copyPasswordHint():';
+    final hint = state.hints.password;
+    if (_closing ||
+        isClosed ||
+        !_monitorAvailable ||
+        state.phase != VaultPhase.locked ||
+        state.busy ||
+        _exportOperation != null ||
+        hint.trim().isEmpty ||
+        !LaunchMode.isInitialized ||
+        !LaunchMode.isForeground) {
+      return false;
+    }
+    final epoch = _epoch;
+    final operation = () async {
+      await _clearClipboard();
+      if (_closing || epoch != _epoch || state.phase != VaultPhase.locked) {
+        return false;
+      }
+      final result = await _useCase.copyPasswordHintV1(hint: hint);
+      if (result.isError) {
+        reportVaultSafely(
+          _reporter,
+          layer: VaultDiagnosticLayer.controller,
+          operation: op,
+          error: _error(result.error),
+        );
+        return false;
+      }
+      _clipboardContent = hint;
+      if (_closing || epoch != _epoch || state.phase != VaultPhase.locked) {
+        await _clearClipboard();
+        return false;
+      }
+      _clipboardExpiry = Timer(
+        const Duration(seconds: 30),
+        () => unawaited(_clearClipboard()),
+      );
+      return true;
+    }();
+    final pending = operation.then<void>((_) {});
+    _exportOperation = pending;
+    try {
+      return await operation;
+    } finally {
+      if (identical(_exportOperation, pending)) _exportOperation = null;
+    }
+  }
+
   Future<void> _clearClipboard() async {
     const op = 'VaultController._clearClipboard():';
     _clipboardExpiry?.cancel();

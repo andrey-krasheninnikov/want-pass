@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:want_allure/want_allure.dart';
 
@@ -66,7 +68,7 @@ final class _VaultMomentState extends State<VaultMoment>
       return;
     }
     _progress.duration = _motion
-        ? Duration(milliseconds: widget.startup ? 1200 : 900)
+        ? Duration(milliseconds: widget.startup ? 1200 : 1400)
         : Duration(milliseconds: widget.startup ? 0 : 400);
     _progress.forward();
   }
@@ -101,25 +103,7 @@ final class _VaultMomentState extends State<VaultMoment>
       child: ClipRect(
         child: AnimatedBuilder(
           animation: _progress,
-          child: widget.startup
-              ? title
-              : Semantics(
-                  liveRegion: true,
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    spacing: 12,
-                    children: [
-                      ExcludeSemantics(
-                        child: Icon(
-                          Icons.check_circle_outline,
-                          color: theme.color('success'),
-                          size: 56,
-                        ),
-                      ),
-                      title,
-                    ],
-                  ),
-                ),
+          child: title,
           builder: (context, child) {
             final t = _progress.value;
             if (widget.startup) {
@@ -156,14 +140,38 @@ final class _VaultMomentState extends State<VaultMoment>
                 ],
               );
             }
-            final reveal = _phase(t, 0, .34);
-            final exit = 1 - _phase(t, .62, 1);
+            final exit = _motion ? 1 - _phase(t, .81, 1) : 1.0;
+            final color = theme.color(
+              MediaQuery.highContrastOf(context)
+                  ? 'foreground'
+                  : 'success-text',
+            );
             return Center(
               child: Opacity(
-                opacity: _motion ? reveal * exit : 1,
-                child: Transform.scale(
-                  scale: _motion ? .94 + reveal * .06 : 1,
-                  child: child,
+                opacity: exit,
+                child: Semantics(
+                  liveRegion: true,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    spacing: 4,
+                    children: [
+                      ExcludeSemantics(
+                        child: CustomPaint(
+                          size: const Size.square(108),
+                          painter: _VaultCreatedPainter(
+                            color: color,
+                            outline: _motion ? _phase(t, 0, .34) : 1,
+                            check: _motion ? _phase(t, .20, .49) : 1,
+                            burst: waveVisible ? _phase(t, .40, .73) : 0,
+                          ),
+                        ),
+                      ),
+                      Opacity(
+                        opacity: _motion ? _phase(t, .36, .58) : 1,
+                        child: child,
+                      ),
+                    ],
+                  ),
                 ),
               ),
             );
@@ -172,4 +180,61 @@ final class _VaultMomentState extends State<VaultMoment>
       ),
     );
   }
+}
+
+final class _VaultCreatedPainter extends CustomPainter {
+  final Color color;
+  final double outline, check, burst;
+  const _VaultCreatedPainter({
+    required this.color,
+    required this.outline,
+    required this.check,
+    required this.burst,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final center = size.center(Offset.zero);
+    final paint = Paint()
+      ..color = color
+      ..strokeCap = StrokeCap.round
+      ..strokeJoin = StrokeJoin.round
+      ..strokeWidth = 2.5
+      ..style = PaintingStyle.stroke;
+    canvas.drawArc(
+      Rect.fromCircle(center: center, radius: 27),
+      -math.pi / 2,
+      2 * math.pi * outline,
+      false,
+      paint,
+    );
+    final tick = Path()
+      ..moveTo(center.dx - 12, center.dy)
+      ..lineTo(center.dx - 4, center.dy + 8)
+      ..lineTo(center.dx + 13, center.dy - 9);
+    final stroke = tick.computeMetrics().first;
+    canvas.drawPath(stroke.extractPath(0, stroke.length * check), paint);
+    if (burst > 0 && burst < 1) {
+      paint
+        ..style = PaintingStyle.fill
+        ..color = color.withValues(alpha: math.sin(math.pi * burst) * .55);
+      for (var i = 0; i < 6; i++) {
+        final theta = (i + .5) * math.pi / 3;
+        final offset =
+            Offset(math.cos(theta), math.sin(theta)) * (31 + burst * 17);
+        final pixel = center + offset;
+        canvas.drawRect(
+          Rect.fromCenter(center: pixel, width: 3, height: 3),
+          paint,
+        );
+      }
+    }
+  }
+
+  @override
+  bool shouldRepaint(_VaultCreatedPainter oldDelegate) =>
+      color != oldDelegate.color ||
+      outline != oldDelegate.outline ||
+      check != oldDelegate.check ||
+      burst != oldDelegate.burst;
 }

@@ -1493,6 +1493,86 @@ void main() {
     await events.close();
   });
 
+  testWidgets('header logo opens the fixed website in the browser', (
+    tester,
+  ) async {
+    const channel = MethodChannel('plugins.flutter.io/url_launcher');
+    final messenger =
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+    final calls = <MethodCall>[];
+    messenger.setMockMethodCallHandler(channel, (call) async {
+      calls.add(call);
+      return true;
+    });
+    addTearDown(() => messenger.setMockMethodCallHandler(channel, null));
+    final events = StreamController<VaultLockSignal>.broadcast();
+    final controller = _controller(_Access(), events.stream);
+    final startup = StartupController(_Startup(), const _Reporter());
+    await tester.runAsync(() async {
+      await startup.init();
+      await controller.init();
+    });
+    await tester.pumpWidget(WantPassApp(startup: startup, vault: controller));
+    await tester.pumpAndSettle();
+    final logo = find.byKey(const ValueKey('want-pass-website'));
+    await tester.drag(logo, const Offset(36, 0));
+    await tester.pump(const Duration(milliseconds: 150));
+    expect(calls, isEmpty);
+    await _tapKey(tester, 'want-pass-website');
+    await tester.pump(const Duration(milliseconds: 150));
+    expect(calls, hasLength(1));
+    expect(calls.single.method, 'launch');
+    expect(calls.single.arguments['url'], 'https://pass.want.foundation');
+    expect(calls.single.arguments['useWebView'], isFalse);
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.runAsync(() async {
+      await controller.close();
+      await startup.close();
+      await events.close();
+    });
+  });
+
+  testWidgets(
+    'password hint copies only on request and preserves unrelated clipboard contents',
+    (tester) async {
+      final access = _Access()
+        ..hintsReply = Completer<DomainResult<VaultHintsDtoV2>>()
+        ..handle.state = VaultAccessStateV1.locked;
+      access.hintsReply!.complete(
+        const Result.success(
+          VaultHintsDtoV2(password: 'Synthetic password hint'),
+        ),
+      );
+      final export = _Export();
+      final signals = StreamController<VaultLockSignal>.broadcast();
+      final controller = _controller(access, signals.stream, export);
+      final startup = StartupController(_Startup(), const _Reporter());
+      await tester.runAsync(() async {
+        await startup.init();
+        await controller.init();
+      });
+      await tester.pumpWidget(WantPassApp(startup: startup, vault: controller));
+      await tester.pumpAndSettle();
+      expect(export.clipboard, isEmpty);
+      await _tapKey(tester, 'vault-show-hint');
+      expect(find.text('Synthetic password hint'), findsOneWidget);
+      expect(find.textContaining('At least 15 characters'), findsNothing);
+      await _tapKey(tester, 'vault-copy-password-hint');
+      expect(export.clipboard, 'Synthetic password hint');
+      expect(find.text('Hint copied'), findsOneWidget);
+      export.clipboard = 'Different clipboard contents';
+      await tester.pump(const Duration(seconds: 31));
+      expect(export.clipboard, 'Different clipboard contents');
+      expect(export.clears, 1);
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.runAsync(() async {
+        await controller.close();
+        await startup.close();
+        await signals.close();
+      });
+    },
+  );
+
   testWidgets('theme retargets from current colors without clearing input', (
     tester,
   ) async {

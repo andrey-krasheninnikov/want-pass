@@ -52,6 +52,7 @@ abstract interface class VaultUseCase {
   FutureDomainResult<RecoveryExportResultV1> exportRecoveryV2({
     required ExportRecoveryParamsV2 params,
   });
+  FutureDomainResult<void> copyPasswordHintV1({required String hint});
   FutureDomainResult<RecoveryExportResultV1> copyRecoveryV1({
     required RecoveryClipboardParamsV1 params,
   });

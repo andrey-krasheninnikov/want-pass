@@ -25,9 +25,14 @@ final class _VaultContentViewState extends State<VaultContentView>
   bool _active = true, _ticker = true, _disposing = false, _guarding = false;
   int _epoch = 0;
   BigInt? _revision, _editorRevision;
-  Route<dynamic>? _overlay;
+  Route<dynamic>? _overlay, _guardOverlay;
   Completer<void>? _availability;
   int _navigation = 0;
+  _VaultSection _section = _VaultSection.secrets;
+  final _sectionKeys = {
+    for (final section in _VaultSection.values) section: GlobalKey(),
+  };
+  bool get _browsing => _available && _section == _VaultSection.secrets;
   bool get _available =>
       mounted &&
       !_disposing &&
@@ -105,6 +110,9 @@ final class _VaultContentViewState extends State<VaultContentView>
   }
 
   void _closeOverlay() {
+    final guard = _guardOverlay;
+    _guardOverlay = null;
+    if (guard?.isActive == true) guard!.navigator?.removeRoute(guard);
     final route = _overlay;
     _overlay = null;
     if (route?.isActive == true) route!.navigator?.removeRoute(route);
@@ -136,7 +144,7 @@ final class _VaultContentViewState extends State<VaultContentView>
   }
 
   void _changed() {
-    if (!_available) return;
+    if (!_browsing) return;
     widget.controller.activity();
     _epoch++;
     _debounce?.cancel();
@@ -145,20 +153,20 @@ final class _VaultContentViewState extends State<VaultContentView>
   }
 
   void _refresh() {
-    if (_available) unawaited(_find());
+    if (_browsing) unawaited(_find());
   }
 
   Future<void> _find() async {
     _pendingFind = true;
     if (_finding ||
-        !_available ||
+        !_browsing ||
         widget.controller.state.busy ||
         widget.controller.state.content == null) {
       return;
     }
     _finding = true;
     try {
-      while (_pendingFind && _available && !widget.controller.state.busy) {
+      while (_pendingFind && _browsing && !widget.controller.state.busy) {
         _pendingFind = false;
         final epoch = _epoch;
         setState(() => _searching = true);
@@ -173,7 +181,7 @@ final class _VaultContentViewState extends State<VaultContentView>
             withoutEnvironment: _environment == 'none',
           ),
         );
-        if (!_available) return;
+        if (!_browsing) return;
         if (epoch != _epoch) {
           _pendingFind = true;
           continue;
@@ -221,7 +229,7 @@ final class _VaultContentViewState extends State<VaultContentView>
   }
 
   void _scheduleRows() {
-    if (!_available || _reading || _wanted.isEmpty) return;
+    if (!_browsing || _reading || _wanted.isEmpty) return;
     _rowTimer?.cancel();
     _rowTimer = Timer(
       const Duration(milliseconds: 16),
@@ -230,14 +238,14 @@ final class _VaultContentViewState extends State<VaultContentView>
   }
 
   Future<void> _readRows() async {
-    if (!_available || _reading || widget.controller.state.busy) return;
+    if (!_browsing || _reading || widget.controller.state.busy) return;
     _reading = true;
     final epoch = _epoch;
     final ids = _wanted.take(50).toList();
     _wanted.removeAll(ids);
     try {
       final rows = await widget.controller.readCardListRows(ids);
-      if (!_available) return;
+      if (!_browsing) return;
       if (epoch != _epoch) {
         _wanted.addAll(ids.where(_visible.contains));
         return;
@@ -250,7 +258,7 @@ final class _VaultContentViewState extends State<VaultContentView>
       });
     } finally {
       _reading = false;
-      if (_available) _scheduleRows();
+      if (_browsing) _scheduleRows();
     }
   }
 
@@ -312,15 +320,19 @@ final class _VaultContentViewState extends State<VaultContentView>
           ),
         ),
       );
-      _overlay = route;
+      _guardOverlay = route;
       final choice = await Navigator.of(context).push(route);
-      if (identical(_overlay, route)) _overlay = null;
+      if (identical(_guardOverlay, route)) _guardOverlay = null;
       if (!await _waitAvailable()) return false;
       if (choice == 'discard') return true;
       if (choice == 'save') {
-        return _editingGroup
-            ? await _groupEditor.currentState!._save()
-            : await _cardEditor.currentState!._save();
+        if (_groupEditor.currentState case final editor?) {
+          return await editor._save();
+        }
+        if (_cardEditor.currentState case final editor?) {
+          return await editor._save();
+        }
+        return false;
       }
       return false;
     } finally {
@@ -376,12 +388,131 @@ final class _VaultContentViewState extends State<VaultContentView>
   void _groupForm([GroupV1? group]) => unawaited(
     _navigate(() {
       _stopEditing();
+      if (group == null) {
+        unawaited(_newGroupDialog());
+        return;
+      }
       _editing = _editingGroup = true;
       _editGroup = group;
       _editorRevision = widget.controller.state.content!.revision;
       _compactDetail = true;
     }),
   );
+
+  Future<void> _newGroupDialog() async {
+    if (_overlay != null || !_browsing) return;
+    final snapshot = widget.controller.state.content!;
+    final ids = snapshot.groups.map((group) => group.id).toSet();
+    late final DialogRoute<bool> route;
+    void close(bool saved) {
+      if (route.isCurrent) route.navigator?.pop(saved);
+    }
+
+    Future<void> cancel() async {
+      if (await _leaveEditor() && await _waitAvailable()) close(false);
+    }
+
+    route = DialogRoute<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => _withActivity(
+        PopScope<bool>(
+          canPop: false,
+          onPopInvokedWithResult: (popped, _) {
+            if (!popped) unawaited(cancel());
+          },
+          child: _GroupEditor(
+            key: _groupEditor,
+            controller: widget.controller,
+            group: null,
+            revision: snapshot.revision,
+            onDone: () => close(true),
+            onCancel: () => unawaited(cancel()),
+          ),
+        ),
+      ),
+    );
+    _overlay = route;
+    final saved = await Navigator.of(context).push(route);
+    await route.completed;
+    if (identical(_overlay, route)) _overlay = null;
+    if (saved != true || !await _waitAvailable() || !_browsing) return;
+    final groups = widget.controller.state.content?.groups ?? const [];
+    final created = groups
+        .where((group) => !ids.contains(group.id))
+        .firstOrNull;
+    if (created == null) return;
+    setState(() {
+      _group = created.id;
+      _search.clear();
+      _selected = null;
+      _compactDetail = false;
+    });
+  }
+
+  void _selectSection(_VaultSection section) {
+    if (section == _section || _overlay != null) return;
+    unawaited(
+      _navigate(() {
+        _stopEditing();
+        _section = section;
+        _epoch++;
+        _debounce?.cancel();
+        _rowTimer?.cancel();
+        _logins.clear();
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!_available || section != _section) return;
+          if (_sectionKeys[section]!.currentContext case final context?) {
+            unawaited(
+              Scrollable.ensureVisible(
+                context,
+                alignmentPolicy: ScrollPositionAlignmentPolicy.keepVisibleAtEnd,
+              ),
+            );
+          }
+          _refresh();
+        });
+      }),
+    );
+  }
+
+  Widget _sectionBar() => SingleChildScrollView(
+    scrollDirection: Axis.horizontal,
+    child: Semantics(
+      role: ui.SemanticsRole.tabBar,
+      container: true,
+      child: Row(
+        spacing: 6,
+        children: [
+          for (final section in _VaultSection.values)
+            Semantics(
+              key: _sectionKeys[section],
+              role: ui.SemanticsRole.tab,
+              container: true,
+              excludeSemantics: true,
+              selected: _section == section,
+              label: section.label(context),
+              onTap: () => _selectSection(section),
+              child: WantButton(
+                key: ValueKey('vault-tab-${section.name}'),
+                variant: _section == section
+                    ? WantButtonVariant.secondary
+                    : WantButtonVariant.ghost,
+                onPressed: () => _selectSection(section),
+                child: Row(
+                  spacing: 8,
+                  children: [
+                    ExcludeSemantics(child: Icon(section.icon, size: 16)),
+                    Text(section.label(context)),
+                  ],
+                ),
+              ),
+            ),
+        ],
+      ),
+    ),
+  );
+
   Future<void> _editCard() async {
     final id = _selected;
     if (id == null || !await _leaveEditor() || !_available) return;
@@ -411,8 +542,7 @@ final class _VaultContentViewState extends State<VaultContentView>
     }
     setState(() {
       if (_editingGroup) {
-        _group =
-            _editGroup?.id ?? widget.controller.state.content!.groups.last.id;
+        _group = _editGroup!.id;
       } else {
         _selected =
             _card?.summary.id ?? widget.controller.state.content!.cards.last.id;
@@ -523,8 +653,10 @@ final class _VaultContentViewState extends State<VaultContentView>
       context: context,
       side: WantSheetSide.left,
       builder: (context) {
-        shown = ModalRoute.of(context);
-        _overlay = shown;
+        if (shown == null) {
+          shown = ModalRoute.of(context);
+          _overlay = shown;
+        }
         final state = widget.controller.state;
         if (!_available) return const SizedBox.shrink();
         return Padding(
@@ -1057,93 +1189,116 @@ final class _VaultContentViewState extends State<VaultContentView>
       );
     },
   );
+  Widget _withActivity(Widget child) => Listener(
+    behavior: HitTestBehavior.translucent,
+    onPointerDown: (_) => widget.controller.activity(),
+    onPointerHover: (_) => widget.controller.activity(),
+    onPointerSignal: (_) => widget.controller.activity(),
+    child: child,
+  );
+
   @override
-  Widget build(BuildContext context) =>
-      BlocConsumer<VaultController, VaultState>(
-        bloc: widget.controller,
-        listener: (context, state) {
-          if (state.phase != VaultPhase.unlocked) {
-            _navigation++;
-            _releaseAvailability();
-            _epoch++;
-            _debounce?.cancel();
-            _rowTimer?.cancel();
-            _closeOverlay();
-            _search.clear();
-            _logins.clear();
-            _card = null;
-            _matches = null;
-          } else if (_revision != state.content?.revision) {
-            _revision = state.content?.revision;
-            _epoch++;
-            _logins.clear();
-            _wanted.addAll(_visible);
-            _refresh();
-          } else if (!state.busy) {
-            if (_pendingFind) _refresh();
-            _scheduleRows();
-          }
-        },
-        builder: (context, state) {
-          if (state.phase != VaultPhase.unlocked) {
-            return const SizedBox.shrink();
-          }
-          if (state.content == null || state.catalog == null) {
-            return Center(
-              child: WantButton(
-                onPressed: state.busy
-                    ? null
-                    : () => unawaited(widget.controller.loadContent()),
-                child: Text(_text(context, 'Load vault', 'Загрузить сейф')),
-              ),
-            );
-          }
-          final mac = Theme.of(context).platform == TargetPlatform.macOS;
-          SingleActivator key(LogicalKeyboardKey k, {bool shift = false}) =>
-              SingleActivator(k, meta: mac, control: !mac, shift: shift);
-          return CallbackShortcuts(
-            bindings: {
-              key(LogicalKeyboardKey.keyK): _focusSearch,
-              key(LogicalKeyboardKey.keyF): _focusSearch,
-              key(LogicalKeyboardKey.keyN): _newCard,
-              key(LogicalKeyboardKey.keyN, shift: true): _groupForm,
-              key(LogicalKeyboardKey.keyE): () => unawaited(_editCard()),
-              key(LogicalKeyboardKey.keyS): () {
-                if (_editing && !state.busy) {
-                  unawaited(
-                    _editingGroup
-                        ? _groupEditor.currentState!._save()
-                        : _cardEditor.currentState!._save(),
-                  );
-                }
-              },
-              key(LogicalKeyboardKey.keyL): () =>
-                  unawaited(widget.controller.lock()),
-              key(LogicalKeyboardKey.keyC, shift: true): () =>
-                  _copy(FieldIdV1.password),
-              key(LogicalKeyboardKey.keyU, shift: true): () =>
-                  _copy(FieldIdV1.login),
-              key(LogicalKeyboardKey.keyT, shift: true): () =>
-                  _copy(null, otp: true),
-              if (!_editing) ...{
-                const SingleActivator(LogicalKeyboardKey.arrowDown): () =>
-                    _move(1),
-                const SingleActivator(LogicalKeyboardKey.arrowUp): () =>
-                    _move(-1),
-                const SingleActivator(LogicalKeyboardKey.enter): _openSelected,
-              },
-              const SingleActivator(LogicalKeyboardKey.escape): _escape,
-            },
-            child: Listener(
-              behavior: HitTestBehavior.translucent,
-              onPointerDown: (_) => widget.controller.activity(),
-              onPointerHover: (_) => widget.controller.activity(),
-              onPointerSignal: (_) => widget.controller.activity(),
-              child: _layout(state),
-            ),
-          );
-        },
+  Widget build(
+    BuildContext context,
+  ) => BlocConsumer<VaultController, VaultState>(
+    bloc: widget.controller,
+    listener: (context, state) {
+      if (state.phase != VaultPhase.unlocked) {
+        _navigation++;
+        _releaseAvailability();
+        _epoch++;
+        _debounce?.cancel();
+        _rowTimer?.cancel();
+        _closeOverlay();
+        _search.clear();
+        _logins.clear();
+        _card = null;
+        _matches = null;
+      } else if (_revision != state.content?.revision) {
+        _revision = state.content?.revision;
+        _epoch++;
+        _logins.clear();
+        _wanted.addAll(_visible);
+        _refresh();
+      } else if (!state.busy) {
+        if (_pendingFind) _refresh();
+        _scheduleRows();
+      }
+    },
+    builder: (context, state) {
+      if (state.phase != VaultPhase.unlocked) {
+        return const SizedBox.shrink();
+      }
+      if (state.content == null || state.catalog == null) {
+        return Center(
+          child: WantButton(
+            onPressed: state.busy
+                ? null
+                : () => unawaited(widget.controller.loadContent()),
+            child: Text(_text(context, 'Load vault', 'Загрузить сейф')),
+          ),
+        );
+      }
+      final mac = Theme.of(context).platform == TargetPlatform.macOS;
+      SingleActivator key(LogicalKeyboardKey k, {bool shift = false}) =>
+          SingleActivator(k, meta: mac, control: !mac, shift: shift);
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        spacing: 8,
+        children: [
+          _sectionBar(),
+          Expanded(
+            child: _section == _VaultSection.secrets
+                ? CallbackShortcuts(
+                    bindings: {
+                      key(LogicalKeyboardKey.keyK): _focusSearch,
+                      key(LogicalKeyboardKey.keyF): _focusSearch,
+                      key(LogicalKeyboardKey.keyN): _newCard,
+                      key(LogicalKeyboardKey.keyN, shift: true): _groupForm,
+                      key(LogicalKeyboardKey.keyE): () =>
+                          unawaited(_editCard()),
+                      key(LogicalKeyboardKey.keyS): () {
+                        if (_editing && !state.busy) {
+                          unawaited(
+                            _editingGroup
+                                ? _groupEditor.currentState!._save()
+                                : _cardEditor.currentState!._save(),
+                          );
+                        }
+                      },
+                      key(LogicalKeyboardKey.keyL): () =>
+                          unawaited(widget.controller.lock()),
+                      key(LogicalKeyboardKey.keyC, shift: true): () =>
+                          _copy(FieldIdV1.password),
+                      key(LogicalKeyboardKey.keyU, shift: true): () =>
+                          _copy(FieldIdV1.login),
+                      key(LogicalKeyboardKey.keyT, shift: true): () =>
+                          _copy(null, otp: true),
+                      if (!_editing) ...{
+                        const SingleActivator(
+                          LogicalKeyboardKey.arrowDown,
+                        ): () =>
+                            _move(1),
+                        const SingleActivator(LogicalKeyboardKey.arrowUp): () =>
+                            _move(-1),
+                        const SingleActivator(LogicalKeyboardKey.enter):
+                            _openSelected,
+                      },
+                      const SingleActivator(LogicalKeyboardKey.escape): _escape,
+                    },
+                    child: _withActivity(_layout(state)),
+                  )
+                : _VaultSectionView(
+                    key: ValueKey(_section),
+                    section: _section,
+                    catalog: state.catalog!,
+                    appearance: widget.appearance,
+                  ),
+          ),
+        ],
       );
+    },
+  );
 }
 
 final class _WorkspaceRow extends StatefulWidget {

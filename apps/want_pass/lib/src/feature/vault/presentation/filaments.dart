@@ -26,7 +26,8 @@ final class _VaultFilamentsState extends State<VaultFilaments>
   late final Ticker _ticker;
   ui.FragmentShader? _shader;
   Offset _pointer = Offset.zero;
-  double _base = 0;
+  Offset _pointerTarget = Offset.zero;
+  Duration? _previousFrame;
   bool _loading = false;
   bool _active = true;
   @override
@@ -37,8 +38,16 @@ final class _VaultFilamentsState extends State<VaultFilaments>
         WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed;
     WidgetsBinding.instance.addObserver(this);
     _ticker = createTicker((elapsed) {
-      _time.value =
-          _base + elapsed.inMicroseconds / Duration.microsecondsPerSecond;
+      final previous = _previousFrame;
+      _previousFrame = elapsed;
+      if (previous == null) return;
+      final seconds =
+          ((elapsed - previous).inMicroseconds / Duration.microsecondsPerSecond)
+              .clamp(0.0, 1 / 30);
+      // Keep movement continuous if a frame arrives late or the view resumes.
+      final blend = 1 - math.exp(-seconds / .16);
+      _pointer = Offset.lerp(_pointer, _pointerTarget, blend)!;
+      _time.value += seconds;
     });
   }
 
@@ -66,7 +75,7 @@ final class _VaultFilamentsState extends State<VaultFilaments>
         !WantTheme.reducedMotionOf(context) &&
         !MediaQuery.highContrastOf(context);
     if (running && !_ticker.isActive) {
-      _base = _time.value;
+      _previousFrame = null;
       _ticker.start();
     } else if (!running && _ticker.isActive) {
       _ticker.stop();
@@ -126,7 +135,7 @@ final class _VaultFilamentsState extends State<VaultFilaments>
       builder: (context, box) => Listener(
         onPointerHover: (event) {
           if (_ticker.isActive && box.maxWidth > 0 && box.maxHeight > 0) {
-            _pointer = Offset(
+            _pointerTarget = Offset(
               (event.localPosition.dx / box.maxWidth - .5).clamp(-.5, .5),
               (event.localPosition.dy / box.maxHeight - .5).clamp(-.5, .5),
             );

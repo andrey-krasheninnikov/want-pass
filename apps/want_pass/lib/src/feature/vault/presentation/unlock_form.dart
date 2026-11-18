@@ -11,14 +11,12 @@ final class VaultUnlockForm extends StatefulWidget {
   final VaultController controller;
   final FocusNode focusNode;
   final VoidCallback onRecovery;
-  final String requirements;
   final String Function(VaultErrorV1) errorText;
   const VaultUnlockForm({
     super.key,
     required this.controller,
     required this.focusNode,
     required this.onRecovery,
-    required this.requirements,
     required this.errorText,
   });
   @override
@@ -134,19 +132,19 @@ final class _VaultUnlockFormState extends State<VaultUnlockForm> {
                 mainAxisSize: MainAxisSize.min,
                 spacing: 12,
                 children: [
-                  WantTypography(
-                    state.hints.password.trim().isEmpty
-                        ? _text(
-                            'No password hint was added.',
-                            'Подсказка к паролю не добавлена.',
-                          )
-                        : state.hints.password,
-                  ),
-                  WantTypography(
-                    widget.requirements,
-                    variant: WantTypographyVariant.caption,
-                    colorRole: 'muted-foreground',
-                  ),
+                  if (state.hints.password.trim().isEmpty)
+                    WantTypography(
+                      _text(
+                        'No password hint was added.',
+                        'Подсказка к паролю не добавлена.',
+                      ),
+                    )
+                  else
+                    _CopyableHint(
+                      text: state.hints.password,
+                      copy: widget.controller.copyPasswordHint,
+                      enabled: !busy,
+                    ),
                   WantButton(
                     key: const ValueKey('vault-recovery'),
                     variant: WantButtonVariant.secondary,
@@ -237,4 +235,74 @@ final class _VaultUnlockFormState extends State<VaultUnlockForm> {
           );
         },
       );
+}
+
+final class _CopyableHint extends StatefulWidget {
+  final String text;
+  final Future<bool> Function() copy;
+  final bool enabled;
+
+  const _CopyableHint({
+    required this.text,
+    required this.copy,
+    required this.enabled,
+  });
+
+  @override
+  State<_CopyableHint> createState() => _CopyableHintState();
+}
+
+final class _CopyableHintState extends State<_CopyableHint> {
+  bool _copying = false;
+  bool? _copied;
+
+  Future<void> _copy() async {
+    setState(() => _copying = true);
+    final copied = await widget.copy();
+    if (!mounted) return;
+    setState(() {
+      _copying = false;
+      _copied = copied;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final ru = Localizations.localeOf(context).languageCode == 'ru';
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      mainAxisSize: MainAxisSize.min,
+      spacing: 4,
+      children: [
+        WantButton(
+          key: const ValueKey('vault-copy-password-hint'),
+          variant: WantButtonVariant.ghost,
+          semanticsLabel: ru ? 'Скопировать подсказку' : 'Copy password hint',
+          onPressed: widget.enabled && !_copying
+              ? () => unawaited(_copy())
+              : null,
+          child: Row(
+            spacing: 8,
+            children: [
+              Expanded(child: Text(widget.text)),
+              const ExcludeSemantics(
+                child: Icon(Icons.copy_outlined, size: 16),
+              ),
+            ],
+          ),
+        ),
+        if (_copied case final copied?)
+          WantTypography(
+            copied
+                ? (ru ? 'Подсказка скопирована' : 'Hint copied')
+                : (ru
+                      ? 'Не удалось скопировать подсказку'
+                      : 'Could not copy the hint'),
+            variant: WantTypographyVariant.caption,
+            colorRole: copied ? 'muted-foreground' : 'destructive',
+            liveRegion: true,
+          ),
+      ],
+    );
+  }
 }

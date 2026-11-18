@@ -189,40 +189,10 @@ final class _VaultPadlockState extends State<VaultPadlock>
                   ),
                 ),
               ),
-              builder: (context, child) {
-                final color = Color.lerp(
-                  theme.color('warning'),
-                  theme.color('success'),
-                  _opening.value,
-                )!;
-                return Transform.rotate(
-                  angle: math.pow(math.sin(_press.value * math.pi), 2) * .045,
-                  child: SizedBox.square(
-                    dimension: 44,
-                    child: Stack(
-                      fit: StackFit.expand,
-                      children: [
-                        if (!MediaQuery.highContrastOf(context))
-                          IgnorePointer(
-                            child: DecoratedBox(
-                              decoration: BoxDecoration(
-                                shape: BoxShape.circle,
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: color.withValues(alpha: .24),
-                                    blurRadius: 18,
-                                    spreadRadius: 1,
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-                        child!,
-                      ],
-                    ),
-                  ),
-                );
-              },
+              builder: (context, child) => Transform.rotate(
+                angle: math.pow(math.sin(_press.value * math.pi), 2) * .045,
+                child: SizedBox.square(dimension: 44, child: child),
+              ),
             ),
           ),
         ),

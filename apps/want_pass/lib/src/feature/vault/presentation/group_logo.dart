@@ -4,10 +4,25 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:want_allure/want_allure.dart';
 
+const vaultGroupIcons = {
+  'folder': Icons.folder_outlined,
+  'building': Icons.business_outlined,
+  'briefcase': Icons.work_outline,
+  'code': Icons.code,
+  'home': Icons.home_outlined,
+  'key': Icons.key_outlined,
+};
+
 final class VaultGroupLogo extends StatefulWidget {
   final String icon;
   final List<int> bytes;
-  const VaultGroupLogo({super.key, required this.icon, this.bytes = const []});
+  final Color? tint;
+  const VaultGroupLogo({
+    super.key,
+    required this.icon,
+    this.bytes = const [],
+    this.tint,
+  });
   @override
   State<VaultGroupLogo> createState() => _VaultGroupLogoState();
 }
@@ -67,14 +82,10 @@ final class _VaultGroupLogoState extends State<VaultGroupLogo> {
       child: ClipRRect(
         borderRadius: BorderRadius.circular(8),
         child: _image == null
-            ? Icon(switch (widget.icon) {
-                'building' => Icons.business_outlined,
-                'briefcase' => Icons.work_outline,
-                'code' => Icons.code,
-                'home' => Icons.home_outlined,
-                'key' => Icons.key_outlined,
-                _ => Icons.folder_outlined,
-              }, color: WantTheme.of(context).color('primary'))
+            ? Icon(
+                vaultGroupIcons[widget.icon] ?? Icons.folder_outlined,
+                color: widget.tint ?? WantTheme.of(context).color('primary'),
+              )
             : RawImage(image: _image, fit: BoxFit.contain),
       ),
     ),

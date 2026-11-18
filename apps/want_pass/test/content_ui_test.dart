@@ -48,6 +48,7 @@ void main() {
     await _pump(tester);
     await _tap(tester, 'group-create');
     await _enter(tester, 'group-name', 'Fixture project');
+    await _tap(tester, 'group-icon-picker');
     await _tap(tester, 'group-logo-select');
     await _idle(tester, controller);
     await _tap(tester, 'group-save');
@@ -499,6 +500,59 @@ void main() {
     await tester.pumpWidget(const SizedBox.shrink());
     await _closeFixture(tester, fixture);
   });
+  testWidgets(
+    'persists the group tone and preserves the workspace across tabs',
+    (tester) async {
+      final fixture = (await tester.runAsync(_Fixture.create))!;
+      final controller = fixture.controller;
+      addTearDown(() => _closeFixture(tester, fixture));
+      await tester.pumpWidget(
+        MaterialApp(
+          builder: (context, child) => WantTheme(
+            data: WantThemeData.light(),
+            child: WantToaster(child: child!),
+          ),
+          home: Scaffold(body: VaultContentView(controller: controller)),
+        ),
+      );
+      await _pump(tester);
+      await _tap(tester, 'group-create');
+      expect(find.byType(WantDialog), findsOneWidget);
+      await _enter(tester, 'group-name', 'Fixture colored group');
+      await _tap(tester, 'group-icon-picker');
+      await _tap(tester, 'group-icon-code');
+      await _tap(tester, 'group-tone-teal');
+      await _tap(tester, 'group-icon-picker');
+      await _tap(tester, 'group-save');
+      for (var i = 0; i < 30 && controller.state.content!.groups.isEmpty; i++) {
+        await _pump(tester);
+      }
+      final group = controller.state.content!.groups.single;
+      expect(group.icon, 'code');
+      expect(group.logo, isNotEmpty);
+      await _pump(tester);
+      expect(find.byKey(const ValueKey('group-name')), findsNothing);
+      await _tap(tester, 'group-edit-${group.id}');
+      final logo = tester.widget<VaultGroupLogo>(
+        find.descendant(
+          of: find.byKey(const ValueKey('group-icon-picker')),
+          matching: find.byType(VaultGroupLogo),
+        ),
+      );
+      expect(logo.icon, 'code');
+      expect(logo.tint, const Color(0xff16837d));
+      await _tap(tester, 'content-cancel');
+      await _enter(tester, 'vault-search', 'Fixture search');
+      await _tap(tester, 'vault-tab-ai');
+      expect(find.text('Provider and model'), findsOneWidget);
+      expect(find.byKey(const ValueKey('vault-search')), findsNothing);
+      await _tap(tester, 'vault-tab-secrets');
+      expect(find.text('Fixture search'), findsOneWidget);
+      await tester.pumpWidget(const SizedBox.shrink());
+      await _closeFixture(tester, fixture);
+    },
+  );
+
   testWidgets('locking discards a late logo selection', (tester) async {
     final logos = _PendingLogoService();
     final fixture = (await tester.runAsync(
@@ -518,6 +572,7 @@ void main() {
     );
     await _pump(tester);
     await _tap(tester, 'group-create');
+    await _tap(tester, 'group-icon-picker');
     await _tap(tester, 'group-logo-select');
     expect(fixture.controller.state.busy, isTrue);
     await tester.runAsync(fixture.controller.lock);

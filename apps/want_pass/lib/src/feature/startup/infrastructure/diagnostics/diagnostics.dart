@@ -136,6 +136,7 @@ final class SafeBlocObserver extends BlocObserver
       'VaultController._clearClipboard():' ||
       'VaultController.chooseSetupWord():' ||
       'VaultController.confirmSetup():' ||
+      'VaultController.copyPasswordHint():' ||
       'VaultController.copyRecovery():' ||
       'VaultController.dismissFailure():' ||
       'VaultController.downloadRecovery():' ||
@@ -143,6 +144,7 @@ final class SafeBlocObserver extends BlocObserver
       'VaultController.readHints():' ||
       'VaultUseCaseImpl.clearRecoveryClipboardV1():' ||
       'VaultUseCaseImpl.confirmSetupV2():' ||
+      'VaultUseCaseImpl.copyPasswordHintV1():' ||
       'VaultUseCaseImpl.copyRecoveryV1():' ||
       'VaultUseCaseImpl.exportRecoveryV2():' ||
       'VaultUseCaseImpl.prepareSetupV2():' ||

@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:qr_flutter/qr_flutter.dart';
+import 'package:url_launcher/url_launcher.dart' as url_launcher;
 import 'package:want_allure/want_allure.dart';
 import 'package:want_pass/src/feature/appearance/application/_barrel.dart';
 import 'package:want_pass/src/feature/appearance/presentation/_barrel.dart';
@@ -27,6 +28,7 @@ class _VaultPageState extends State<VaultPage> {
   Timer? _passwordDebounce;
   int _passwordRevision = 0;
   bool _savingRecovery = false, _celebratingSetup = false;
+  bool _completingRecovery = false;
   final _confirmation = TextEditingController();
   final _phrase = TextEditingController();
   final _passwordHint = TextEditingController();
@@ -244,6 +246,7 @@ class _VaultPageState extends State<VaultPage> {
       } else if (_step < 5) {
         _go(_step + 1);
       } else {
+        _completingRecovery = _recovering;
         await widget.controller.confirmSetup(
           answers: state.setupAnswers.cast<String>(),
           password: _password.text,
@@ -287,10 +290,6 @@ class _VaultPageState extends State<VaultPage> {
     }
   }
 
-  String get _passwordRequirements => _text(
-    'At least 15 characters, uppercase and lowercase letters, an ASCII digit and a special character. Maximum: 1,024 UTF-8 bytes. Spaces and Unicode are allowed.',
-    'Минимум 15 символов, заглавная и строчная буквы, ASCII-цифра и спецсимвол. Максимум: 1024 UTF-8 байта. Разрешены пробелы и Unicode.',
-  );
   Widget _passwordChecklist() {
     final status = _passwordPolicy;
     final theme = WantTheme.of(context);
@@ -518,6 +517,33 @@ class _VaultPageState extends State<VaultPage> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted && _pages.hasClients) _pages.jumpToPage(0);
     });
+  }
+
+  Future<void> _openWebsite() async {
+    var launched = false;
+    try {
+      launched = await url_launcher.launchUrl(
+        Uri.https('pass.want.foundation'),
+        mode: url_launcher.LaunchMode.externalApplication,
+      );
+    } on PlatformException {
+      // The system browser may be unavailable.
+    } on MissingPluginException {
+      // This host may not provide a URL launcher.
+    }
+    if (!mounted || launched) return;
+    showWantSnackbar(
+      context: context,
+      variant: WantSnackbarVariant.info,
+      variantLabel: _text('Info', 'Информация'),
+      closeLabel: _text('Close', 'Закрыть'),
+      title: Text(
+        _text(
+          'Could not open the Want Pass website.',
+          'Не удалось открыть сайт Want Pass.',
+        ),
+      ),
+    );
   }
 
   void _showUnlock() {
@@ -996,7 +1022,9 @@ class _VaultPageState extends State<VaultPage> {
           return VaultMoment(
             key: const ValueKey('setup-complete'),
             startup: false,
-            title: _text('Vault ready', 'Сейф готов'),
+            title: _completingRecovery
+                ? _text('Access restored', 'Доступ восстановлен')
+                : _text('Vault created', 'Сейф создан'),
             onComplete: () {
               if (mounted) setState(() => _celebratingSetup = false);
             },
@@ -1030,18 +1058,27 @@ class _VaultPageState extends State<VaultPage> {
                               Row(
                                 spacing: 12,
                                 children: [
-                                  SizedBox(
-                                    width: 48,
-                                    height: 48,
-                                    child: WantSvg3D.asset(
-                                      'assets/brand/logo.svg',
-                                      semanticsLabel: 'Want Pass',
-                                      glow: !MediaQuery.highContrastOf(context),
-                                      placeholderBuilder: (_) => Image.asset(
-                                        'assets/brand/logo-dark.png',
-                                      ),
-                                      errorBuilder: (_, error) => Image.asset(
-                                        'assets/brand/logo-dark.png',
+                                  VaultSecretAction(
+                                    key: const ValueKey('want-pass-website'),
+                                    label: _text(
+                                      'Open Want Pass website',
+                                      'Открыть сайт Want Pass',
+                                    ),
+                                    onPressed: () => unawaited(_openWebsite()),
+                                    child: SizedBox.square(
+                                      dimension: 48,
+                                      child: WantSvg3D.asset(
+                                        'assets/brand/logo.svg',
+                                        semanticsLabel: 'Want Pass',
+                                        glow: !MediaQuery.highContrastOf(
+                                          context,
+                                        ),
+                                        placeholderBuilder: (_) => Image.asset(
+                                          'assets/brand/logo-dark.png',
+                                        ),
+                                        errorBuilder: (_, _) => Image.asset(
+                                          'assets/brand/logo-dark.png',
+                                        ),
                                       ),
                                     ),
                                   ),
@@ -1120,6 +1157,7 @@ class _VaultPageState extends State<VaultPage> {
                                           Expanded(
                                             child: VaultContentView(
                                               controller: widget.controller,
+                                              appearance: widget.appearance,
                                             ),
                                           )
                                         else if (state.phase ==
@@ -1130,8 +1168,6 @@ class _VaultPageState extends State<VaultPage> {
                                                 controller: widget.controller,
                                                 focusNode: _unlockFocus,
                                                 onRecovery: _startRecovery,
-                                                requirements:
-                                                    _passwordRequirements,
                                                 errorText: _error,
                                               ),
                                             ),

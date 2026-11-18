@@ -1,16 +1,22 @@
 import 'dart:async';
+import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:bloc_effects/bloc_effects.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:image/image.dart' as img;
 import 'package:want_allure/want_allure.dart';
+import 'package:want_pass/src/feature/appearance/application/_barrel.dart';
+import 'package:want_pass/src/feature/appearance/presentation/_barrel.dart';
 import 'package:want_pass/src/feature/vault/application/_barrel.dart';
 import 'package:want_pass/src/feature/vault/presentation/_barrel.dart';
 import 'package:want_pass_core/want_pass_core.dart';
 
 part 'card_editor.dart';
+part 'group_icon_picker.dart';
+part 'sections.dart';
 part 'workspace.dart';
 part 'preview.dart';
 
@@ -19,7 +25,12 @@ String _text(BuildContext context, String en, String ru) =>
 
 final class VaultContentView extends StatefulWidget {
   final VaultController controller;
-  const VaultContentView({super.key, required this.controller});
+  final AppearanceController? appearance;
+  const VaultContentView({
+    super.key,
+    required this.controller,
+    this.appearance,
+  });
   @override
   State<VaultContentView> createState() => _VaultContentViewState();
 }
@@ -97,7 +108,16 @@ final class _GroupEditorState extends State<_GroupEditor> {
     text: widget.group?.description,
   );
   late String _icon = widget.group?.icon ?? 'folder';
-  late List<int> _logo = widget.group?.logo ?? const [];
+  late final _originalTone = _GroupTone.fromLogo(
+    widget.group?.logo ?? const [],
+    _icon,
+  );
+  late _GroupTone _tone = _originalTone ?? _GroupTone.brand;
+  late List<int> _logo = _originalTone == null
+      ? widget.group?.logo ?? const []
+      : const [];
+  bool _saving = false;
+  bool _iconError = false;
   @override
   void dispose() {
     _name.clear();
@@ -112,153 +132,151 @@ final class _GroupEditorState extends State<_GroupEditor> {
       _name.text != (widget.group?.name ?? '') ||
       _description.text != (widget.group?.description ?? '') ||
       _icon != (widget.group?.icon ?? 'folder') ||
-      !listEquals(_logo, widget.group?.logo ?? const <int>[]);
+      _tone != (_originalTone ?? _GroupTone.brand) ||
+      !listEquals(
+        _logo,
+        _originalTone == null
+            ? widget.group?.logo ?? const <int>[]
+            : const <int>[],
+      );
 
   Future<bool> _save() async {
-    final saved = await widget.controller.saveGroup(
-      GroupDraftV1(
-        id: widget.group?.id,
-        name: _name.text,
-        description: _description.text,
-        icon: _icon,
-        logo: List.unmodifiable(_logo),
-      ),
-      revision: widget.revision,
-    );
-    if (mounted && saved) widget.onDone();
-    return saved;
+    final controller = widget.controller;
+    if (_saving || controller.state.busy) return false;
+    setState(() {
+      _saving = true;
+      _iconError = false;
+    });
+    try {
+      List<int> logo = _logo;
+      if (logo.isEmpty && _tone != _GroupTone.brand) {
+        try {
+          logo = await _tone.render(_icon);
+        } on Object {
+          if (mounted) setState(() => _iconError = true);
+          return false;
+        }
+      }
+      if (!mounted || controller.state.phase != VaultPhase.unlocked) {
+        return false;
+      }
+      final saved = await controller.saveGroup(
+        GroupDraftV1(
+          id: widget.group?.id,
+          name: _name.text,
+          description: _description.text,
+          icon: _icon,
+          logo: List.unmodifiable(logo),
+        ),
+        revision: widget.revision,
+      );
+      if (mounted && saved) widget.onDone();
+      return saved;
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
   }
 
   @override
-  Widget build(
-    BuildContext context,
-  ) => BlocBuilder<VaultController, VaultState>(
-    bloc: widget.controller,
-    builder: (context, state) => _EditorFrame(
-      embedded: widget.embedded,
-      title: _text(
-        context,
-        widget.group == null ? 'New group' : 'Group',
-        widget.group == null ? 'Новая группа' : 'Группа',
-      ),
-      actions: _Actions(
-        children: [
-          WantButton(
-            key: const ValueKey('content-cancel'),
-            variant: WantButtonVariant.secondary,
-            onPressed: widget.onCancel ?? widget.onDone,
-            child: Text(_text(context, 'Cancel', 'Отмена')),
-          ),
-          WantButton(
-            key: const ValueKey('group-save'),
-            onPressed: state.busy ? null : () => unawaited(_save()),
-            child: Text(_text(context, 'Save', 'Сохранить')),
-          ),
-        ],
-      ),
-      child: Flexible(
-        child: SingleChildScrollView(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            spacing: 16,
-            children: [
-              WantInput(
-                key: const ValueKey('group-name'),
-                label: Text(_text(context, 'Name *', 'Название *')),
-                description: Text(
-                  _text(context, 'Up to 512 UTF-8 bytes', 'До 512 байт UTF-8'),
-                ),
-                controller: _name,
-                enabled: !state.busy,
-                autofocus: true,
-                onSubmitted: (_) => unawaited(_save()),
-              ),
-              WantTextarea(
-                key: const ValueKey('group-description'),
-                label: Text(_text(context, 'Description', 'Описание')),
-                description: Text(_text(context, 'Up to 16 KiB', 'До 16 KiB')),
-                controller: _description,
-                enabled: !state.busy,
-              ),
-              Row(
-                spacing: 12,
-                children: [
-                  VaultGroupLogo(icon: _icon, bytes: _logo),
-                  Expanded(
-                    child: WantSelect<String>(
-                      value: _icon,
-                      label: Text(_text(context, 'Icon', 'Иконка')),
-                      options: [
-                        for (final (value, en, ru) in [
-                          ('folder', 'Folder', 'Папка'),
-                          ('building', 'Company', 'Компания'),
-                          ('briefcase', 'Work', 'Работа'),
-                          ('code', 'Code', 'Код'),
-                          ('home', 'Home', 'Дом'),
-                          ('key', 'Key', 'Ключ'),
-                        ])
-                          WantOption(
-                            value: value,
-                            label: _text(context, en, ru),
-                          ),
-                      ],
-                      enabled: !state.busy,
-                      onChanged: (value) {
-                        if (value != null) {
-                          setState(() {
-                            _icon = value;
-                            _logo = const [];
-                          });
-                        }
-                      },
-                    ),
-                  ),
-                ],
-              ),
-              _Actions(
-                children: [
-                  WantButton(
-                    key: const ValueKey('group-logo-select'),
-                    variant: WantButtonVariant.secondary,
-                    onPressed: state.busy
-                        ? null
-                        : () async {
-                            final bytes = await widget.controller
-                                .selectGroupLogo();
-                            if (mounted && bytes != null) {
-                              setState(() => _logo = bytes);
-                            }
-                          },
-                    child: Text(
-                      _text(context, 'Choose image', 'Выбрать изображение'),
-                    ),
-                  ),
-                  if (_logo.isNotEmpty)
-                    WantButton(
-                      variant: WantButtonVariant.ghost,
-                      onPressed: state.busy
-                          ? null
-                          : () => setState(() => _logo = const []),
-                      child: Text(
-                        _text(context, 'Remove image', 'Убрать изображение'),
-                      ),
-                    ),
-                ],
-              ),
-              if (widget.group != null)
+  Widget build(BuildContext context) =>
+      BlocBuilder<VaultController, VaultState>(
+        bloc: widget.controller,
+        builder: (context, state) {
+          if (state.phase != VaultPhase.unlocked) {
+            return const SizedBox.shrink();
+          }
+          final busy = _saving || state.busy;
+          return _EditorFrame(
+            embedded: widget.embedded,
+            title: _text(
+              context,
+              widget.group == null ? 'New group' : 'Group',
+              widget.group == null ? 'Новая группа' : 'Группа',
+            ),
+            actions: _Actions(
+              children: [
                 WantButton(
-                  key: const ValueKey('group-delete'),
-                  variant: WantButtonVariant.destructive,
-                  onPressed: state.busy ? null : widget.onDelete,
-                  child: Text(_text(context, 'Delete group', 'Удалить группу')),
+                  key: const ValueKey('content-cancel'),
+                  variant: WantButtonVariant.secondary,
+                  onPressed: busy ? null : widget.onCancel ?? widget.onDone,
+                  child: Text(_text(context, 'Cancel', 'Отмена')),
                 ),
-              _ContentError(state.error),
-            ],
-          ),
-        ),
-      ),
-    ),
-  );
+                WantButton(
+                  key: const ValueKey('group-save'),
+                  onPressed: busy ? null : () => unawaited(_save()),
+                  child: Text(_text(context, 'Save', 'Сохранить')),
+                ),
+              ],
+            ),
+            child: Flexible(
+              child: SingleChildScrollView(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  spacing: 16,
+                  children: [
+                    WantInput(
+                      key: const ValueKey('group-name'),
+                      label: Text(_text(context, 'Name *', 'Название *')),
+                      description: Text(
+                        _text(
+                          context,
+                          'Up to 512 UTF-8 bytes',
+                          'До 512 байт UTF-8',
+                        ),
+                      ),
+                      controller: _name,
+                      enabled: !busy,
+                      autofocus: true,
+                      onSubmitted: (_) => unawaited(_save()),
+                    ),
+                    WantTextarea(
+                      key: const ValueKey('group-description'),
+                      label: Text(_text(context, 'Description', 'Описание')),
+                      description: Text(
+                        _text(context, 'Up to 16 KiB', 'До 16 KiB'),
+                      ),
+                      controller: _description,
+                      enabled: !busy,
+                    ),
+                    _GroupIconPicker(
+                      icon: _icon,
+                      image: _logo,
+                      tone: _tone,
+                      enabled: !busy,
+                      selectImage: widget.controller.selectGroupLogo,
+                      onChanged: (icon, image, tone) => setState(() {
+                        _icon = icon;
+                        _logo = image;
+                        _tone = tone;
+                      }),
+                    ),
+                    if (_iconError)
+                      WantTypography(
+                        _text(
+                          context,
+                          'Could not prepare the group icon.',
+                          'Не удалось подготовить иконку группы.',
+                        ),
+                        colorRole: 'destructive',
+                        liveRegion: true,
+                      ),
+                    if (widget.group != null)
+                      WantButton(
+                        key: const ValueKey('group-delete'),
+                        variant: WantButtonVariant.destructive,
+                        onPressed: busy ? null : widget.onDelete,
+                        child: Text(
+                          _text(context, 'Delete group', 'Удалить группу'),
+                        ),
+                      ),
+                    _ContentError(state.error),
+                  ],
+                ),
+              ),
+            ),
+          );
+        },
+      );
 }
 
 final class _DeleteContentDialog extends StatelessWidget {

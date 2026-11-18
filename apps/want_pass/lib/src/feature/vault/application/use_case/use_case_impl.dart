@@ -456,6 +456,24 @@ final class VaultUseCaseImpl implements VaultUseCase {
   }
 
   @override
+  FutureDomainResult<void> copyPasswordHintV1({required String hint}) async {
+    const op = 'VaultUseCaseImpl.copyPasswordHintV1():';
+    final result = await captureResult<void>(() async {
+      final copied = await _export.copyV1(hint);
+      if (copied.isError) throw copied.error;
+    }, mapToDomainError: (_, _) => const VaultUnexpectedErrorV1());
+    if (result.isError) {
+      reportVaultSafely(
+        _reporter,
+        layer: VaultDiagnosticLayer.application,
+        operation: op,
+        error: const VaultUnexpectedErrorV1(),
+      );
+    }
+    return result;
+  }
+
+  @override
   FutureDomainResult<RecoveryExportResultV1> copyRecoveryV1({
     required RecoveryClipboardParamsV1 params,
   }) async {

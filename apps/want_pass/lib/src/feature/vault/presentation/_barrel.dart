@@ -1,6 +1,7 @@
 export 'content.dart';
 export 'filaments.dart';
 export 'group_logo.dart';
+export 'moment.dart';
 export 'padlock.dart';
 export 'page.dart';
 export 'secret_input.dart';

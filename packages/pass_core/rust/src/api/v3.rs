@@ -7,6 +7,21 @@ pub fn validate_password_v3(password: String) -> bool {
     format::validate_password_v2(&password).is_ok()
 }
 
+pub struct PasswordPolicyStatusV4 {
+    pub minimum_length: bool,
+    pub maximum_bytes: bool,
+    pub uppercase: bool,
+    pub lowercase: bool,
+    pub digit: bool,
+    pub special: bool,
+    pub single_line: bool,
+}
+
+pub fn password_policy_v4(password: String) -> PasswordPolicyStatusV4 {
+    let password = Zeroizing::new(password);
+    format::password_policy(&password)
+}
+
 pub struct RecoveryChallengeV3 {
     pub words: Vec<String>,
     pub positions: Vec<u32>,
@@ -188,6 +203,25 @@ impl Vault {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn password_report_matches_the_native_policy() {
+        let good = "Ёж 🗝 credentials 7";
+        let report = super::password_policy_v4(good.into());
+        assert!(report.minimum_length && report.maximum_bytes);
+        assert!(report.uppercase && report.lowercase && report.digit && report.special);
+        assert!(report.single_line && super::validate_password_v3(good.into()));
+
+        let missing = super::password_policy_v4("aβ".into());
+        assert!(
+            !missing.minimum_length && !missing.uppercase && !missing.digit && !missing.special
+        );
+        assert!(missing.maximum_bytes && missing.lowercase && missing.single_line);
+
+        let oversize = super::password_policy_v4("🚀".repeat(257));
+        assert!(oversize.minimum_length && !oversize.maximum_bytes);
+        assert!(!super::password_policy_v4(format!("{good}\u{2028}")).single_line);
+    }
+
     #[test]
     fn password_validation_is_a_pure_strict_policy_check() {
         use super::validate_password_v3;

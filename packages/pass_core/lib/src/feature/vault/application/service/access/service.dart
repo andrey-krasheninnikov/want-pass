@@ -21,6 +21,9 @@ abstract interface class VaultAccessService {
     required VaultHandleV1 handle,
     required List<String> answers,
   });
+  FutureDomainResult<PasswordPolicyStatusV4> passwordPolicyV4({
+    required String password,
+  });
   FutureDomainResult<bool> validatePasswordV3({required String password});
   FutureDomainResult<void> unlockV3({
     required VaultHandleV1 handle,

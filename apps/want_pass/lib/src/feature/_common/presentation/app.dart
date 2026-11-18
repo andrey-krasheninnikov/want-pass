@@ -8,21 +8,30 @@ import 'package:want_pass/src/feature/startup/application/_barrel.dart';
 import 'package:want_pass/src/feature/vault/application/_barrel.dart';
 import 'package:want_pass/src/feature/vault/presentation/_barrel.dart';
 
-class WantPassApp extends StatelessWidget {
+class WantPassApp extends StatefulWidget {
   final StartupController startup;
   final VaultController vault;
   final AppearanceController? appearance;
+  final bool playStartupIntro;
 
   const WantPassApp({
     super.key,
     required this.startup,
     required this.vault,
     this.appearance,
+    this.playStartupIntro = false,
   });
 
   @override
+  State<WantPassApp> createState() => _WantPassAppState();
+}
+
+class _WantPassAppState extends State<WantPassApp> {
+  late bool _intro = widget.playStartupIntro;
+
+  @override
   Widget build(BuildContext context) {
-    final preferences = appearance;
+    final preferences = widget.appearance;
     if (preferences == null) return _application(const AppearanceState());
     return BlocBuilder<AppearanceController, AppearanceState>(
       bloc: preferences,
@@ -55,11 +64,23 @@ class WantPassApp extends StatelessWidget {
       child: WantToaster(child: child!),
     ),
     home: BlocProvider.value(
-      value: startup,
+      value: widget.startup,
       child: BlocBuilder<StartupController, StartupState>(
         builder: (context, state) {
           if (state is StartupReady) {
-            return VaultPage(controller: vault, appearance: appearance);
+            if (_intro) {
+              return VaultMoment(
+                startup: true,
+                title: 'Want Pass',
+                onComplete: () {
+                  if (mounted) setState(() => _intro = false);
+                },
+              );
+            }
+            return VaultPage(
+              controller: widget.vault,
+              appearance: widget.appearance,
+            );
           }
           final russian = Localizations.localeOf(context).languageCode == 'ru';
           final (title, message) = switch ((state, russian)) {

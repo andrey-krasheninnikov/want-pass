@@ -1,5 +1,6 @@
 import 'package:domain_error/domain_error.dart';
 import 'package:want_pass/src/feature/vault/application/_barrel.dart';
+import 'package:want_pass_core/want_pass_core.dart';
 
 abstract interface class VaultUseCase {
   const VaultUseCase();
@@ -11,6 +12,9 @@ abstract interface class VaultUseCase {
   });
   FutureDomainResult<ConfirmVaultCreationResultV1> confirmCreationV1({
     required ConfirmVaultCreationParamsV1 params,
+  });
+  FutureDomainResult<PasswordPolicyStatusV4> passwordPolicyV4({
+    required PasswordPolicyParamsV4 params,
   });
   FutureDomainResult<ValidatePasswordResultV3> validatePasswordV3({
     required ValidatePasswordParamsV3 params,

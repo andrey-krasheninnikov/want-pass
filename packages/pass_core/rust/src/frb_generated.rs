@@ -37,7 +37,7 @@ flutter_rust_bridge::frb_generated_boilerplate!(
     default_rust_auto_opaque = RustAutoOpaqueMoi,
 );
 pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_VERSION: &str = "2.13.0";
-pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = -480172431;
+pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = -2014136366;
 
 // Section: executor
 
@@ -2349,6 +2349,39 @@ fn wire__crate__api__presets__card_presets_v1_impl(
         },
     )
 }
+fn wire__crate__api__v3__password_policy_v4_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "password_policy_v4",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_password = <String>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| {
+                transform_result_sse::<_, ()>((move || {
+                    let output_ok = Ok::<_, ()>(crate::api::v3::password_policy_v4(api_password))?;
+                    std::result::Result::Ok(output_ok)
+                })())
+            }
+        },
+    )
+}
 fn wire__crate__api__cards__services_v1_impl(
     port_: flutter_rust_bridge::for_generated::MessagePort,
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
@@ -3106,6 +3139,28 @@ impl SseDecode for Option<crate::api::otp::TotpCodeV1> {
     }
 }
 
+impl SseDecode for crate::api::v3::PasswordPolicyStatusV4 {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_minimumLength = <bool>::sse_decode(deserializer);
+        let mut var_maximumBytes = <bool>::sse_decode(deserializer);
+        let mut var_uppercase = <bool>::sse_decode(deserializer);
+        let mut var_lowercase = <bool>::sse_decode(deserializer);
+        let mut var_digit = <bool>::sse_decode(deserializer);
+        let mut var_special = <bool>::sse_decode(deserializer);
+        let mut var_singleLine = <bool>::sse_decode(deserializer);
+        return crate::api::v3::PasswordPolicyStatusV4 {
+            minimum_length: var_minimumLength,
+            maximum_bytes: var_maximumBytes,
+            uppercase: var_uppercase,
+            lowercase: var_lowercase,
+            digit: var_digit,
+            special: var_special,
+            single_line: var_singleLine,
+        };
+    }
+}
+
 impl SseDecode for crate::api::RecoveryChallenge {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -3300,8 +3355,9 @@ fn pde_ffi_dispatcher_primary_impl(
         41 => wire__crate__api__Vault_validate_recovery_v3_impl(port, ptr, rust_vec_len, data_len),
         42 => wire__crate__api__Vault_wait_for_exports_v2_impl(port, ptr, rust_vec_len, data_len),
         43 => wire__crate__api__presets__card_presets_v1_impl(port, ptr, rust_vec_len, data_len),
-        44 => wire__crate__api__cards__services_v1_impl(port, ptr, rust_vec_len, data_len),
-        45 => wire__crate__api__v3__validate_password_v3_impl(port, ptr, rust_vec_len, data_len),
+        44 => wire__crate__api__v3__password_policy_v4_impl(port, ptr, rust_vec_len, data_len),
+        45 => wire__crate__api__cards__services_v1_impl(port, ptr, rust_vec_len, data_len),
+        46 => wire__crate__api__v3__validate_password_v3_impl(port, ptr, rust_vec_len, data_len),
         _ => unreachable!(),
     }
 }
@@ -3892,6 +3948,32 @@ impl flutter_rust_bridge::IntoIntoDart<crate::api::content::GroupRecordV1>
     for crate::api::content::GroupRecordV1
 {
     fn into_into_dart(self) -> crate::api::content::GroupRecordV1 {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::api::v3::PasswordPolicyStatusV4 {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.minimum_length.into_into_dart().into_dart(),
+            self.maximum_bytes.into_into_dart().into_dart(),
+            self.uppercase.into_into_dart().into_dart(),
+            self.lowercase.into_into_dart().into_dart(),
+            self.digit.into_into_dart().into_dart(),
+            self.special.into_into_dart().into_dart(),
+            self.single_line.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::api::v3::PasswordPolicyStatusV4
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::api::v3::PasswordPolicyStatusV4>
+    for crate::api::v3::PasswordPolicyStatusV4
+{
+    fn into_into_dart(self) -> crate::api::v3::PasswordPolicyStatusV4 {
         self
     }
 }
@@ -4563,6 +4645,19 @@ impl SseEncode for Option<crate::api::otp::TotpCodeV1> {
         if let Some(value) = self {
             <crate::api::otp::TotpCodeV1>::sse_encode(value, serializer);
         }
+    }
+}
+
+impl SseEncode for crate::api::v3::PasswordPolicyStatusV4 {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <bool>::sse_encode(self.minimum_length, serializer);
+        <bool>::sse_encode(self.maximum_bytes, serializer);
+        <bool>::sse_encode(self.uppercase, serializer);
+        <bool>::sse_encode(self.lowercase, serializer);
+        <bool>::sse_encode(self.digit, serializer);
+        <bool>::sse_encode(self.special, serializer);
+        <bool>::sse_encode(self.single_line, serializer);
     }
 }
 

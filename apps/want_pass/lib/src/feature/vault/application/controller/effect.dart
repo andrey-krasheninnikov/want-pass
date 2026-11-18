@@ -15,8 +15,8 @@ final class VaultRecoveryReset extends VaultEffect {
   const VaultRecoveryReset();
 }
 
-final class VaultRecoveryRegenerated extends VaultEffect {
-  const VaultRecoveryRegenerated();
+final class VaultSetupCompletedV1 extends VaultEffect {
+  const VaultSetupCompletedV1();
 }
 
 final class VaultCredentialCopiedV1 extends VaultEffect {

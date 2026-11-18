@@ -207,6 +207,9 @@ abstract class VaultRustLibApiImplPlatform
   TotpCodeV1? dco_decode_opt_box_autoadd_totp_code_v_1(dynamic raw);
 
   @protected
+  PasswordPolicyStatusV4 dco_decode_password_policy_status_v_4(dynamic raw);
+
+  @protected
   RecoveryChallenge dco_decode_recovery_challenge(dynamic raw);
 
   @protected
@@ -465,6 +468,11 @@ abstract class VaultRustLibApiImplPlatform
 
   @protected
   TotpCodeV1? sse_decode_opt_box_autoadd_totp_code_v_1(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  PasswordPolicyStatusV4 sse_decode_password_policy_status_v_4(
     SseDeserializer deserializer,
   );
 
@@ -802,6 +810,12 @@ abstract class VaultRustLibApiImplPlatform
   @protected
   void sse_encode_opt_box_autoadd_totp_code_v_1(
     TotpCodeV1? self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_password_policy_status_v_4(
+    PasswordPolicyStatusV4 self,
     SseSerializer serializer,
   );
 

@@ -189,9 +189,9 @@ final class VaultController extends CubitWithEffects<VaultState, VaultEffect> {
           setupAnswers: state.setupChallenge == value.challenge
               ? state.setupAnswers
               : const [null, null, null],
-          quizPassed: state.setupChallenge == value.challenge
-              ? state.quizPassed
-              : const [false, false, false],
+          recoveryExportCompleted:
+              state.setupChallenge == value.challenge &&
+              state.recoveryExportCompleted,
         ),
       ),
     );
@@ -206,7 +206,12 @@ final class VaultController extends CubitWithEffects<VaultState, VaultEffect> {
     if (!state.passwordSaved ||
         !state.phraseSaved ||
         !state.lossAccepted ||
-        !state.quizPassed.every((v) => v) ||
+        !state.recoveryExportCompleted ||
+        _exportOperation != null ||
+        !state.setupAnswers.every((v) => v != null) ||
+        answers.length != state.setupAnswers.length ||
+        Iterable<int>.generate(answers.length)
+            .any((i) => answers[i] != state.setupAnswers[i]) ||
         state.setupChallenge == null) {
       return Future.value();
     }
@@ -224,7 +229,29 @@ final class VaultController extends CubitWithEffects<VaultState, VaultEffect> {
           hints: hints,
         ),
       ),
-      (value) => emit(VaultState(phase: _phase(value.state), hints: hints)),
+      (value) {
+        emit(VaultState(phase: _phase(value.state), hints: hints));
+        if (state.phase == VaultPhase.unlocked) {
+          emitEffect(const VaultSetupCompletedV1());
+        }
+      },
+      handleFailure: (error) {
+        if (error is! VaultRejectedErrorV1 ||
+            error.kind != VaultFailureKindV1.confirmation) {
+          return false;
+        }
+        emit(
+          state.copyWith(
+            busy: false,
+            recoveryExportCompleted: false,
+            phraseSaved: false,
+            lossAccepted: false,
+            setupAnswers: const [null, null, null],
+          ),
+        );
+        emitEffect(const VaultRecoveryReset());
+        return true;
+      },
     );
   }
 
@@ -292,66 +319,44 @@ final class VaultController extends CubitWithEffects<VaultState, VaultEffect> {
     return accepted;
   }
 
-  Future<void> chooseSetupWord(int index, String word) async {
-    const op = 'VaultController.chooseSetupWord():';
+  void chooseSetupWord(int index, String word) {
     final challenge = state.setupChallenge;
     if (_closing ||
+        isClosed ||
         state.busy ||
+        !LaunchMode.isInitialized ||
+        !LaunchMode.isForeground ||
+        state.phase != VaultPhase.confirmation ||
+        state.error is VaultRejectedErrorV1 &&
+            (state.error as VaultRejectedErrorV1).kind ==
+                VaultFailureKindV1.writeUncertain ||
         challenge == null ||
         index < 0 ||
-        index >= 3 ||
+        index >= challenge.choices.length ||
         !challenge.choices[index].contains(word)) {
       return;
     }
-    if (word != challenge.words[challenge.positions[index]]) {
-      final epoch = ++_epoch;
-      if (_fileSelectionCancelled?.isCompleted == false) {
-        _fileSelectionCancelled!.complete();
-      }
-      emit(
-        VaultState(
-          phase: VaultPhase.confirmation,
-          busy: true,
-          recovering: state.recovering,
-          hints: state.hints,
-          passwordSaved: state.passwordSaved,
-        ),
-      );
-      emitEffect(const VaultRecoveryReset());
-      await _clearClipboard();
-      if (_closing || epoch != _epoch) return;
-      // The native scenario invalidates the old revision before draining admitted exports.
-      emit(state.copyWith(busy: false));
-      await _perform(
-        op,
-        (handle) => _useCase.regenerateRecoveryV3(
-          params: RegenerateVaultRecoveryParamsV3(handle: handle),
-        ),
-        (value) {
-          emit(
-            VaultState(
-              phase: VaultPhase.confirmation,
-              setupChallenge: value.challenge,
-              recovering: state.recovering,
-              hints: state.hints,
-              passwordSaved: state.passwordSaved,
-            ),
-          );
-          emitEffect(const VaultRecoveryRegenerated());
-        },
-      );
-      return;
-    }
     final answers = [...state.setupAnswers]..[index] = word;
-    final passed = [...state.quizPassed]..[index] = true;
     emit(
       state.copyWith(
         setupAnswers: List.unmodifiable(answers),
-        quizPassed: List.unmodifiable(passed),
         error: () => null,
       ),
     );
     activity();
+  }
+
+  void confirmRecoveryQr(BigInt revision) {
+    if (_closing ||
+        isClosed ||
+        state.busy ||
+        !LaunchMode.isInitialized ||
+        !LaunchMode.isForeground ||
+        state.phase != VaultPhase.confirmation ||
+        state.setupChallenge?.revision != revision) {
+      return;
+    }
+    emit(state.copyWith(recoveryExportCompleted: true, phraseSaved: true));
   }
 
   Future<void> downloadRecovery() {
@@ -393,6 +398,7 @@ final class VaultController extends CubitWithEffects<VaultState, VaultEffect> {
         if (result.isError) {
           _fail(op, _error(result.error));
         } else {
+          emit(state.copyWith(recoveryExportCompleted: true));
           emitEffect(const VaultNotice(VaultNoticeKind.exported));
         }
       }
@@ -433,6 +439,7 @@ final class VaultController extends CubitWithEffects<VaultState, VaultEffect> {
         return;
       }
       _clipboardContent = phrase;
+      emit(state.copyWith(recoveryExportCompleted: true));
       emitEffect(const VaultNotice(VaultNoticeKind.copied));
       _clipboardExpiry = Timer(
         const Duration(seconds: 60),
@@ -473,6 +480,44 @@ final class VaultController extends CubitWithEffects<VaultState, VaultEffect> {
     } finally {
       if (identical(_clipboardCleanup, operation)) _clipboardCleanup = null;
     }
+  }
+
+  Future<PasswordPolicyStatusV4?> checkSetupPassword(String password) {
+    const op = 'VaultController.checkSetupPassword():';
+    if (_closing ||
+        isClosed ||
+        !_monitorAvailable ||
+        !LaunchMode.isInitialized ||
+        !LaunchMode.isForeground ||
+        state.phase == VaultPhase.loading ||
+        state.phase == VaultPhase.unavailable ||
+        state.phase == VaultPhase.unlocked) {
+      return Future.value();
+    }
+    final epoch = _epoch;
+    final settled = Completer<void>();
+    _browseOperations.add(settled.future);
+    return () async {
+      try {
+        final result = await _useCase.passwordPolicyV4(
+          params: PasswordPolicyParamsV4(password: password),
+        );
+        if (_closing || isClosed || epoch != _epoch) return null;
+        if (result.isError) {
+          reportVaultSafely(
+            _reporter,
+            layer: VaultDiagnosticLayer.controller,
+            operation: op,
+            error: _error(result.error),
+          );
+          return null;
+        }
+        return result.value;
+      } finally {
+        settled.complete();
+        _browseOperations.remove(settled.future);
+      }
+    }();
   }
 
   Future<bool> validatePassword(String password) {
@@ -556,6 +601,7 @@ final class VaultController extends CubitWithEffects<VaultState, VaultEffect> {
     void Function(T) success, {
     bool contentMutation = false,
     bool preserveError = false,
+    bool Function(VaultErrorV1)? handleFailure,
   }) async {
     if (_closing ||
         isClosed ||
@@ -581,6 +627,7 @@ final class VaultController extends CubitWithEffects<VaultState, VaultEffect> {
         if (_closing || epoch != _epoch) return;
         if (result.isError) {
           final error = _error(result.error);
+          if (handleFailure?.call(error) == true) return;
           if (contentMutation &&
               error is VaultRejectedErrorV1 &&
               (error.kind == VaultFailureKindV1.writeUncertain ||

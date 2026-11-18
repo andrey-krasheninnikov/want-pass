@@ -388,6 +388,15 @@ final class SelectRecoveryFileParamsV3 extends Equatable {
   List<Object?> get props => [];
 }
 
+final class PasswordPolicyParamsV4 extends Equatable {
+  final String password;
+  const PasswordPolicyParamsV4({required this.password});
+  @override
+  List<Object?> get props => [password];
+  @override
+  String toString() => 'PasswordPolicyParamsV4(<redacted>)';
+}
+
 final class ValidatePasswordParamsV3 extends Equatable {
   final String password;
   const ValidatePasswordParamsV3({required this.password});

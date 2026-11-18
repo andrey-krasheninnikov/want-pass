@@ -62,7 +62,7 @@ class VaultRustLib
   String get codegenVersion => '2.13.0';
 
   @override
-  int get rustContentHash => -480172431;
+  int get rustContentHash => -2014136366;
 
   static const kDefaultExternalLibraryLoaderConfig =
       ExternalLibraryLoaderConfig(
@@ -320,6 +320,10 @@ abstract class VaultRustLibApi extends BaseApi {
   Future<void> crateApiVaultWaitForExportsV2({required Vault that});
 
   Future<List<CardPresetV1>> crateApiPresetsCardPresetsV1();
+
+  Future<PasswordPolicyStatusV4> crateApiV3PasswordPolicyV4({
+    required String password,
+  });
 
   Future<List<String>> crateApiCardsServicesV1();
 
@@ -2012,6 +2016,38 @@ class VaultRustLibApiImpl extends VaultRustLibApiImplPlatform
       const TaskConstMeta(debugName: "card_presets_v1", argNames: []);
 
   @override
+  Future<PasswordPolicyStatusV4> crateApiV3PasswordPolicyV4({
+    required String password,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(password, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 44,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_password_policy_status_v_4,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiV3PasswordPolicyV4ConstMeta,
+        argValues: const [],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiV3PasswordPolicyV4ConstMeta => const TaskConstMeta(
+    debugName: "password_policy_v4",
+    argNames: ["password"],
+  );
+
+  @override
   Future<List<String>> crateApiCardsServicesV1() {
     return handler.executeNormal(
       NormalTask(
@@ -2020,7 +2056,7 @@ class VaultRustLibApiImpl extends VaultRustLibApiImplPlatform
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 44,
+            funcId: 45,
             port: port_,
           );
         },
@@ -2048,7 +2084,7 @@ class VaultRustLibApiImpl extends VaultRustLibApiImplPlatform
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 45,
+            funcId: 46,
             port: port_,
           );
         },
@@ -2599,6 +2635,23 @@ class VaultRustLibApiImpl extends VaultRustLibApiImplPlatform
   TotpCodeV1? dco_decode_opt_box_autoadd_totp_code_v_1(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return raw == null ? null : dco_decode_box_autoadd_totp_code_v_1(raw);
+  }
+
+  @protected
+  PasswordPolicyStatusV4 dco_decode_password_policy_status_v_4(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 7)
+      throw Exception('unexpected arr length: expect 7 but see ${arr.length}');
+    return PasswordPolicyStatusV4(
+      minimumLength: dco_decode_bool(arr[0]),
+      maximumBytes: dco_decode_bool(arr[1]),
+      uppercase: dco_decode_bool(arr[2]),
+      lowercase: dco_decode_bool(arr[3]),
+      digit: dco_decode_bool(arr[4]),
+      special: dco_decode_bool(arr[5]),
+      singleLine: dco_decode_bool(arr[6]),
+    );
   }
 
   @protected
@@ -3402,6 +3455,29 @@ class VaultRustLibApiImpl extends VaultRustLibApiImplPlatform
   }
 
   @protected
+  PasswordPolicyStatusV4 sse_decode_password_policy_status_v_4(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_minimumLength = sse_decode_bool(deserializer);
+    var var_maximumBytes = sse_decode_bool(deserializer);
+    var var_uppercase = sse_decode_bool(deserializer);
+    var var_lowercase = sse_decode_bool(deserializer);
+    var var_digit = sse_decode_bool(deserializer);
+    var var_special = sse_decode_bool(deserializer);
+    var var_singleLine = sse_decode_bool(deserializer);
+    return PasswordPolicyStatusV4(
+      minimumLength: var_minimumLength,
+      maximumBytes: var_maximumBytes,
+      uppercase: var_uppercase,
+      lowercase: var_lowercase,
+      digit: var_digit,
+      special: var_special,
+      singleLine: var_singleLine,
+    );
+  }
+
+  @protected
   RecoveryChallenge sse_decode_recovery_challenge(
     SseDeserializer deserializer,
   ) {
@@ -4118,6 +4194,21 @@ class VaultRustLibApiImpl extends VaultRustLibApiImplPlatform
     if (self != null) {
       sse_encode_box_autoadd_totp_code_v_1(self, serializer);
     }
+  }
+
+  @protected
+  void sse_encode_password_policy_status_v_4(
+    PasswordPolicyStatusV4 self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_bool(self.minimumLength, serializer);
+    sse_encode_bool(self.maximumBytes, serializer);
+    sse_encode_bool(self.uppercase, serializer);
+    sse_encode_bool(self.lowercase, serializer);
+    sse_encode_bool(self.digit, serializer);
+    sse_encode_bool(self.special, serializer);
+    sse_encode_bool(self.singleLine, serializer);
   }
 
   @protected

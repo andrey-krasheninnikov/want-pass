@@ -145,6 +145,36 @@ final class RustVaultAccessService implements VaultAccessService {
   }
 
   @override
+  FutureDomainResult<PasswordPolicyStatusV4> passwordPolicyV4({
+    required String password,
+  }) async {
+    const op = 'RustVaultAccessService.passwordPolicyV4():';
+    final result = await captureResult<PasswordPolicyStatusV4>(() async {
+      final data = await native.passwordPolicyV4(password: password);
+      return PasswordPolicyStatusV4(
+        minimumLength: data.minimumLength,
+        maximumBytes: data.maximumBytes,
+        uppercase: data.uppercase,
+        lowercase: data.lowercase,
+        digit: data.digit,
+        special: data.special,
+        singleLine: data.singleLine,
+      );
+    }, mapToDomainError: _mapNativeError);
+    if (result.isError) {
+      reportVaultSafely(
+        _reporter,
+        layer: VaultDiagnosticLayer.infrastructure,
+        operation: op,
+        error: result.error is VaultErrorV1
+            ? result.error as VaultErrorV1
+            : const VaultUnexpectedErrorV1(),
+      );
+    }
+    return result;
+  }
+
+  @override
   FutureDomainResult<bool> validatePasswordV3({
     required String password,
   }) async {

@@ -255,6 +255,21 @@ final class _VaultAccess implements VaultAccessService {
       const Result.error(VaultRejectedErrorV1(VaultFailureKindV1.unavailable));
 
   @override
+  FutureDomainResult<PasswordPolicyStatusV4> passwordPolicyV4({
+    required String password,
+  }) async => Result.success(
+    PasswordPolicyStatusV4(
+      minimumLength: password.runes.length >= 15,
+      maximumBytes: true,
+      uppercase: password.contains(RegExp('[A-Z]')),
+      lowercase: password.contains(RegExp('[a-z]')),
+      digit: password.contains(RegExp('[0-9]')),
+      special: password.contains('!'),
+      singleLine: true,
+    ),
+  );
+
+  @override
   FutureDomainResult<bool> validatePasswordV3({
     required String password,
   }) async => const Result.success(true);

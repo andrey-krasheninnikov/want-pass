@@ -1,7 +1,6 @@
 import 'package:flutter/widgets.dart';
 import 'package:flutter/services.dart';
 import 'package:forui/forui.dart';
-import 'package:want_allure/want_allure.dart';
 
 final class VaultSecretInput extends StatefulWidget {
   final String label;
@@ -13,6 +12,8 @@ final class VaultSecretInput extends StatefulWidget {
   final bool multiline;
   final bool preserveLineBreaks;
   final bool concealed;
+  final ValueNotifier<bool>? sharedObscure;
+  final bool showVisibilityToggle;
   final Widget? postfix;
   final bool invalid;
   final VoidCallback onSubmitted;
@@ -28,6 +29,8 @@ final class VaultSecretInput extends StatefulWidget {
     this.multiline = false,
     this.preserveLineBreaks = false,
     this.concealed = true,
+    this.sharedObscure,
+    this.showVisibilityToggle = true,
     this.postfix,
     this.invalid = false,
     required this.onSubmitted,
@@ -38,11 +41,12 @@ final class VaultSecretInput extends StatefulWidget {
 }
 
 final class _VaultSecretInputState extends State<VaultSecretInput> {
-  late final _obscure = ValueNotifier(widget.concealed);
+  late final _localObscure = ValueNotifier(widget.concealed);
+  ValueNotifier<bool> get _obscure => widget.sharedObscure ?? _localObscure;
 
   @override
   void dispose() {
-    _obscure.dispose();
+    _localObscure.dispose();
     super.dispose();
   }
 
@@ -63,6 +67,9 @@ final class _VaultSecretInputState extends State<VaultSecretInput> {
               )
             : null,
         readOnly: widget.concealed && widget.preserveLineBreaks && obscure,
+        style: const FTextFieldStyleDelta.delta(
+          errorPadding: EdgeInsetsGeometryDelta.value(EdgeInsets.zero),
+        ),
         error: widget.invalid ? const SizedBox.shrink() : null,
         control: FTextFieldControl.managed(
           controller: widget.controller,
@@ -101,42 +108,25 @@ final class _VaultSecretInputState extends State<VaultSecretInput> {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     ?widget.postfix,
-                    VaultSecretAction(
-                      label: obscure
-                          ? labels
-                                .passwordFieldUnobscureTextButtonSemanticsLabel
-                          : labels.passwordFieldObscureTextButtonSemanticsLabel,
-                      onPressed: variants.contains(FTextFieldVariant.disabled)
-                          ? null
-                          : () => _obscure.value = !obscure,
-                      child: obscure
-                          ? context.theme.icons.eye(context)
-                          : context.theme.icons.eyeClosed(context),
-                    ),
+                    if (widget.showVisibilityToggle)
+                      VaultSecretAction(
+                        label: obscure
+                            ? labels
+                                  .passwordFieldUnobscureTextButtonSemanticsLabel
+                            : labels
+                                  .passwordFieldObscureTextButtonSemanticsLabel,
+                        onPressed: variants.contains(FTextFieldVariant.disabled)
+                            ? null
+                            : () => _obscure.value = !obscure,
+                        child: obscure
+                            ? context.theme.icons.eye(context)
+                            : context.theme.icons.eyeClosed(context),
+                      ),
                   ],
                 );
               },
       );
     },
-  );
-}
-
-final class VaultPasswordHelp extends StatelessWidget {
-  final String label, message;
-  const VaultPasswordHelp({
-    super.key,
-    required this.label,
-    required this.message,
-  });
-  @override
-  Widget build(BuildContext context) => WantPopover(
-    child: const WantIcon(WantIcons.question, size: 18),
-    triggerBuilder: (context, toggle, child) =>
-        VaultSecretAction(label: label, onPressed: toggle, child: child),
-    contentBuilder: (context, close) => ConstrainedBox(
-      constraints: const BoxConstraints(maxWidth: 280),
-      child: Text(message),
-    ),
   );
 }
 

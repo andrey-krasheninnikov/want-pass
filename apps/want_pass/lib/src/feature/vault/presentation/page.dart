@@ -22,6 +22,11 @@ class VaultPage extends StatefulWidget {
 
 class _VaultPageState extends State<VaultPage> {
   final _password = TextEditingController();
+  final _obscurePasswords = ValueNotifier(true);
+  PasswordPolicyStatusV4? _passwordPolicy;
+  Timer? _passwordDebounce;
+  int _passwordRevision = 0;
+  bool _savingRecovery = false, _celebratingSetup = false;
   final _confirmation = TextEditingController();
   final _phrase = TextEditingController();
   final _passwordHint = TextEditingController();
@@ -46,6 +51,7 @@ class _VaultPageState extends State<VaultPage> {
     _step = _firstStep;
     _pages = PageController(initialPage: _step);
     _password.addListener(_passwordChanged);
+    _confirmation.addListener(_phraseChanged);
     _phrase.addListener(_phraseChanged);
     HardwareKeyboard.instance.addHandler(_keyboard);
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -60,6 +66,15 @@ class _VaultPageState extends State<VaultPage> {
     if (text == _lastPasswordText) return;
     _lastPasswordText = text;
     widget.controller.acknowledge(password: false);
+    final revision = ++_passwordRevision;
+    _passwordDebounce?.cancel();
+    if (mounted) setState(() => _passwordPolicy = null);
+    if (text.isEmpty) return;
+    _passwordDebounce = Timer(const Duration(milliseconds: 120), () async {
+      final policy = await widget.controller.checkSetupPassword(text);
+      if (!mounted || revision != _passwordRevision || _step != 1) return;
+      setState(() => _passwordPolicy = policy);
+    });
   }
 
   void _phraseChanged() {
@@ -90,6 +105,10 @@ class _VaultPageState extends State<VaultPage> {
   }
 
   void _clear() {
+    _passwordRevision++;
+    _passwordDebounce?.cancel();
+    _passwordPolicy = null;
+    _obscurePasswords.value = true;
     _hideOverlay();
     for (final field in [
       _password,
@@ -107,6 +126,7 @@ class _VaultPageState extends State<VaultPage> {
   void dispose() {
     HardwareKeyboard.instance.removeHandler(_keyboard);
     _password.removeListener(_passwordChanged);
+    _confirmation.removeListener(_phraseChanged);
     _phrase.removeListener(_phraseChanged);
     _clear();
     for (final field in [
@@ -118,6 +138,7 @@ class _VaultPageState extends State<VaultPage> {
     ]) {
       field.dispose();
     }
+    _obscurePasswords.dispose();
     _pages.dispose();
     _background.dispose();
     _headingFocus.dispose();
@@ -130,6 +151,7 @@ class _VaultPageState extends State<VaultPage> {
     widget.controller.dismissFailure();
     _hideOverlay();
     FocusScope.of(context).unfocus();
+    if (step != 1) _obscurePasswords.value = true;
     setState(() => _step = step);
     if (_pages.hasClients) {
       if (WantTheme.reducedMotionOf(context)) {
@@ -138,7 +160,7 @@ class _VaultPageState extends State<VaultPage> {
         unawaited(
           _pages.animateToPage(
             step,
-            duration: const Duration(milliseconds: 180),
+            duration: const Duration(milliseconds: 260),
             curve: const Cubic(.32, .72, 0, 1),
           ),
         );
@@ -153,10 +175,18 @@ class _VaultPageState extends State<VaultPage> {
       widget.appearance?.state.busy != true &&
       switch (_step) {
         0 => !_recovering || _phrase.text.trim().isNotEmpty,
+        1 =>
+          _passwordPolicy?.valid == true &&
+              _password.text == _confirmation.text,
         2 => state.passwordSaved,
-        3 => state.setupChallenge != null,
+        3 =>
+          state.setupChallenge != null &&
+              state.recoveryExportCompleted &&
+              !_savingRecovery,
         4 => state.phraseSaved && state.lossAccepted,
-        >= 5 => state.setupChallenge != null && state.quizPassed[_step - 5],
+        5 =>
+          state.setupChallenge != null &&
+              state.setupAnswers.every((answer) => answer != null),
         _ => true,
       };
   Future<void> _next() async {
@@ -196,7 +226,7 @@ class _VaultPageState extends State<VaultPage> {
             widget.controller.state.error == null) {
           _go(2);
         }
-      } else if (_step < 7) {
+      } else if (_step < 5) {
         _go(_step + 1);
       } else {
         await widget.controller.confirmSetup(
@@ -213,29 +243,102 @@ class _VaultPageState extends State<VaultPage> {
     }
   }
 
-  Widget _icon(String key, String label, Widget icon, VoidCallback? action) =>
-      WantTooltip(
-        message: label,
-        child: Semantics(
-          label: label,
-          button: true,
-          child: WantButton(
-            key: ValueKey(key),
-            variant: WantButtonVariant.secondary,
-            onPressed: action,
-            child: ExcludeSemantics(child: icon),
-          ),
-        ),
-      );
+  Widget _saveAction(
+    String key,
+    String label,
+    Widget icon,
+    VoidCallback? action,
+  ) => WantButton(
+    key: ValueKey(key),
+    variant: WantButtonVariant.secondary,
+    onPressed: action,
+    child: Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      spacing: 8,
+      children: [
+        ExcludeSemantics(child: icon),
+        Flexible(child: Text(label)),
+      ],
+    ),
+  );
+
+  Future<void> _saveRecovery(Future<void> Function() save) async {
+    if (_savingRecovery) return;
+    setState(() => _savingRecovery = true);
+    try {
+      await save();
+    } finally {
+      if (mounted) setState(() => _savingRecovery = false);
+    }
+  }
+
   String get _passwordRequirements => _text(
     'At least 15 characters, uppercase and lowercase letters, an ASCII digit and a special character. Maximum: 1,024 UTF-8 bytes. Spaces and Unicode are allowed.',
     'Минимум 15 символов, заглавная и строчная буквы, ASCII-цифра и спецсимвол. Максимум: 1024 UTF-8 байта. Разрешены пробелы и Unicode.',
   );
-  Widget _requirements() => VaultPasswordHelp(
-    key: const ValueKey('password-requirements'),
-    label: _text('Password requirements', 'Требования к паролю'),
-    message: _passwordRequirements,
-  );
+  Widget _passwordChecklist() {
+    final status = _passwordPolicy;
+    final theme = WantTheme.of(context);
+    final green = Theme.of(context).brightness == Brightness.dark
+        ? theme.color('success')
+        : Color.alphaBlend(
+            Colors.black.withValues(alpha: .52),
+            theme.color('success'),
+          );
+    final requirements = [
+      (
+        _text('At least 15 characters', 'Минимум 15 символов'),
+        status?.minimumLength,
+      ),
+      (
+        _text('At most 1,024 UTF-8 bytes', 'Не больше 1024 байт UTF-8'),
+        status?.maximumBytes,
+      ),
+      (_text('An uppercase letter', 'Заглавная буква'), status?.uppercase),
+      (_text('A lowercase letter', 'Строчная буква'), status?.lowercase),
+      (_text('A digit from 0 to 9', 'Цифра от 0 до 9'), status?.digit),
+      (_text('A special character', 'Спецсимвол'), status?.special),
+      (_text('One line', 'Одна строка'), status?.singleLine),
+      (
+        _text('Passwords match', 'Пароли совпадают'),
+        _password.text.isNotEmpty && _password.text == _confirmation.text,
+      ),
+    ];
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      spacing: 4,
+      children: [
+        for (final (label, passed) in requirements)
+          Semantics(
+            label: passed == true
+                ? _text('Met', 'Выполнено')
+                : _text('Pending', 'Не выполнено'),
+            child: Row(
+              spacing: 8,
+              children: [
+                Icon(
+                  passed == true ? Icons.check : Icons.circle_outlined,
+                  size: 14,
+                  color: WantTheme.of(context)
+                      .color(passed == true ? 'success' : 'muted-foreground'),
+                ),
+                Flexible(
+                  child: Text(
+                    label,
+                    style: theme.forui.typography.body.sm.copyWith(
+                      color: passed == true
+                          ? green
+                          : theme.color('muted-foreground'),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+      ],
+    );
+  }
+
   Widget _secret(
     String key,
     String label,
@@ -243,7 +346,8 @@ class _VaultPageState extends State<VaultPage> {
     VaultState state, {
     bool last = false,
     bool multiline = false,
-    Widget? postfix,
+    bool sharedVisibility = false,
+    bool showVisibilityToggle = true,
   }) => VaultSecretInput(
     key: ValueKey(key),
     label: label,
@@ -252,7 +356,8 @@ class _VaultPageState extends State<VaultPage> {
     autofocus: false,
     last: last,
     multiline: multiline,
-    postfix: postfix,
+    sharedObscure: sharedVisibility ? _obscurePasswords : null,
+    showVisibilityToggle: showVisibilityToggle,
     onSubmitted: () => unawaited(_next()),
   );
   Widget _hint(
@@ -329,7 +434,7 @@ class _VaultPageState extends State<VaultPage> {
       2 => _text('Password hint', 'Подсказка к паролю'),
       3 => _text('Save recovery phrase', 'Сохраните фразу'),
       4 => _text('Phrase location', 'Где хранится фраза'),
-      _ => _text('Check ${_step - 4} of 3', 'Проверка ${_step - 4} из 3'),
+      _ => _text('Check recovery words', 'Проверьте слова восстановления'),
     };
   }
 
@@ -358,7 +463,7 @@ class _VaultPageState extends State<VaultPage> {
         actions: WantButton(
           key: const ValueKey('qr-saved'),
           onPressed: () {
-            widget.controller.acknowledge(phrase: true);
+            widget.controller.confirmRecoveryQr(challenge.revision);
             _hideOverlay();
           },
           child: Text(_text('I saved it', 'Я сохранил')),
@@ -416,30 +521,62 @@ class _VaultPageState extends State<VaultPage> {
       : state.phase == VaultPhase.locked
       ? VaultFilaments(child: child)
       : child;
-  Widget _surface({required bool setup, required Widget child}) => setup
-      ? WantCard(hoverEffect: false, padding: EdgeInsets.zero, child: child)
-      : child;
+  Widget _arrival(Object view, Widget child) {
+    final reduced = WantTheme.reducedMotionOf(context);
+    return TweenAnimationBuilder<double>(
+      key: ValueKey(view),
+      tween: Tween(begin: 0, end: 1),
+      curve: Curves.easeOutCubic,
+      duration: reduced ? Duration.zero : const Duration(milliseconds: 260),
+      child: child,
+      builder: (context, progress, child) => reduced
+          ? child!
+          : Opacity(
+              opacity: progress,
+              child: Transform.translate(
+                offset: Offset(0, (1 - progress) * 8),
+                child: child,
+              ),
+            ),
+    );
+  }
+
+  Widget _surface({
+    required bool setup,
+    required VaultPhase phase,
+    required Widget child,
+  }) => _arrival(
+    setup ? (_recovering ? 'recovery' : 'setup') : phase,
+    setup
+        ? WantCard(hoverEffect: false, padding: EdgeInsets.zero, child: child)
+        : child,
+  );
 
   void _effect(BuildContext context, VaultEffect effect) {
     switch (effect) {
       case VaultRecoveryReset():
+        if (widget.controller.state.phase != VaultPhase.confirmation) return;
         _go(3);
-      case VaultRecoveryRegenerated():
         _dialog(
           (context) => WantDialog(
-            title: _text('Save the new phrase', 'Сохраните новую фразу'),
+            title: _text('Check the phrase again', 'Сверьте фразу ещё раз'),
             actions: WantButton(
+              key: const ValueKey('recovery-retry'),
               onPressed: _hideOverlay,
-              child: Text(_text('Continue', 'Продолжить')),
+              child: Text(_text('OK', 'Понятно')),
             ),
             child: Text(
               _text(
-                'One word was incorrect. A new phrase has been created. Save it again and repeat all three checks. The previous phrase is no longer valid for this setup.',
-                'Одно из слов указано неверно. Создана новая фраза. Сохраните её заново и пройдите все три проверки. Прежняя фраза больше не подходит для этой настройки.',
+                'One or more answers were incorrect. Save the same phrase again before retrying.',
+                'Один или несколько ответов неверны. Сохраните ту же фразу и повторите проверку.',
               ),
             ),
           ),
         );
+      case VaultSetupCompletedV1():
+        if (widget.controller.state.phase == VaultPhase.unlocked) {
+          setState(() => _celebratingSetup = true);
+        }
       case VaultCredentialCopiedV1():
         return;
       case VaultNotice(:final kind):
@@ -468,7 +605,7 @@ class _VaultPageState extends State<VaultPage> {
   }
 
   Widget _progress() {
-    final total = 8 - _firstStep;
+    final total = 6 - _firstStep;
     final theme = WantTheme.of(context);
     return Column(
       spacing: 8,
@@ -476,7 +613,7 @@ class _VaultPageState extends State<VaultPage> {
         Row(
           spacing: 4,
           children: [
-            for (var i = _firstStep; i < 8; i++)
+            for (var i = _firstStep; i < 6; i++)
               Expanded(
                 child: Semantics(
                   label: _text(
@@ -565,7 +702,7 @@ class _VaultPageState extends State<VaultPage> {
           _text('Master password', 'Мастер-пароль'),
           _password,
           state,
-          postfix: _requirements(),
+          sharedVisibility: true,
         ),
         _secret(
           'password-confirmation',
@@ -573,7 +710,10 @@ class _VaultPageState extends State<VaultPage> {
           _confirmation,
           state,
           last: true,
+          sharedVisibility: true,
+          showVisibilityToggle: false,
         ),
+        _passwordChecklist(),
       ]),
       _slide([
         _hint(
@@ -629,49 +769,35 @@ class _VaultPageState extends State<VaultPage> {
                 ),
             ],
           ),
-        Row(
-          spacing: 8,
-          children: [
-            const WantIcon(WantIcons.download),
-            WantTypography(
-              _text('Save', 'Сохранить'),
-              variant: WantTypographyVariant.h4,
-            ),
-          ],
-        ),
-        Row(
-          spacing: 8,
-          children: [
-            Expanded(
-              child: _icon(
-                'recovery-copy',
-                _text('Copy JSON', 'Скопировать JSON'),
-                const Icon(Icons.content_copy),
-                state.busy || challenge == null
-                    ? null
-                    : () => unawaited(widget.controller.copyRecovery()),
-              ),
-            ),
-            Expanded(
-              child: _icon(
-                'recovery-download',
-                _text('Download JSON', 'Скачать JSON'),
-                const WantIcon(WantIcons.file),
-                state.busy || challenge == null
-                    ? null
-                    : () => unawaited(widget.controller.downloadRecovery()),
-              ),
-            ),
-            Expanded(
-              child: _icon(
-                'recovery-qr',
-                _text('Show QR', 'Показать QR'),
-                const Icon(Icons.qr_code),
-                state.busy || challenge == null ? null : () => _showQr(state),
-              ),
-            ),
-          ],
-        ),
+        _row([
+          _saveAction(
+            'recovery-copy',
+            _text('Copy JSON', 'Скопировать JSON'),
+            const Icon(Icons.content_copy, size: 18),
+            state.busy || challenge == null || _savingRecovery
+                ? null
+                : () =>
+                      unawaited(_saveRecovery(widget.controller.copyRecovery)),
+          ),
+          _saveAction(
+            'recovery-download',
+            _text('Download JSON', 'Скачать JSON'),
+            const WantIcon(WantIcons.download, size: 18),
+            state.busy || challenge == null || _savingRecovery
+                ? null
+                : () => unawaited(
+                    _saveRecovery(widget.controller.downloadRecovery),
+                  ),
+          ),
+          _saveAction(
+            'recovery-qr',
+            _text('Show QR', 'Показать QR'),
+            const Icon(Icons.qr_code, size: 18),
+            state.busy || challenge == null || _savingRecovery
+                ? null
+                : () => _showQr(state),
+          ),
+        ]),
         WantTypography(
           _text(
             'JSON, clipboard and QR contain the same numbered words in plain text. Clipboard clears after 60 seconds if unchanged.',
@@ -712,9 +838,9 @@ class _VaultPageState extends State<VaultPage> {
           state,
         ),
       ]),
-      for (var i = 0; i < 3; i++)
-        _slide([
-          if (challenge != null) ...[
+      _slide([
+        if (challenge != null)
+          for (var i = 0; i < 3; i++) ...[
             WantTypography(
               _text(
                 'Choose word ${challenge.positions[i] + 1}',
@@ -736,16 +862,14 @@ class _VaultPageState extends State<VaultPage> {
                           : WantButtonVariant.secondary,
                       onPressed: state.busy || uncertain
                           ? null
-                          : () => unawaited(
-                              widget.controller.chooseSetupWord(i, option),
-                            ),
+                          : () => widget.controller.chooseSetupWord(i, option),
                       child: Text(option, textDirection: TextDirection.ltr),
                     ),
                   ),
               ],
             ),
           ],
-        ]),
+      ]),
     ];
   }
 
@@ -764,6 +888,7 @@ class _VaultPageState extends State<VaultPage> {
           _clear();
           setState(() {
             _recovering = false;
+            if (state.phase != VaultPhase.unlocked) _celebratingSetup = false;
             _includeAppearance =
                 widget.appearance?.state.settings.configured == false;
             _step = _firstStep;
@@ -783,6 +908,16 @@ class _VaultPageState extends State<VaultPage> {
             state.error is VaultRejectedErrorV1 &&
             (state.error as VaultRejectedErrorV1).kind ==
                 VaultFailureKindV1.writeUncertain;
+        if (_celebratingSetup && state.phase == VaultPhase.unlocked) {
+          return VaultMoment(
+            key: const ValueKey('setup-complete'),
+            startup: false,
+            title: _text('Vault ready', 'Сейф готов'),
+            onComplete: () {
+              if (mounted) setState(() => _celebratingSetup = false);
+            },
+          );
+        }
         return Listener(
           onPointerDown: (_) => widget.controller.activity(),
           onPointerHover: (_) => widget.controller.activity(),
@@ -861,6 +996,7 @@ class _VaultPageState extends State<VaultPage> {
                             child: LayoutBuilder(
                               builder: (context, constraints) => _surface(
                                 setup: setup,
+                                phase: state.phase,
                                 child: SizedBox(
                                   height: constraints.maxHeight,
                                   child: Padding(
@@ -879,10 +1015,21 @@ class _VaultPageState extends State<VaultPage> {
                                             focusNode: _headingFocus,
                                             child: Semantics(
                                               header: true,
-                                              child: WantTypography(
-                                                _title(state),
-                                                variant:
-                                                    WantTypographyVariant.h2,
+                                              child: AnimatedSwitcher(
+                                                duration:
+                                                    WantTheme.reducedMotionOf(
+                                                      context,
+                                                    )
+                                                    ? Duration.zero
+                                                    : const Duration(
+                                                        milliseconds: 260,
+                                                      ),
+                                                child: WantTypography(
+                                                  _title(state),
+                                                  key: ValueKey(_title(state)),
+                                                  variant:
+                                                      WantTypographyVariant.h2,
+                                                ),
                                               ),
                                             ),
                                           ),
@@ -979,7 +1126,7 @@ class _VaultPageState extends State<VaultPage> {
                                                     ? (_recovering
                                                           ? 'vault-recover'
                                                           : 'vault-create')
-                                                    : _step == 7
+                                                    : _step == 5
                                                     ? 'vault-confirm'
                                                     : 'setup-next',
                                               ),
@@ -987,7 +1134,7 @@ class _VaultPageState extends State<VaultPage> {
                                                   ? () => unawaited(_next())
                                                   : null,
                                               child: Text(
-                                                _step == 7
+                                                _step == 5
                                                     ? _text(
                                                         'Finish',
                                                         'Завершить',

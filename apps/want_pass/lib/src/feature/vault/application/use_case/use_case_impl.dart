@@ -113,6 +113,29 @@ final class VaultUseCaseImpl implements VaultUseCase {
   }
 
   @override
+  FutureDomainResult<PasswordPolicyStatusV4> passwordPolicyV4({
+    required PasswordPolicyParamsV4 params,
+  }) async {
+    const op = 'VaultUseCaseImpl.passwordPolicyV4():';
+    final result = await captureResult<PasswordPolicyStatusV4>(() async {
+      final checked = await _access.passwordPolicyV4(password: params.password);
+      if (checked.isError) throw checked.error;
+      return checked.value;
+    }, mapToDomainError: (_, _) => const VaultUnexpectedErrorV1());
+    if (result.isError) {
+      reportVaultSafely(
+        _reporter,
+        layer: VaultDiagnosticLayer.application,
+        operation: op,
+        error: result.error is VaultErrorV1
+            ? result.error as VaultErrorV1
+            : const VaultUnexpectedErrorV1(),
+      );
+    }
+    return result;
+  }
+
+  @override
   FutureDomainResult<ValidatePasswordResultV3> validatePasswordV3({
     required ValidatePasswordParamsV3 params,
   }) async {

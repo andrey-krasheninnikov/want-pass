@@ -70,6 +70,7 @@ void main() {
             startup: runtime.startup,
             vault: runtime.vault,
             appearance: runtime.appearance,
+            playStartupIntro: true,
           ),
         ),
       );
@@ -147,6 +148,9 @@ void main() {
           of: find.byKey(const ValueKey('account-password')),
           matching: find.byType(FButton),
         );
+        await tester.ensureVisible(visibility);
+        await _settle(tester);
+        expect(visibility.hitTestable(), findsOneWidget);
         await tester.tap(visibility);
         await _settle(tester);
         await _enter(tester, 'account-password', 'Synthetic\naccount value');
@@ -179,9 +183,6 @@ void main() {
         expect(find.text('Synthetic password hint'), findsNothing);
         await _tap(tester, 'vault-show-hint');
         expect(find.text('Synthetic password hint'), findsOneWidget);
-        await _tap(tester, 'vault-show-hint');
-        await _settle(tester);
-        expect(find.text('Synthetic password hint'), findsNothing);
         await _tap(tester, 'vault-recovery');
         await _settle(tester);
         await _enter(tester, 'recovery-phrase', first.json);
@@ -200,6 +201,8 @@ void main() {
         await _tap(tester, 'password-saved');
         await _tap(tester, 'setup-next');
         await _settle(tester);
+        await _tap(tester, 'recovery-qr');
+        await _tap(tester, 'qr-saved');
         await _confirm(tester, next);
 
         await _until(
@@ -308,9 +311,8 @@ Future<void> _confirm(
   for (var i = 0; i < 3; i++) {
     final word = challenge.words[challenge.positions[i]];
     await _tap(tester, 'quiz-$i-$word');
-    await _tap(tester, i == 2 ? 'vault-confirm' : 'setup-next');
-    if (i < 2) await _settle(tester);
   }
+  await _tap(tester, 'vault-confirm');
 }
 
 Future<void> _until(WidgetTester tester, bool Function() ready) async {

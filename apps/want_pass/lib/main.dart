@@ -14,6 +14,7 @@ Future<void> main() async {
         startup: runtime.startup,
         vault: runtime.vault,
         appearance: runtime.appearance,
+        playStartupIntro: true,
       ),
     );
   } on Object {

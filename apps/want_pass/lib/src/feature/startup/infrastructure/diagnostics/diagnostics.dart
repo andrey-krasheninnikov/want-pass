@@ -102,9 +102,12 @@ final class SafeBlocObserver extends BlocObserver
       'VaultController.selectGroupLogo():' ||
       'PlatformGroupLogoService.selectV1():' ||
       'VaultController.validatePassword():' ||
+      'VaultController.checkSetupPassword():' ||
       'RustVaultAccessService.validatePasswordV3():' ||
+      'RustVaultAccessService.passwordPolicyV4():' ||
       'RustVaultAccessService.unlockV3():' ||
       'VaultUseCaseImpl.validatePasswordV3():' ||
+      'VaultUseCaseImpl.passwordPolicyV4():' ||
       'VaultUseCaseImpl.unlockV3():' ||
       'VaultController.acknowledge():' ||
       'VaultController.validateRecovery():' ||
@@ -282,9 +285,12 @@ final class SafeBlocObserver extends BlocObserver
       'VaultUseCaseImpl.selectAttachmentV1():' ||
       'VaultUseCaseImpl.selectCardDestinationV1():' ||
       'VaultController.validatePassword():' ||
+      'VaultController.checkSetupPassword():' ||
       'RustVaultAccessService.validatePasswordV3():' ||
+      'RustVaultAccessService.passwordPolicyV4():' ||
       'RustVaultAccessService.unlockV3():' ||
       'VaultUseCaseImpl.validatePasswordV3():' ||
+      'VaultUseCaseImpl.passwordPolicyV4():' ||
       'VaultUseCaseImpl.unlockV3():' ||
       'VaultController.acknowledge():' ||
       'VaultController.validateRecovery():' ||

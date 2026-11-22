@@ -22,7 +22,7 @@ final class AppearanceController extends Cubit<AppearanceState> {
   final AppearanceUseCase _useCase;
   final StartupReporter _reporter;
   Future<void>? _initialization, _operation, _closure;
-  bool _closing = false;
+  bool _closing = false, _resetting = false;
   AppearanceController(this._useCase, this._reporter)
     : super(const AppearanceState());
   @PostConstruct(preResolve: true)
@@ -48,7 +48,7 @@ final class AppearanceController extends Cubit<AppearanceState> {
 
   Future<void> save(AppearanceSettingsV1 settings) async {
     const op = 'AppearanceController.save():';
-    if (_closing || state.busy) return;
+    if (_closing || _resetting || state.busy) return;
     if (!LaunchMode.isInitialized || !LaunchMode.isForeground) {
       _fail(op);
       return;
@@ -68,6 +68,34 @@ final class AppearanceController extends Cubit<AppearanceState> {
     _operation = operation;
     await operation;
     if (identical(_operation, operation)) _operation = null;
+  }
+
+  Future<void> saveLayout(WorkspaceLayoutV1 layout) async {
+    if (_resetting) return;
+    await _operation;
+    final current = state.settings;
+    await save(
+      AppearanceSettingsV1(
+        theme: current.theme,
+        language: current.language,
+        configured: current.configured,
+        layout: layout,
+      ),
+    );
+  }
+
+  Future<bool> resetWith(
+    Future<bool> Function(void Function() restoreDefaults) reset,
+  ) async {
+    if (_closing || _resetting || state.busy) return false;
+    _resetting = true;
+    try {
+      return await reset(() {
+        if (!_closing) emit(const AppearanceState());
+      });
+    } finally {
+      _resetting = false;
+    }
   }
 
   void _fail(String operation) {

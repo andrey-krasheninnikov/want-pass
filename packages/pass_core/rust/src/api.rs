@@ -1,3 +1,10 @@
+pub(crate) mod presets;
+pub(crate) mod validation;
+pub use presets::{CardPresetV1, FieldSpecV1, card_presets_v1};
+pub(crate) mod otp;
+pub use otp::{TotpCodeV1, totp_code_v1};
+pub(crate) mod cards;
+pub use cards::*;
 pub(crate) mod content;
 pub use content::{
     AccountInputV1, AccountRecordV1, AccountSummaryV1, ContentSnapshotV1, GroupInputV1,
@@ -79,8 +86,15 @@ impl Vault {
     }
 
     pub fn open(directory: String) -> Result<Self, VaultFailure> {
-        let store = Store::open(Path::new(&directory))?;
-        Ok(Self {
+        Ok(Self::from_store(Store::open(Path::new(&directory))?))
+    }
+    pub fn open_application_v1(directory: String) -> Result<Self, VaultFailure> {
+        Ok(Self::from_store(Store::open_application(Path::new(
+            &directory,
+        ))?))
+    }
+    fn from_store(store: Store) -> Self {
+        Self {
             state: Mutex::new(State {
                 store: Arc::new(store),
                 active: None,
@@ -91,7 +105,7 @@ impl Vault {
             job: Mutex::new(()),
             export_publication: Mutex::new(()),
             epoch: AtomicU64::new(0),
-        })
+        }
     }
     pub fn status(&self) -> Result<VaultStatus, VaultFailure> {
         let state = self.state.lock().map_err(|_| VaultFailure::Unavailable)?;

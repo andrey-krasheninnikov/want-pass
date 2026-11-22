@@ -1,5 +1,6 @@
 import 'package:domain_error/domain_error.dart';
 import 'package:want_pass/src/feature/vault/application/_barrel.dart';
+import 'package:want_pass_core/want_pass_core.dart';
 
 abstract interface class VaultUseCase {
   const VaultUseCase();
@@ -11,6 +12,9 @@ abstract interface class VaultUseCase {
   });
   FutureDomainResult<ConfirmVaultCreationResultV1> confirmCreationV1({
     required ConfirmVaultCreationParamsV1 params,
+  });
+  FutureDomainResult<PasswordPolicyStatusV4> passwordPolicyV4({
+    required PasswordPolicyParamsV4 params,
   });
   FutureDomainResult<ValidatePasswordResultV3> validatePasswordV3({
     required ValidatePasswordParamsV3 params,
@@ -48,6 +52,7 @@ abstract interface class VaultUseCase {
   FutureDomainResult<RecoveryExportResultV1> exportRecoveryV2({
     required ExportRecoveryParamsV2 params,
   });
+  FutureDomainResult<void> copyPasswordHintV1({required String hint});
   FutureDomainResult<RecoveryExportResultV1> copyRecoveryV1({
     required RecoveryClipboardParamsV1 params,
   });
@@ -62,6 +67,9 @@ abstract interface class VaultUseCase {
   });
   FutureDomainResult<PrepareVaultSetupResultV3> regenerateRecoveryV3({
     required RegenerateVaultRecoveryParamsV3 params,
+  });
+  FutureDomainResult<void> resetApplicationV1({
+    required ResetVaultApplicationParamsV1 params,
   });
   FutureDomainResult<ValidateVaultRecoveryResultV3> validateRecoveryV3({
     required ValidateVaultRecoveryParamsV3 params,
@@ -92,5 +100,53 @@ abstract interface class VaultUseCase {
   });
   FutureDomainResult<SelectGroupLogoResultV1> selectGroupLogoV1({
     required SelectGroupLogoParamsV1 params,
+  });
+  FutureDomainResult<LoadContentResultV2> loadContentV2({
+    required LoadContentParamsV2 params,
+  });
+  FutureDomainResult<SaveGroupResultV2> saveGroupV2({
+    required SaveGroupParamsV2 params,
+  });
+  FutureDomainResult<DeleteGroupResultV2> deleteGroupV2({
+    required DeleteGroupParamsV2 params,
+  });
+  FutureDomainResult<SearchCardsResultV1> searchCardsV1({
+    required SearchCardsParamsV1 params,
+  });
+  FutureDomainResult<ReadCardListRowsResultV1> readCardListRowsV1({
+    required ReadCardListRowsParamsV1 params,
+  });
+  FutureDomainResult<ReadCardPreviewResultV1> readCardPreviewV1({
+    required ReadCardPreviewParamsV1 params,
+  });
+  FutureDomainResult<ReadCardFieldResultV1> readCardFieldV1({
+    required ReadCardFieldParamsV1 params,
+  });
+  FutureDomainResult<ReadCardResultV1> readCardV1({
+    required ReadCardParamsV1 params,
+  });
+  FutureDomainResult<SaveCardResultV1> saveCardV1({
+    required SaveCardParamsV1 params,
+  });
+  FutureDomainResult<DeleteCardResultV1> deleteCardV1({
+    required DeleteCardParamsV1 params,
+  });
+  FutureDomainResult<HotpAdvanceV1> nextHotpV1({
+    required NextHotpParamsV1 params,
+  });
+  FutureDomainResult<ReadTotpResultV1> readTotpV1({
+    required ReadTotpParamsV1 params,
+  });
+  FutureDomainResult<CopyCardResultV1> copyCardV1({
+    required CopyCardParamsV1 params,
+  });
+  FutureDomainResult<SelectAttachmentResultV1> selectAttachmentV1({
+    required SelectAttachmentParamsV1 params,
+  });
+  FutureDomainResult<SelectCardDestinationResultV1> selectCardDestinationV1({
+    required SelectCardDestinationParamsV1 params,
+  });
+  FutureDomainResult<ExportCardAttachmentResultV1> exportCardAttachmentV1({
+    required ExportCardAttachmentParamsV1 params,
   });
 }

@@ -4,6 +4,7 @@ import 'package:want_pass_core/src/feature/vault/infrastructure/_barrel.dart';
 
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
+// These functions are ignored because they are not marked as `pub`: `from_store`
 // These types are ignored because they are neither used by any `pub` functions nor (for structs and enums) marked `#[frb(unignore)]`: `Draft`, `State`
 // These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_receiver_is_total_eq`, `assert_receiver_is_total_eq`, `clone`, `clone`, `eq`, `eq`, `fmt`, `fmt`
 
@@ -13,6 +14,26 @@ abstract class Vault implements RustOpaqueInterface {
     required String id,
     required BigInt generation,
   });
+
+  Future<List<CardListRowV1>> cardListRowsV1({
+    required List<String> ids,
+    required BigInt revision,
+    required BigInt generation,
+  });
+
+  Future<CardPreviewV1> cardPreviewV1({
+    required String id,
+    required BigInt revision,
+    required BigInt generation,
+  });
+
+  Future<List<CardRowV1>> cardRowsV1({
+    required List<String> ids,
+    required BigInt revision,
+    required BigInt generation,
+  });
+
+  Future<CardRecordV1> cardV1({required String id, required BigInt generation});
 
   Future<void> close();
 
@@ -39,7 +60,31 @@ abstract class Vault implements RustOpaqueInterface {
 
   Future<ContentSnapshotV1> contentV1({required BigInt generation});
 
+  Future<ContentSnapshotV2> contentV2({required BigInt generation});
+
+  Future<String> copyAccountV1({
+    required String id,
+    required BigInt generation,
+  });
+
+  Future<String> copyCardFieldV1({
+    required String id,
+    required FieldIdV1 field,
+    required BigInt generation,
+  });
+
+  Future<TotpCodeV1> currentTotpV1({
+    required String id,
+    required BigInt generation,
+  });
+
   Future<ContentSnapshotV1> deleteAccountV1({
+    required String id,
+    required BigInt revision,
+    required BigInt generation,
+  });
+
+  Future<ContentSnapshotV2> deleteCardV1({
     required String id,
     required BigInt revision,
     required BigInt generation,
@@ -47,6 +92,19 @@ abstract class Vault implements RustOpaqueInterface {
 
   Future<ContentSnapshotV1> deleteGroupV1({
     required String id,
+    required BigInt revision,
+    required BigInt generation,
+  });
+
+  Future<ContentSnapshotV2> deleteGroupV2({
+    required String id,
+    required BigInt revision,
+    required BigInt generation,
+  });
+
+  Future<void> exportAttachmentV1({
+    required String id,
+    required String destination,
     required BigInt revision,
     required BigInt generation,
   });
@@ -67,8 +125,19 @@ abstract class Vault implements RustOpaqueInterface {
 
   void lock();
 
+  Future<HotpAdvanceV1> nextHotpV1({
+    required String id,
+    required BigInt revision,
+    required BigInt generation,
+  });
+
   static Future<Vault> open({required String directory}) =>
       VaultRustLib.instance.api.crateApiVaultOpen(directory: directory);
+
+  static Future<Vault> openApplicationV1({required String directory}) =>
+      VaultRustLib.instance.api.crateApiVaultOpenApplicationV1(
+        directory: directory,
+      );
 
   Future<RecoveryChallenge> prepareCreation({
     required String password,
@@ -107,14 +176,37 @@ abstract class Vault implements RustOpaqueInterface {
     required BigInt generation,
   });
 
+  Future<void> resetApplicationV1({
+    required String phrase,
+    required BigInt generation,
+  });
+
   Future<ContentSnapshotV1> saveAccountV1({
     required AccountInputV1 input,
     required BigInt revision,
     required BigInt generation,
   });
 
+  Future<ContentSnapshotV2> saveCardV1({
+    required CardInputV1 input,
+    required BigInt revision,
+    required BigInt generation,
+  });
+
   Future<ContentSnapshotV1> saveGroupV1({
     required GroupInputV1 input,
+    required BigInt revision,
+    required BigInt generation,
+  });
+
+  Future<ContentSnapshotV2> saveGroupV2({
+    required GroupInputV1 input,
+    required BigInt revision,
+    required BigInt generation,
+  });
+
+  Future<CardMatchesV1> searchCardsV1({
+    required CardSearchV1 query,
     required BigInt revision,
     required BigInt generation,
   });

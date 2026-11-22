@@ -29,6 +29,9 @@ extension GetItInjectableX on _i174.GetIt {
     _i526.EnvironmentFilter? environmentFilter,
   }) async {
     final gh = _i526.GetItHelper(this, environment, environmentFilter);
+    gh.singleton<_i849.CredentialFileService>(
+      () => _i293.PlatformCredentialFileService(gh<_i73.VaultReporter>()),
+    );
     gh.singleton<_i849.RecoveryExportService>(
       () => _i293.PlatformRecoveryExportService(gh<_i73.VaultReporter>()),
     );
@@ -41,14 +44,6 @@ extension GetItInjectableX on _i174.GetIt {
         gh<_i73.StartupReporter>(),
       ),
     );
-    gh.singleton<_i849.VaultUseCase>(
-      () => _i849.VaultUseCaseImpl(
-        gh<_i73.VaultAccessService>(),
-        gh<_i73.VaultReporter>(),
-        gh<_i849.RecoveryExportService>(),
-        gh<_i849.GroupLogoService>(),
-      ),
-    );
     await gh.singletonAsync<_i121.StartupController>(
       () {
         final i = _i121.StartupController(
@@ -59,6 +54,15 @@ extension GetItInjectableX on _i174.GetIt {
       },
       preResolve: true,
       dispose: (i) => i.close(),
+    );
+    gh.singleton<_i849.VaultUseCase>(
+      () => _i849.VaultUseCaseImpl(
+        gh<_i73.VaultAccessService>(),
+        gh<_i73.VaultReporter>(),
+        gh<_i849.RecoveryExportService>(),
+        gh<_i849.GroupLogoService>(),
+        gh<_i849.CredentialFileService>(),
+      ),
     );
     gh.singleton<_i984.AppearancePreferencesService>(
       () => _i792.FileAppearancePreferencesService(

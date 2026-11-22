@@ -37,6 +37,7 @@ final class FileAppearancePreferencesService
           theme: theme,
           language: language,
           configured: configured,
+          layout: _readLayout(raw['workspaceLayout']),
         );
       } on FormatException {
         return const AppearanceSettingsV1();
@@ -58,6 +59,23 @@ final class FileAppearancePreferencesService
     return result;
   }
 
+  static WorkspaceLayoutV1 _readLayout(Object? value) {
+    if (value case [final num groups, final num secrets, final num dual]
+        when [
+              groups,
+              secrets,
+              dual,
+            ].every((v) => v.isFinite && v > 0 && v < 1) &&
+            groups + secrets < 1) {
+      return WorkspaceLayoutV1(
+        groupFraction: groups.toDouble(),
+        listFraction: secrets.toDouble(),
+        dualListFraction: dual.toDouble(),
+      );
+    }
+    return const WorkspaceLayoutV1();
+  }
+
   @override
   FutureDomainResult<void> saveV1(AppearanceSettingsV1 settings) async {
     const op = 'FileAppearancePreferencesService.saveV1():';
@@ -67,6 +85,13 @@ final class FileAppearancePreferencesService
         throw const StartupUnexpectedErrorV1();
       }
       await directory.create(recursive: true);
+      if (await FileSystemEntity.type(
+            '$_directory/vault/reset.pending',
+            followLinks: false,
+          ) !=
+          FileSystemEntityType.notFound) {
+        throw const StartupUnexpectedErrorV1();
+      }
       final file = File('$_directory/appearance.json');
       final temporary = File('$_directory/appearance.tmp');
       if (await FileSystemEntity.isLink(file.path) ||
@@ -79,6 +104,11 @@ final class FileAppearancePreferencesService
             'theme': settings.theme.name,
             'language': settings.language?.name,
             'configured': settings.configured,
+            'workspaceLayout': [
+              settings.layout.groupFraction,
+              settings.layout.listFraction,
+              settings.layout.dualListFraction,
+            ],
           }),
           flush: true,
         );

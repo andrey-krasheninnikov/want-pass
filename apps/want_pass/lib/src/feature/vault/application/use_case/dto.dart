@@ -361,6 +361,19 @@ final class ValidateVaultRecoveryParamsV3 extends Equatable {
   String toString() => 'ValidateVaultRecoveryParamsV3(<redacted>)';
 }
 
+final class ResetVaultApplicationParamsV1 extends Equatable {
+  final VaultHandleV1 handle;
+  final String phrase;
+  const ResetVaultApplicationParamsV1({
+    required this.handle,
+    required this.phrase,
+  });
+  @override
+  List<Object?> get props => [handle, phrase];
+  @override
+  String toString() => 'ResetVaultApplicationParamsV1(<redacted>)';
+}
+
 final class ExportRecoveryParamsV3 extends Equatable {
   final VaultHandleV1 handle;
   final String destination;
@@ -386,6 +399,15 @@ final class SelectRecoveryFileParamsV3 extends Equatable {
   const SelectRecoveryFileParamsV3();
   @override
   List<Object?> get props => [];
+}
+
+final class PasswordPolicyParamsV4 extends Equatable {
+  final String password;
+  const PasswordPolicyParamsV4({required this.password});
+  @override
+  List<Object?> get props => [password];
+  @override
+  String toString() => 'PasswordPolicyParamsV4(<redacted>)';
 }
 
 final class ValidatePasswordParamsV3 extends Equatable {
@@ -419,4 +441,52 @@ final class UnlockVaultResultV3 extends Equatable {
   const UnlockVaultResultV3({required this.state});
   @override
   List<Object?> get props => [state];
+}
+
+final class SearchCardsParamsV1 extends Equatable {
+  final VaultHandleV1 handle;
+  final CardSearchV1 query;
+  final BigInt revision;
+  const SearchCardsParamsV1({
+    required this.handle,
+    required this.query,
+    required this.revision,
+  });
+  @override
+  List<Object?> get props => [handle, query, revision];
+  @override
+  String toString() => 'SearchCardsParamsV1(<redacted>)';
+}
+
+final class SearchCardsResultV1 extends Equatable {
+  final CardMatchesV1 matches;
+  const SearchCardsResultV1({required this.matches});
+  @override
+  List<Object?> get props => [matches];
+  @override
+  String toString() => 'SearchCardsResultV1(<redacted>)';
+}
+
+final class ReadCardListRowsParamsV1 extends Equatable {
+  final VaultHandleV1 handle;
+  final List<String> ids;
+  final BigInt revision;
+  const ReadCardListRowsParamsV1({
+    required this.handle,
+    required this.ids,
+    required this.revision,
+  });
+  @override
+  List<Object?> get props => [handle, ids, revision];
+  @override
+  String toString() => 'ReadCardListRowsParamsV1(<redacted>)';
+}
+
+final class ReadCardListRowsResultV1 extends Equatable {
+  final List<CardListRowV1> rows;
+  const ReadCardListRowsResultV1({required this.rows});
+  @override
+  List<Object?> get props => [rows];
+  @override
+  String toString() => 'ReadCardListRowsResultV1(<redacted>)';
 }

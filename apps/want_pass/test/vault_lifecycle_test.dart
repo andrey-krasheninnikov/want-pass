@@ -1,6 +1,10 @@
 import 'package:want_pass/src/feature/vault/infrastructure/_barrel.dart';
 
 import 'dart:async';
+
+import 'package:ditredi/ditredi.dart';
+import 'package:flutter/foundation.dart';
+
 import 'dart:convert';
 
 import 'package:domain_error/domain_error.dart';
@@ -30,6 +34,16 @@ const _challenge = VaultRecoveryChallengeV1(
 
 void main() {
   final binding = TestWidgetsFlutterBinding.ensureInitialized();
+  setUpAll(() async {
+    for (final asset in [
+      'lock.svg',
+      'lock-body.obj',
+      'lock-shackle.obj',
+      'lock.mtl',
+    ]) {
+      expect(await rootBundle.loadString('assets/brand/$asset'), isNotEmpty);
+    }
+  });
   setUp(() {
     binding.platformDispatcher.accessibilityFeaturesTestValue =
         const FakeAccessibilityFeatures(disableAnimations: true);
@@ -68,37 +82,204 @@ void main() {
     },
   );
 
-  testWidgets(
-    'idle countdown follows the owner even with reduced motion and inactive views',
-    (tester) async {
-      var remaining = const Duration(minutes: 5);
-      await tester.pumpWidget(
-        MaterialApp(
-          home: WantTheme(
-            data: WantThemeData.dark(),
-            reduceMotion: true,
-            child: VaultIdleCountdown(remaining: () => remaining),
+  testWidgets('stale password report cannot enable setup', (tester) async {
+    final access = _Access();
+    final old = Completer<DomainResult<PasswordPolicyStatusV4>>();
+    access.setupPolicy = (value) => value == _password
+        ? old.future
+        : Future.value(
+            const Result.success(
+              PasswordPolicyStatusV4(
+                minimumLength: false,
+                maximumBytes: true,
+                uppercase: false,
+                lowercase: true,
+                digit: false,
+                special: false,
+                singleLine: true,
+              ),
+            ),
+          );
+    final events = StreamController<VaultLockSignal>.broadcast();
+    final controller = _controller(access, events.stream);
+    final startup = StartupController(_Startup(), const _Reporter());
+    await tester.runAsync(() async {
+      await startup.init();
+      await controller.init();
+    });
+    await tester.pumpWidget(WantPassApp(startup: startup, vault: controller));
+    await tester.pumpAndSettle();
+    Finder field(String key) => find.descendant(
+      of: find.byKey(ValueKey(key)),
+      matching: find.bySubtype<EditableText>(),
+    );
+    await _enter(tester, field('master-password'), _password);
+    await tester.pump(const Duration(milliseconds: 130));
+    tester.testTextInput.enterText('short');
+    await tester.pump();
+    await _enter(tester, field('password-confirmation'), 'short');
+    await tester.pump(const Duration(milliseconds: 130));
+    old.complete(
+      const Result.success(
+        PasswordPolicyStatusV4(
+          minimumLength: true,
+          maximumBytes: true,
+          uppercase: true,
+          lowercase: true,
+          digit: true,
+          special: true,
+          singleLine: true,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    final next = tester.widget<WantButton>(
+      find.byKey(const ValueKey('vault-create')),
+    );
+    expect(next.onPressed, isNull);
+    expect(access.preparations, 0);
+    await tester.pumpWidget(const SizedBox.shrink());
+    var closed = false;
+    final closing = controller.close().then((_) => closed = true);
+    for (var i = 0; i < 30 && !closed; i++) {
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 10)),
+      );
+      await tester.pump(const Duration(milliseconds: 20));
+    }
+    expect(closed, isTrue);
+    await closing;
+    await startup.close();
+    await events.close();
+  });
+
+  testWidgets('startup wave yields to the app after one pass', (tester) async {
+    tester.platformDispatcher.accessibilityFeaturesTestValue =
+        const FakeAccessibilityFeatures();
+    var completions = 0;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: WantTheme(
+          data: WantThemeData.dark(),
+          child: VaultMoment(
+            startup: true,
+            title: 'Want Pass',
+            onComplete: () => completions++,
           ),
         ),
+      ),
+    );
+    await tester.pump(const Duration(milliseconds: 350));
+    expect(find.text('Want Pass'), findsOneWidget);
+    final wave = tester
+        .widgetList<Transform>(find.byType(Transform))
+        .firstWhere((widget) => widget.transform.storage[0] > 1);
+    expect(wave.transform.storage[0], greaterThan(1));
+    expect(completions, 0);
+    await tester.pumpAndSettle();
+    expect(completions, 1);
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
+
+  testWidgets('header padlock reflects confirmed state without a countdown', (
+    tester,
+  ) async {
+    var presses = 0;
+    Widget view(bool opened) => MaterialApp(
+      home: WantTheme(
+        data: WantThemeData.dark(),
+        reduceMotion: true,
+        child: Center(
+          child: VaultPadlock(
+            opened: opened,
+            label: opened ? 'Lock vault' : 'Unlock vault',
+            onPressed: () => presses++,
+          ),
+        ),
+      ),
+    );
+    await tester.pumpWidget(view(false));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byType(VaultPadlock));
+    expect(presses, 1);
+    expect(
+      tester.widget<VaultPadlock>(find.byType(VaultPadlock)).opened,
+      isFalse,
+    );
+    await tester.pumpWidget(view(true));
+    await tester.pumpAndSettle();
+    expect(
+      tester.widget<VaultPadlock>(find.byType(VaultPadlock)).opened,
+      isTrue,
+    );
+    expect(find.text('05:00'), findsNothing);
+    binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+    await tester.pump();
+    binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
+
+  testWidgets('padlock rotates its mesh on drag without locking', (
+    tester,
+  ) async {
+    final boundary = GlobalKey();
+    var presses = 0;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: WantTheme(
+          data: WantThemeData.dark(),
+          reduceMotion: true,
+          child: Center(
+            child: RepaintBoundary(
+              key: boundary,
+              child: VaultPadlock(
+                opened: false,
+                label: 'Unlock vault',
+                onPressed: () => presses++,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    Future<List<int>> pixels() async => (await tester.runAsync(() async {
+      final image =
+          await (boundary.currentContext!.findRenderObject()!
+                  as RenderRepaintBoundary)
+              .toImage();
+      try {
+        return (await image.toByteData(format: ui.ImageByteFormat.rawRgba))!
+            .buffer
+            .asUint8List()
+            .toList();
+      } finally {
+        image.dispose();
+      }
+    }))!;
+    final model = find.byType(DiTreDi);
+    for (var i = 0; i < 30 && model.evaluate().isEmpty; i++) {
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 10)),
       );
-      expect(find.text('05:00'), findsOneWidget);
-      remaining = const Duration(minutes: 4, seconds: 59);
-      await tester.pump(const Duration(seconds: 1));
-      expect(find.text('04:59'), findsOneWidget);
-      binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
       await tester.pump();
-      remaining = const Duration(minutes: 3);
-      await tester.pump(const Duration(seconds: 60));
-      expect(find.text('04:59'), findsOneWidget);
-      binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
-      await tester.pump();
-      expect(find.text('03:00'), findsOneWidget);
-      remaining = const Duration(minutes: 5);
-      await tester.pump(const Duration(seconds: 1));
-      expect(find.text('05:00'), findsOneWidget);
-      await tester.pumpWidget(const SizedBox.shrink());
-    },
-  );
+    }
+    expect(model, findsOneWidget);
+    final mouse = await tester.createGesture(kind: ui.PointerDeviceKind.mouse);
+    await mouse.addPointer(location: const Offset(1, 1));
+    await mouse.moveTo(tester.getCenter(find.byType(VaultPadlock)));
+    await tester.pumpAndSettle();
+    final before = await pixels();
+    await tester.drag(model, const Offset(60, 0));
+    await tester.pumpAndSettle();
+    expect(presses, 0);
+    expect(listEquals(before, await pixels()), isFalse);
+    await mouse.removePointer();
+    await tester.tap(find.byType(VaultPadlock));
+    await tester.pumpAndSettle();
+    expect(presses, 1);
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
 
   test(
     'password mismatch never reaches storage and domain errors keep identity',
@@ -109,6 +290,7 @@ void main() {
         const _Reporter(),
         const PlatformRecoveryExportService(_Reporter()),
         const PlatformGroupLogoService(_Reporter()),
+        const PlatformCredentialFileService(_Reporter()),
       );
       final mismatch = await useCase.prepareCreationV1(
         params: PrepareVaultCreationParamsV1(
@@ -252,9 +434,13 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
-      await _tapKey(tester, 'vault-dial');
+      await _tapKey(tester, 'vault-padlock');
       expect(find.byKey(const ValueKey('vault-recovery')), findsNothing);
-      expect(find.byKey(const ValueKey('vault-show-hint')), findsNothing);
+      expect(find.byKey(const ValueKey('vault-show-hint')), findsOneWidget);
+      await _tapKey(tester, 'vault-show-hint');
+      expect(find.text('No password hint was added.'), findsOneWidget);
+      expect(find.byKey(const ValueKey('vault-recovery')), findsOneWidget);
+      await _tapKey(tester, 'vault-show-hint');
       await _capture(tester, boundary, 'unlock-initial');
       final field = find.descendant(
         of: find.byKey(const ValueKey('unlock-password')),
@@ -277,6 +463,9 @@ void main() {
         expect(decoration.border, isNull);
         expect(element.size!.shortestSide, greaterThanOrEqualTo(44));
       }
+      final arrow = find.byKey(const ValueKey('vault-unlock'));
+      final alignment =
+          tester.getBottomLeft(field).dy - tester.getBottomLeft(arrow).dy;
       await _enter(tester, field, 'short');
       await tester.pump(const Duration(milliseconds: 200));
       await tester.pumpAndSettle();
@@ -300,14 +489,18 @@ void main() {
             .invalid,
         isTrue,
       );
+      expect(
+        tester.getBottomLeft(field).dy - tester.getBottomLeft(arrow).dy,
+        closeTo(alignment, .1),
+      );
       await _capture(tester, boundary, 'unlock-invalid');
       expect(find.byKey(const ValueKey('vault-recovery')), findsNothing);
-      expect(find.byKey(const ValueKey('vault-show-hint')), findsNothing);
+      expect(find.byKey(const ValueKey('vault-show-hint')), findsOneWidget);
       await _enter(tester, field, 'Wrong synthetic password 2026!');
       await tester.tap(find.byKey(const ValueKey('vault-unlock')));
       await tester.pumpAndSettle();
       expect(controller.state.error, isNotNull);
-      expect(find.byKey(const ValueKey('vault-recovery')), findsOneWidget);
+      expect(find.byKey(const ValueKey('vault-recovery')), findsNothing);
       expect(find.byKey(const ValueKey('vault-show-hint')), findsOneWidget);
       expect(find.textContaining('Access could not be verified'), findsNothing);
       expect(find.text('No password hint was added.'), findsNothing);
@@ -336,16 +529,10 @@ void main() {
       await tester.pumpAndSettle();
       expect(controller.state.phase, VaultPhase.unlocked);
       expect(notices, [VaultNoticeKind.unlocked]);
-      expect(find.text('Access granted'), findsWidgets);
-      expect(find.text('05:00'), findsOneWidget);
-      final glows = find.byType(WantGlow);
-      expect(glows, findsOneWidget);
-      expect(
-        find.ancestor(of: glows, matching: find.byType(VaultSafeDial)),
-        findsOneWidget,
-      );
-      final dialSize = tester.getSize(find.byKey(const ValueKey('vault-dial')));
-      expect(dialSize.width, dialSize.height);
+      expect(find.text('Access granted'), findsNothing);
+      expect(find.text('Sign-in required'), findsNothing);
+      expect(find.text('05:00'), findsNothing);
+      expect(find.byType(VaultPadlock), findsOneWidget);
       await _capture(tester, boundary, 'unlock-granted');
       expect(access.passwords, ['Wrong synthetic password 2026!', _password]);
       await tester.pumpWidget(const SizedBox.shrink());
@@ -377,7 +564,7 @@ void main() {
           WantPassApp(startup: startup, vault: controller),
         );
         await tester.pumpAndSettle();
-        await _tapKey(tester, 'vault-dial');
+        await _tapKey(tester, 'vault-padlock');
         final field = find.descendant(
           of: find.byKey(const ValueKey('unlock-password')),
           matching: find.bySubtype<EditableText>(),
@@ -402,21 +589,21 @@ void main() {
           expect(controller.state.phase, VaultPhase.locked);
           expect(
             find.descendant(
-              of: find.byType(VaultUnlockDialog),
+              of: find.byType(VaultUnlockForm),
               matching: find.text(message),
             ),
             findsOneWidget,
           );
           final errorNode = tester.getSemantics(
             find.descendant(
-              of: find.byType(VaultUnlockDialog),
+              of: find.byType(VaultUnlockForm),
               matching: find.text(message),
             ),
           );
           expect(errorNode.getSemanticsData().label, message);
           expect(errorNode.flagsCollection.isLiveRegion, isTrue);
           expect(find.byKey(const ValueKey('vault-recovery')), findsNothing);
-          expect(find.byKey(const ValueKey('vault-show-hint')), findsNothing);
+          expect(find.byKey(const ValueKey('vault-show-hint')), findsOneWidget);
         }
         await tester.pumpWidget(const SizedBox.shrink());
         await tester.runAsync(() async {
@@ -558,17 +745,30 @@ void main() {
         await toggle('Show password');
         await _enter(tester, input('master-password'), password);
         expectPrivateInput(false);
+        expect(
+          tester
+              .widget<EditableText>(input('password-confirmation'))
+              .obscureText,
+          isFalse,
+        );
         await toggle('Hide password');
         expectPrivateInput(true);
+        expect(
+          tester
+              .widget<EditableText>(input('password-confirmation'))
+              .obscureText,
+          isTrue,
+        );
 
         await _enter(tester, input('password-confirmation'), password);
+        await tester.pump(const Duration(milliseconds: 130));
         await tester.tap(find.byKey(const ValueKey('vault-create')));
         await tester.pumpAndSettle();
         expect(access.preparedPasswords, [acceptedPassword]);
         await controller.confirm(['one', 'two', 'three']);
         await controller.lock();
         await tester.pumpAndSettle();
-        await tester.tap(find.byKey(const ValueKey('vault-dial')));
+        await tester.tap(find.byKey(const ValueKey('vault-padlock')));
         await tester.pumpAndSettle();
         await _enter(tester, input('unlock-password'), password);
         await tester.tap(find.byKey(const ValueKey('vault-unlock')));
@@ -648,13 +848,15 @@ void main() {
     await controller.copyRecovery();
     final copied = export.clipboard;
     export.clearing = Completer<void>();
-    await controller.lock();
+    final locking = controller.lock();
+    await Future<void>.delayed(Duration.zero);
     var closed = false;
     final closing = controller.close().then((_) => closed = true);
     await Future<void>.delayed(Duration.zero);
     expect(closed, isFalse);
     expect(export.clipboard, copied);
     export.clearing!.complete();
+    await locking;
     await closing;
     expect(export.clipboard, isEmpty);
     expect(export.clears, 1);
@@ -677,9 +879,9 @@ void main() {
       });
       await tester.pumpWidget(WantPassApp(startup: startup, vault: controller));
       await tester.pumpAndSettle();
-      await tester.tap(find.byKey(const ValueKey('vault-dial')));
+      await tester.tap(find.byKey(const ValueKey('vault-padlock')));
       await tester.pumpAndSettle();
-      await _rejectUnlock(tester, access);
+      await _tapKey(tester, 'vault-show-hint');
       await tester.tap(find.byKey(const ValueKey('vault-recovery')));
       await tester.pumpAndSettle();
       Finder field(String key) => find.descendant(
@@ -695,6 +897,7 @@ void main() {
       await tester.pumpAndSettle();
       await _enter(tester, field('master-password'), _password);
       await _enter(tester, field('password-confirmation'), _password);
+      await tester.pump(const Duration(milliseconds: 130));
       await tester.tap(find.byKey(const ValueKey('vault-recover')));
       await tester.pumpAndSettle();
       expect(controller.state.setupChallenge, isNotNull);
@@ -711,7 +914,7 @@ void main() {
       expect(controller.state.phase, VaultPhase.locked);
       expect(controller.state.setupChallenge, isNull);
       expect(access.handle.invalidations, 1);
-      expect(find.byKey(const ValueKey('vault-dial')), findsOneWidget);
+      expect(find.byKey(const ValueKey('vault-padlock')), findsOneWidget);
       expect(find.text('Appearance'), findsNothing);
       expect(export.clipboard, isEmpty);
       export.selection.complete(
@@ -729,6 +932,402 @@ void main() {
     },
   );
 
+  for (final pendingCopy in [false, true]) {
+    testWidgets(
+      pendingCopy
+          ? 'preview masks expired OTP during pending copy'
+          : 'preview retries an already expired response',
+      (tester) async {
+        const id = '0123456789abcdef0123456789abcdef';
+        final access = _Access()..accountCopy = 'synthetic credential';
+        access.handle.exists = true;
+        access.handle.state = VaultAccessStateV1.unlocked;
+        access.snapshot = ContentSnapshotV2(
+          revision: BigInt.zero,
+          groups: const [],
+          cards: [
+            CardSummaryV1(
+              id: id,
+              name: 'Synthetic account',
+              service: 'github',
+              groupIds: const [],
+              cardType: CardTypeV1.account,
+              templateVersion: 1,
+            ),
+          ],
+        );
+        CardRowV1 row(String code, DateTime deadline) => CardRowV1(
+          id: id,
+          fields: const [],
+          otp: TotpCodeV1(
+            code: code,
+            validUntil: deadline,
+            period: const Duration(seconds: 1),
+          ),
+        );
+        access.rowsReply = Completer<DomainResult<List<CardRowV1>>>();
+        final export = _Export()..writing = Completer<void>();
+        final events = StreamController<VaultLockSignal>.broadcast();
+        final controller = _controller(access, events.stream, export);
+        await controller.init();
+        await controller.loadContent();
+        await tester.pumpWidget(
+          MaterialApp(
+            builder: (context, child) => WantTheme(
+              data: WantThemeData.light(),
+              child: WantToaster(child: child!),
+            ),
+            home: Scaffold(body: VaultContentView(controller: controller)),
+          ),
+        );
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 200));
+        await tester.pump();
+        await tester.tap(find.byKey(const ValueKey('account-$id')));
+        for (var i = 0; i < 20 && access.rowReads == 0; i++) {
+          await tester.pump(const Duration(milliseconds: 20));
+        }
+        expect(access.rowReads, greaterThanOrEqualTo(1));
+        for (var i = 0; i < 10 && access.previewReads == 0; i++) {
+          await tester.pump(const Duration(milliseconds: 20));
+        }
+        if (pendingCopy) {
+          final oldDeadline = DateTime.now().toUtc().add(
+            const Duration(seconds: 2),
+          );
+          access.rowsReply!.complete(
+            Result.success([row('123456', oldDeadline)]),
+          );
+          access.rowsReply = null;
+          await tester.pump();
+          await tester.pump();
+          expect(find.text('123456'), findsOneWidget);
+          final copying = controller.copyCard(id);
+          await tester.pump();
+          expect(controller.state.busy, isTrue);
+          final delay =
+              oldDeadline.difference(DateTime.now().toUtc()) +
+              const Duration(milliseconds: 20);
+          if (delay > Duration.zero) {
+            await tester.runAsync(() => Future<void>.delayed(delay));
+          }
+          await tester.pump(const Duration(seconds: 3));
+          expect(find.text('123456'), findsNothing);
+          expect(controller.state.busy, isTrue);
+          access.rows = [
+            row(
+              '654321',
+              DateTime.now().toUtc().add(const Duration(seconds: 30)),
+            ),
+          ];
+          export.writing!.complete();
+          await copying;
+        } else {
+          access.rows = [
+            row(
+              '654321',
+              DateTime.now().toUtc().add(const Duration(seconds: 30)),
+            ),
+          ];
+          access.rowsReply!.complete(
+            Result.success([
+              row(
+                '123456',
+                DateTime.now().toUtc().subtract(const Duration(seconds: 1)),
+              ),
+            ]),
+          );
+          access.rowsReply = null;
+          await tester.pump();
+          expect(find.text('123456'), findsNothing);
+        }
+        await tester.pump(const Duration(milliseconds: 120));
+        await tester.pump();
+        expect(find.text('654321'), findsOneWidget);
+        expect(access.rowReads, greaterThanOrEqualTo(2));
+        await tester.pumpWidget(const SizedBox.shrink());
+        var closed = false;
+        final closing = controller.close().then((_) => closed = true);
+        for (var i = 0; i < 30 && !closed; i++) {
+          await tester.runAsync(
+            () => Future<void>.delayed(const Duration(milliseconds: 10)),
+          );
+          await tester.pump(const Duration(milliseconds: 20));
+        }
+        expect(closed, isTrue);
+        await closing;
+        await events.close();
+      },
+    );
+  }
+  testWidgets('large workspace loads safe previews and Enter never copies', (
+    tester,
+  ) async {
+    await _loadFonts(tester);
+    tester.view.physicalSize = const Size(1440, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final access = _Access()..fieldCopy = 'Synthetic selected value';
+    access.handle.exists = true;
+    access.handle.state = VaultAccessStateV1.unlocked;
+    access.snapshot = ContentSnapshotV2(
+      revision: BigInt.zero,
+      groups: const [],
+      cards: List.generate(
+        1000,
+        (i) => CardSummaryV1(
+          id: i.toRadixString(16).padLeft(32, '0'),
+          name: 'Synthetic secret ${i.toString().padLeft(4, '0')}',
+          service: 'github',
+          groupIds: const [],
+          cardType: CardTypeV1.account,
+          templateVersion: 1,
+        ),
+      ),
+    );
+    final id = access.snapshot!.cards.first.id;
+    access.rows = [
+      CardRowV1(
+        id: id,
+        fields: const [FieldIdV1.login, FieldIdV1.password],
+        login: 'fixture@example.invalid',
+      ),
+    ];
+    final events = StreamController<VaultLockSignal>.broadcast();
+    final controller = _controller(access, events.stream, _Export());
+    final boundary = GlobalKey();
+    await controller.init();
+    await controller.loadContent();
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: ThemeData(fontFamily: 'packages/want_allure/Manrope'),
+        builder: (context, child) => WantTheme(
+          data: WantThemeData.dark(),
+          reduceMotion: true,
+          child: child!,
+        ),
+        home: Scaffold(
+          body: RepaintBoundary(
+            key: boundary,
+            child: VaultContentView(controller: controller),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    final reads = access.rowReads;
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+    await tester.pumpAndSettle();
+    expect(find.text('fixture@example.invalid'), findsNothing);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    await tester.pumpAndSettle();
+    expect(access.rowReads, greaterThan(reads));
+    expect(find.text('fixture@example.invalid'), findsOneWidget);
+    final mountedRows = find
+        .byWidgetPredicate(
+          (w) =>
+              w.key is ValueKey<String> &&
+              (w.key! as ValueKey<String>).value.startsWith('account-'),
+        )
+        .evaluate()
+        .length;
+    expect(mountedRows, lessThan(40));
+    await tester.tap(find.byKey(ValueKey('account-$id')));
+    await tester.pumpAndSettle();
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    await tester.pumpAndSettle();
+    expect(access.fullCardReads, 0);
+    expect(access.fieldCopies, 0);
+    expect(access.previewReads, 1);
+    expect(find.text('Synthetic selected value'), findsNothing);
+    expect(find.byKey(const ValueKey('preview-copy-password')), findsOneWidget);
+    await _capture(tester, boundary, 'workspace-desktop-dark');
+    await tester.tap(find.bySemanticsLabel('Show Password'));
+    await tester.pumpAndSettle();
+    expect(access.fieldCopies, 1);
+    expect(access.fullCardReads, 0);
+    expect(find.text('Synthetic selected value'), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('preview-copy-password')));
+    await tester.pumpAndSettle();
+    expect(access.fieldCopies, 2);
+    expect(find.byIcon(Icons.check), findsOneWidget);
+    tester.view.physicalSize = const Size(390, 844);
+    await tester.pumpAndSettle();
+    await _capture(tester, boundary, 'workspace-narrow-dark');
+    expect(tester.takeException(), isNull);
+    final locking = controller.lock();
+    await tester.pumpAndSettle();
+    await locking;
+    expect(find.text('Synthetic selected value'), findsNothing);
+    await tester.pumpWidget(const SizedBox.shrink());
+    var closed = false;
+    final closing = controller.close().then((_) => closed = true);
+    for (var i = 0; i < 30 && !closed; i++) {
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 10)),
+      );
+      await tester.pump(const Duration(milliseconds: 20));
+    }
+    expect(closed, isTrue);
+    await closing;
+    await events.close();
+  });
+
+  testWidgets('lock shortcut closes a dirty form guard immediately', (
+    tester,
+  ) async {
+    final access = _Access();
+    access.handle.exists = true;
+    access.handle.state = VaultAccessStateV1.unlocked;
+    final events = StreamController<VaultLockSignal>.broadcast();
+    final controller = _controller(access, events.stream, _Export());
+    final startup = StartupController(_Startup(), const _Reporter());
+    await tester.runAsync(() async {
+      await startup.init();
+      await controller.init();
+      await controller.loadContent();
+    });
+    await tester.pumpWidget(WantPassApp(startup: startup, vault: controller));
+    await tester.pumpAndSettle();
+    await _tapKey(tester, 'account-create');
+    await tester.enterText(
+      find.descendant(
+        of: find.byKey(const ValueKey('account-name')),
+        matching: find.byType(EditableText),
+      ),
+      'Synthetic unsaved name',
+    );
+    Future<void> shortcut(LogicalKeyboardKey key) async {
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+      await tester.sendKeyEvent(key);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+      await tester.pumpAndSettle();
+    }
+
+    await shortcut(LogicalKeyboardKey.keyN);
+    expect(find.text('Unsaved changes'), findsOneWidget);
+    await shortcut(LogicalKeyboardKey.keyL);
+    expect(controller.state.phase, VaultPhase.locked);
+    expect(find.text('Unsaved changes'), findsNothing);
+    expect(find.text('Synthetic unsaved name'), findsNothing);
+    expect(find.byType(VaultUnlockForm), findsOneWidget);
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.runAsync(() async {
+      await controller.close();
+      await startup.close();
+      await events.close();
+    });
+  });
+
+  test('single-field copy never reads the complete card', () async {
+    final access = _Access()..fieldCopy = 'fixture@example.invalid';
+    access.handle.exists = true;
+    access.handle.state = VaultAccessStateV1.unlocked;
+    final export = _Export();
+    final events = StreamController<VaultLockSignal>.broadcast();
+    final controller = _controller(access, events.stream, export);
+    await controller.init();
+    await controller.loadContent();
+    await controller.copyCard(
+      '0123456789abcdef0123456789abcdef',
+      field: FieldIdV1.login,
+    );
+    expect(export.clipboard, access.fieldCopy);
+    expect(access.fieldCopies, 1);
+    expect(access.fullCardReads, 0);
+    await controller.close();
+    await events.close();
+  });
+  for (final rows in [false, true]) {
+    test(
+      'late ${rows ? "row" : "search"} error preserves foreground busy',
+      () async {
+        final access = _Access()..accountCopy = 'synthetic credential';
+        access.handle.exists = true;
+        access.handle.state = VaultAccessStateV1.unlocked;
+        final export = _Export()..writing = Completer<void>();
+        final events = StreamController<VaultLockSignal>.broadcast();
+        final controller = _controller(access, events.stream, export);
+        await controller.init();
+        await controller.loadContent();
+        access.searchReply = Completer<DomainResult<CardMatchesV1>>();
+        access.rowsReply = Completer<DomainResult<List<CardRowV1>>>();
+        final browsing = rows
+            ? controller.readCardListRows(['synthetic-id'])
+            : controller.searchCards(const CardSearchV1(text: 'synthetic'));
+        final copying = controller.copyCard('0123456789abcdef0123456789abcdef');
+        await Future<void>.delayed(Duration.zero);
+        expect(controller.state.busy, isTrue);
+        const error = VaultRejectedErrorV1(VaultFailureKindV1.unavailable);
+        if (rows) {
+          access.rowsReply!.complete(const Result.error(error));
+        } else {
+          access.searchReply!.complete(const Result.error(error));
+        }
+        await browsing;
+        expect(controller.state.error, error);
+        expect(controller.state.busy, isTrue);
+        export.writing!.complete();
+        await copying;
+        expect(controller.state.busy, isFalse);
+        await controller.close();
+        await events.close();
+      },
+    );
+  }
+  testWidgets(
+    'credential copies expire after thirty seconds and preserve another clipboard value',
+    (tester) async {
+      final access = _Access()
+        ..accountCopy = 'Login: fixture@example.invalid\nPassword: synthetic';
+      access.handle.exists = true;
+      access.handle.state = VaultAccessStateV1.unlocked;
+      final export = _Export();
+      final events = StreamController<VaultLockSignal>.broadcast();
+      final controller = _controller(access, events.stream, export);
+      await tester.runAsync(controller.init);
+      await controller.copyCard('0123456789abcdef0123456789abcdef');
+      expect(export.clipboard, access.accountCopy);
+      await tester.pump(const Duration(seconds: 29));
+      expect(export.clipboard, access.accountCopy);
+      export.clipboard = 'other application';
+      await tester.pump(const Duration(seconds: 1));
+      expect(export.clipboard, 'other application');
+      await controller.copyCard('0123456789abcdef0123456789abcdef');
+      await tester.pump(const Duration(seconds: 30));
+      expect(export.clipboard, isEmpty);
+      await tester.runAsync(() async {
+        await controller.close();
+        await events.close();
+      });
+    },
+  );
+  test(
+    'lock waits for an admitted credential copy and clears a late write',
+    () async {
+      final access = _Access()..accountCopy = 'synthetic credential';
+      access.handle.exists = true;
+      access.handle.state = VaultAccessStateV1.unlocked;
+      final export = _Export()..writing = Completer<void>();
+      final events = StreamController<VaultLockSignal>.broadcast();
+      final controller = _controller(access, events.stream, export);
+      await controller.init();
+      final copying = controller.copyCard('0123456789abcdef0123456789abcdef');
+      await Future<void>.delayed(Duration.zero);
+      var locked = false;
+      final locking = controller.lock().then((_) => locked = true);
+      await Future<void>.delayed(Duration.zero);
+      expect(locked, isFalse);
+      export.writing!.complete();
+      await copying;
+      await locking;
+      expect(export.clipboard, isEmpty);
+      expect(controller.state.phase, VaultPhase.locked);
+      await controller.close();
+      await events.close();
+    },
+  );
   testWidgets('clipboard expires conditionally and lock clears our copy', (
     tester,
   ) async {
@@ -755,7 +1354,7 @@ void main() {
     });
   });
   testWidgets(
-    'setup gates acknowledgments, preserves Back and replaces a failed quiz',
+    'setup gates export and retries a failed quiz with the same phrase',
     (tester) async {
       final access = _Access();
       final events = StreamController<VaultLockSignal>.broadcast();
@@ -831,25 +1430,40 @@ void main() {
       );
       await _tapKey(tester, 'recovery-loss-accepted');
       await _tapKey(tester, 'setup-next');
+      final challenge = controller.state.setupChallenge;
+      expect(challenge, first);
+      final finish = find.byKey(const ValueKey('vault-confirm'));
+      expect(tester.widget<WantButton>(finish).onPressed, isNull);
       await _tapKey(tester, 'quiz-0-wrong-one');
-      expect(controller.state.setupChallenge!.revision, isNot(first!.revision));
+      await _tapKey(tester, 'quiz-1-two');
+      await _tapKey(tester, 'quiz-2-three');
+      expect(controller.state.setupChallenge, same(challenge));
+      await _tapKey(tester, 'vault-confirm');
+      expect(controller.state.setupChallenge, same(challenge));
       expect(controller.state.passwordSaved, isTrue);
       expect(controller.state.phraseSaved, isFalse);
       expect(controller.state.lossAccepted, isFalse);
-      expect(controller.state.quizPassed, everyElement(isFalse));
-      expect(find.text('Save the new phrase'), findsOneWidget);
-      await tester.tap(find.text('Continue').last);
-      await tester.pumpAndSettle();
+      expect(controller.state.recoveryExportCompleted, isFalse);
+      expect(controller.state.setupAnswers, everyElement(isNull));
+      expect(find.text('Check the phrase again'), findsOneWidget);
+      await _tapKey(tester, 'recovery-retry');
+      expect(
+        tester
+            .widget<WantButton>(find.byKey(const ValueKey('setup-next')))
+            .onPressed,
+        isNull,
+      );
+      await _tapKey(tester, 'recovery-qr');
+      await _tapKey(tester, 'qr-saved');
       await _tapKey(tester, 'setup-next');
-      await _tapKey(tester, 'phrase-saved');
       await _tapKey(tester, 'recovery-loss-accepted');
       await _tapKey(tester, 'setup-next');
       for (var i = 0; i < 3; i++) {
         await _tapKey(tester, 'quiz-$i-${['one', 'two', 'three'][i]}');
-        await _tapKey(tester, i == 2 ? 'vault-confirm' : 'setup-next');
       }
+      await _tapKey(tester, 'vault-confirm');
       expect(controller.state.phase, VaultPhase.unlocked);
-      await _tapKey(tester, 'vault-dial');
+      await _tapKey(tester, 'vault-padlock');
       expect(controller.state.phase, VaultPhase.locked);
       await tester.pumpWidget(const SizedBox());
       await tester.pump(const Duration(milliseconds: 100));
@@ -861,41 +1475,194 @@ void main() {
     },
   );
 
-  test('all quiz failures clear acknowledgments and a failed regeneration blocks confirmation', () async {
-    for (var index = 0; index < 3; index++) {
-      final access = _Access();
-      final events = StreamController<VaultLockSignal>.broadcast();
-      final controller = _controller(access, events.stream);
+  test('cancelled download cannot satisfy the recovery export gate', () async {
+    final access = _Access();
+    final export = _Export();
+    final events = StreamController<VaultLockSignal>.broadcast();
+    final controller = _controller(access, events.stream, export);
+    await controller.init();
+    await controller.prepareSetup(password: _password, confirmation: _password);
+    final pending = controller.downloadRecovery();
+    export.selection.complete(const Result.success(null));
+    await pending;
+    expect(controller.state.recoveryExportCompleted, isFalse);
+    await controller.copyRecovery();
+    expect(controller.state.recoveryExportCompleted, isTrue);
+    await controller.lock();
+    expect(controller.state.recoveryExportCompleted, isFalse);
+    await controller.close();
+    await events.close();
+  });
+
+  testWidgets('header logo opens the fixed website in the browser', (
+    tester,
+  ) async {
+    const channel = MethodChannel('plugins.flutter.io/url_launcher');
+    final messenger =
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+    final calls = <MethodCall>[];
+    messenger.setMockMethodCallHandler(channel, (call) async {
+      calls.add(call);
+      return true;
+    });
+    addTearDown(() => messenger.setMockMethodCallHandler(channel, null));
+    final events = StreamController<VaultLockSignal>.broadcast();
+    final controller = _controller(_Access(), events.stream);
+    final startup = StartupController(_Startup(), const _Reporter());
+    await tester.runAsync(() async {
+      await startup.init();
       await controller.init();
-      await controller.prepareSetup(
-        password: _password,
-        confirmation: _password,
-      );
-      controller.acknowledge(password: true, phrase: true, loss: true);
-      for (var i = 0; i < index; i++) {
-        await controller.chooseSetupWord(i, ['one', 'two', 'three'][i]);
-      }
-      final old = controller.state.setupChallenge!;
-      await controller.chooseSetupWord(index, 'wrong-one');
-      expect(controller.state.setupChallenge!.revision, isNot(old.revision));
-      expect(controller.state.passwordSaved, isTrue);
-      expect(controller.state.phraseSaved, isFalse);
-      expect(controller.state.quizPassed, everyElement(isFalse));
-      access.regenerationFailure = const VaultRejectedErrorV1(
-        VaultFailureKindV1.unavailable,
-      );
-      await controller.chooseSetupWord(0, 'wrong-one');
-      expect(controller.state.setupChallenge, isNull);
-      expect(controller.state.error, isNotNull);
-      await controller.confirmSetup(
-        answers: const ['one', 'two', 'three'],
-        password: _password,
-        hints: const VaultHintsDtoV2(),
-      );
-      expect(access.handle.exists, isFalse);
+    });
+    await tester.pumpWidget(WantPassApp(startup: startup, vault: controller));
+    await tester.pumpAndSettle();
+    final logo = find.byKey(const ValueKey('want-pass-website'));
+    await tester.drag(logo, const Offset(36, 0));
+    await tester.pump(const Duration(milliseconds: 150));
+    expect(calls, isEmpty);
+    await _tapKey(tester, 'want-pass-website');
+    await tester.pump(const Duration(milliseconds: 150));
+    expect(calls, hasLength(1));
+    expect(calls.single.method, 'launch');
+    expect(calls.single.arguments['url'], 'https://pass.want.foundation');
+    expect(calls.single.arguments['useWebView'], isFalse);
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.runAsync(() async {
       await controller.close();
+      await startup.close();
       await events.close();
-    }
+    });
+  });
+
+  testWidgets(
+    'password hint copies only on request and preserves unrelated clipboard contents',
+    (tester) async {
+      final access = _Access()
+        ..hintsReply = Completer<DomainResult<VaultHintsDtoV2>>()
+        ..handle.state = VaultAccessStateV1.locked;
+      access.hintsReply!.complete(
+        const Result.success(
+          VaultHintsDtoV2(password: 'Synthetic password hint'),
+        ),
+      );
+      final export = _Export();
+      final signals = StreamController<VaultLockSignal>.broadcast();
+      final controller = _controller(access, signals.stream, export);
+      final startup = StartupController(_Startup(), const _Reporter());
+      await tester.runAsync(() async {
+        await startup.init();
+        await controller.init();
+      });
+      await tester.pumpWidget(WantPassApp(startup: startup, vault: controller));
+      await tester.pumpAndSettle();
+      expect(export.clipboard, isEmpty);
+      tester.platformDispatcher.accessibilityFeaturesTestValue =
+          const FakeAccessibilityFeatures();
+      await tester.pump();
+      await tester.tap(find.byKey(const ValueKey('vault-show-hint')));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 350));
+      expect(find.text('Synthetic password hint'), findsOneWidget);
+      expect(find.textContaining('At least 15 characters'), findsNothing);
+      final copy = find.byKey(const ValueKey('hint-copy'));
+      final check = find.byKey(const ValueKey('hint-copied'));
+      expect(copy, findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('vault-copy-password-hint')));
+      await tester.pump();
+      expect(export.clipboard, 'Synthetic password hint');
+      expect(find.text('Hint copied'), findsNothing);
+      expect(check, findsOneWidget);
+      expect(copy, findsOneWidget);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 200));
+      await tester.pump();
+      expect(copy, findsNothing);
+      await tester.pump(const Duration(milliseconds: 2799));
+      expect(check, findsOneWidget);
+      await tester.pump(const Duration(milliseconds: 1));
+      expect(copy, findsOneWidget);
+      expect(check, findsOneWidget);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 200));
+      await tester.pump();
+      expect(check, findsNothing);
+      export.clipboard = 'Different clipboard contents';
+      await tester.pump(const Duration(seconds: 28));
+      expect(export.clipboard, 'Different clipboard contents');
+      expect(export.clears, 1);
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.runAsync(() async {
+        await controller.close();
+        await startup.close();
+        await signals.close();
+      });
+    },
+  );
+
+  testWidgets('theme retargets from current colors without clearing input', (
+    tester,
+  ) async {
+    await _loadFonts(tester);
+    tester.platformDispatcher.platformBrightnessTestValue = Brightness.light;
+    addTearDown(tester.platformDispatcher.clearPlatformBrightnessTestValue);
+    final access = _Access();
+    access.handle.state = VaultAccessStateV1.locked;
+    final events = StreamController<VaultLockSignal>.broadcast();
+    final controller = _controller(access, events.stream);
+    final startup = StartupController(_Startup(), const _Reporter());
+    final appearance = AppearanceController(
+      AppearanceUseCaseImpl(_AppearancePreferences(), const _Reporter()),
+      const _Reporter(),
+    );
+    await tester.runAsync(() async {
+      await startup.init();
+      await controller.init();
+      await appearance.init();
+    });
+    await tester.pumpWidget(
+      WantPassApp(startup: startup, vault: controller, appearance: appearance),
+    );
+    await tester.pumpAndSettle();
+    final field = find.byType(EditableText);
+    await tester.enterText(field, 'Synthetic unfinished input');
+    final editor = tester.state<EditableTextState>(field);
+    final light = WantThemeData.light().color('background');
+    final dark = WantThemeData.dark().color('background');
+    Color background() =>
+        WantTheme.of(tester.element(field)).color('background');
+    expect(background(), light);
+
+    tester.platformDispatcher.accessibilityFeaturesTestValue =
+        const FakeAccessibilityFeatures();
+    tester.platformDispatcher.platformBrightnessTestValue = Brightness.dark;
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 120));
+    final midway = background();
+    expect(midway, isNot(light));
+    expect(midway, isNot(dark));
+    expect(FTheme.of(tester.element(field)).colors.background, midway);
+
+    tester.platformDispatcher.platformBrightnessTestValue = Brightness.light;
+    await tester.pump();
+    expect(background(), midway);
+    await tester.pump(const Duration(milliseconds: 360));
+    expect(background(), light);
+    expect(tester.state<EditableTextState>(field), same(editor));
+    expect(editor.widget.controller.text, 'Synthetic unfinished input');
+    expect(editor.widget.focusNode.hasFocus, isTrue);
+
+    tester.platformDispatcher.accessibilityFeaturesTestValue =
+        const FakeAccessibilityFeatures(disableAnimations: true);
+    tester.platformDispatcher.platformBrightnessTestValue = Brightness.dark;
+    await tester.pump();
+    expect(background(), dark);
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.runAsync(() async {
+      await controller.close();
+      await startup.close();
+      await appearance.close();
+      await events.close();
+    });
   });
 
   testWidgets(
@@ -947,14 +1714,14 @@ void main() {
       final segmentWidth = tester
           .getSize(find.byKey(const ValueKey('setup-segment-0')))
           .width;
-      for (var step = 1; step < 8; step++) {
+      for (var step = 1; step < 6; step++) {
         expect(
           tester.getSize(find.byKey(ValueKey('setup-segment-$step'))).width,
           closeTo(segmentWidth, .01),
         );
       }
-      final future = tester.widget<AnimatedContainer>(
-        find.byKey(const ValueKey('setup-segment-7')),
+      final future = tester.widget<Container>(
+        find.byKey(const ValueKey('setup-segment-5')),
       );
       expect(
         (future.decoration! as BoxDecoration).color,
@@ -986,8 +1753,29 @@ void main() {
       await tester.tap(find.text('Светлая'));
       await tester.pumpAndSettle();
       expect(appearance.state.settings.theme, AppearanceThemeV1.light);
+      tester.platformDispatcher.accessibilityFeaturesTestValue =
+          const FakeAccessibilityFeatures();
+      await tester.pump();
       await tester.tap(find.byKey(const ValueKey('setup-next')));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+      final pages = tester.widget<PageView>(find.byType(PageView)).controller!;
+      final intermediate = pages.page!;
+      expect(intermediate, greaterThan(0));
+      expect(intermediate, lessThan(1));
+      await tester.tap(find.byKey(const ValueKey('setup-back')));
+      await tester.pump();
+      expect(pages.page, closeTo(intermediate, .001));
+      await tester.pump(const Duration(milliseconds: 360));
+      expect(pages.page, 0);
+      tester.platformDispatcher.accessibilityFeaturesTestValue =
+          const FakeAccessibilityFeatures(disableAnimations: true);
       await tester.pumpAndSettle();
+      final next = find.byKey(const ValueKey('setup-next'));
+      expect(tester.widget<WantButton>(next).onPressed, isNotNull);
+      await tester.tap(next);
+      await tester.pumpAndSettle();
+      expect(pages.page, 1);
       expect(appearance.state.settings.configured, isTrue);
       tester.view.physicalSize = const Size(320, 800);
       tester.platformDispatcher.textScaleFactorTestValue = 1.8;
@@ -1020,8 +1808,8 @@ void main() {
       });
       await tester.pumpWidget(WantPassApp(startup: startup, vault: controller));
       await tester.pumpAndSettle();
-      await _tapKey(tester, 'vault-dial');
-      await _rejectUnlock(tester, access);
+      await _tapKey(tester, 'vault-padlock');
+      await _tapKey(tester, 'vault-show-hint');
       await _tapKey(tester, 'vault-recovery');
       expect(
         tester
@@ -1162,6 +1950,7 @@ VaultController _controller(
     const _Reporter(),
     export ?? const PlatformRecoveryExportService(_Reporter()),
     const PlatformGroupLogoService(_Reporter()),
+    const PlatformCredentialFileService(_Reporter()),
   ),
   const _Reporter(),
   events,
@@ -1186,6 +1975,182 @@ final class _Handle implements VaultHandleV1 {
 }
 
 final class _Access implements VaultAccessService {
+  String? accountCopy, fieldCopy;
+  int fullCardReads = 0, fieldCopies = 0, rowReads = 0, previewReads = 0;
+  ContentSnapshotV2? snapshot;
+  List<CardRowV1> rows = const [];
+  Completer<DomainResult<CardMatchesV1>>? searchReply;
+  Completer<DomainResult<List<CardRowV1>>>? rowsReply;
+
+  @override
+  FutureDomainResult<CardMatchesV1> searchCardsV1({
+    required VaultHandleV1 handle,
+    required CardSearchV1 query,
+    required BigInt revision,
+  }) async => searchReply == null
+      ? Result.success(
+          CardMatchesV1(
+            revision: revision,
+            cardIds: List.unmodifiable(
+              snapshot?.cards.map((c) => c.id) ?? const <String>[],
+            ),
+            groupIds: const [],
+          ),
+        )
+      : await searchReply!.future;
+  @override
+  FutureDomainResult<List<CardListRowV1>> cardListRowsV1({
+    required VaultHandleV1 handle,
+    required List<String> ids,
+    required BigInt revision,
+  }) async {
+    final rows = await cardRowsV1(handle: handle, ids: ids, revision: revision);
+    return rows.isError
+        ? Result.error(rows.error)
+        : Result.success(
+            List.unmodifiable(
+              rows.value.map(
+                (row) => CardListRowV1(id: row.id, login: row.login),
+              ),
+            ),
+          );
+  }
+
+  @override
+  FutureDomainResult<List<CardRowV1>> cardRowsV1({
+    required VaultHandleV1 handle,
+    required List<String> ids,
+    required BigInt revision,
+  }) async {
+    rowReads++;
+    return rowsReply == null ? Result.success(rows) : await rowsReply!.future;
+  }
+
+  @override
+  FutureDomainResult<CardCatalogV1> cardCatalogV1() async => Result.success(
+    CardCatalogV1(
+      services: const ['github'],
+      presets: [CardPresetV1(cardType: CardTypeV1.account, fields: const [])],
+    ),
+  );
+  @override
+  FutureDomainResult<ContentSnapshotV2> contentV2({
+    required VaultHandleV1 handle,
+  }) async => Result.success(
+    snapshot ??
+        ContentSnapshotV2(
+          revision: BigInt.zero,
+          groups: const [],
+          cards: const [],
+        ),
+  );
+  @override
+  FutureDomainResult<ContentSnapshotV2> saveGroupV2({
+    required VaultHandleV1 handle,
+    required GroupDraftV1 input,
+    required BigInt revision,
+  }) async => Result.error(
+    contentFailure ??
+        const VaultRejectedErrorV1(VaultFailureKindV1.unavailable),
+  );
+  @override
+  FutureDomainResult<ContentSnapshotV2> deleteGroupV2({
+    required VaultHandleV1 handle,
+    required String id,
+    required BigInt revision,
+  }) async =>
+      const Result.error(VaultRejectedErrorV1(VaultFailureKindV1.unavailable));
+  @override
+  FutureDomainResult<CardPreviewV1> cardPreviewV1({
+    required VaultHandleV1 handle,
+    required String id,
+    required BigInt revision,
+  }) async {
+    previewReads++;
+    final result = await cardRowsV1(
+      handle: handle,
+      ids: [id],
+      revision: revision,
+    );
+    if (result.isError) return Result.error(result.error);
+    final row = result.value.where((r) => r.id == id).firstOrNull;
+    return row == null
+        ? const Result.error(
+            VaultRejectedErrorV1(VaultFailureKindV1.unavailable),
+          )
+        : Result.success(
+            CardPreviewV1(row: row, description: '', protectedContainer: false),
+          );
+  }
+
+  @override
+  FutureDomainResult<CardV1> cardV1({
+    required VaultHandleV1 handle,
+    required String id,
+  }) async {
+    fullCardReads++;
+    return const Result.error(
+      VaultRejectedErrorV1(VaultFailureKindV1.unavailable),
+    );
+  }
+
+  @override
+  FutureDomainResult<ContentSnapshotV2> saveCardV1({
+    required VaultHandleV1 handle,
+    required CardDraftV1 input,
+    required BigInt revision,
+  }) async =>
+      const Result.error(VaultRejectedErrorV1(VaultFailureKindV1.unavailable));
+  @override
+  FutureDomainResult<ContentSnapshotV2> deleteCardV1({
+    required VaultHandleV1 handle,
+    required String id,
+    required BigInt revision,
+  }) async =>
+      const Result.error(VaultRejectedErrorV1(VaultFailureKindV1.unavailable));
+  @override
+  FutureDomainResult<HotpAdvanceV1> nextHotpV1({
+    required VaultHandleV1 handle,
+    required String id,
+    required BigInt revision,
+  }) async => Result.error(const VaultUnexpectedErrorV1());
+
+  @override
+  FutureDomainResult<TotpCodeV1> currentTotpV1({
+    required VaultHandleV1 handle,
+    required String id,
+  }) async =>
+      const Result.error(VaultRejectedErrorV1(VaultFailureKindV1.unavailable));
+  @override
+  FutureDomainResult<String> copyCardFieldV1({
+    required VaultHandleV1 handle,
+    required String id,
+    required FieldIdV1 field,
+  }) async {
+    fieldCopies++;
+    return fieldCopy == null
+        ? const Result.error(
+            VaultRejectedErrorV1(VaultFailureKindV1.unavailable),
+          )
+        : Result.success(fieldCopy!);
+  }
+
+  @override
+  FutureDomainResult<String> copyAccountV1({
+    required VaultHandleV1 handle,
+    required String id,
+  }) async => accountCopy == null
+      ? const Result.error(VaultRejectedErrorV1(VaultFailureKindV1.unavailable))
+      : Result.success(accountCopy!);
+  @override
+  FutureDomainResult<void> exportAttachmentV1({
+    required VaultHandleV1 handle,
+    required String id,
+    required String destination,
+    required BigInt revision,
+  }) async =>
+      const Result.error(VaultRejectedErrorV1(VaultFailureKindV1.unavailable));
+
   @override
   FutureDomainResult<ContentSnapshotV1> contentV1({
     required VaultHandleV1 handle,
@@ -1236,10 +2201,16 @@ final class _Access implements VaultAccessService {
   VaultErrorV1? contentFailure;
   Completer<DomainResult<VaultHintsDtoV2>>? hintsReply;
   BigInt revision = BigInt.zero;
-  VaultErrorV1? regenerationFailure;
   VaultErrorV1? validationFailure;
   Completer<DomainResult<void>>? validation;
   int validations = 0;
+  @override
+  FutureDomainResult<void> resetApplicationV1({
+    required VaultHandleV1 handle,
+    required String phrase,
+  }) async =>
+      const Result.error(VaultRejectedErrorV1(VaultFailureKindV1.unavailable));
+
   @override
   FutureDomainResult<void> validateRecoveryV3({
     required VaultHandleV1 handle,
@@ -1286,9 +2257,6 @@ final class _Access implements VaultAccessService {
     required VaultHandleV1 handle,
   }) {
     revision += BigInt.one;
-    if (regenerationFailure case final error?) {
-      return Future.value(Result.error(error));
-    }
     return prepareCreationV3(handle: handle, password: _password);
   }
 
@@ -1299,12 +2267,18 @@ final class _Access implements VaultAccessService {
     required String password,
     required VaultHintsDtoV2 hints,
     required BigInt revision,
-  }) => confirmV2(
-    handle: handle,
-    answers: answers,
-    password: password,
-    hints: hints,
-  );
+  }) => listEquals(answers, ['one', 'two', 'three'])
+      ? confirmV2(
+          handle: handle,
+          answers: answers,
+          password: password,
+          hints: hints,
+        )
+      : Future.value(
+          const Result.error(
+            VaultRejectedErrorV1(VaultFailureKindV1.confirmation),
+          ),
+        );
   @override
   FutureDomainResult<void> exportRecoveryV3({
     required VaultHandleV1 handle,
@@ -1419,6 +2393,25 @@ final class _Access implements VaultAccessService {
   }
 
   Completer<DomainResult<bool>>? passwordCheck;
+  FutureDomainResult<PasswordPolicyStatusV4> Function(String)? setupPolicy;
+  @override
+  FutureDomainResult<PasswordPolicyStatusV4> passwordPolicyV4({
+    required String password,
+  }) async {
+    if (setupPolicy case final check?) return check(password);
+    return Result.success(
+      PasswordPolicyStatusV4(
+        minimumLength: password.runes.length >= 15,
+        maximumBytes: true,
+        uppercase: password.contains(RegExp('[A-Z]')),
+        lowercase: password.contains(RegExp('[a-z]')),
+        digit: password.contains(RegExp('[0-9]')),
+        special: password.contains('!'),
+        singleLine: true,
+      ),
+    );
+  }
+
   @override
   FutureDomainResult<bool> validatePasswordV3({required String password}) =>
       passwordCheck?.future ??
@@ -1484,6 +2477,7 @@ final class _Export implements RecoveryExportService {
   final selection = Completer<DomainResult<String?>>();
   String clipboard = '';
   Completer<void>? clearing;
+  Completer<void>? writing;
   int clears = 0;
   @override
   FutureDomainResult<String?> selectFileV1() => selection.future;
@@ -1491,6 +2485,7 @@ final class _Export implements RecoveryExportService {
   FutureDomainResult<String?> selectFileV3() => selection.future;
   @override
   FutureDomainResult<void> copyV1(String phrase) async {
+    await writing?.future;
     clipboard = phrase;
     return const Result.success(null);
   }
@@ -1544,26 +2539,13 @@ Future<void> _capture(WidgetTester tester, GlobalKey key, String name) async {
 
 Future<void> _tapKey(WidgetTester tester, String key) async {
   final target = find.byKey(ValueKey(key));
+  if (key == 'vault-create' || key == 'vault-recover') {
+    await tester.pump(const Duration(milliseconds: 130));
+  }
   await tester.ensureVisible(target);
   await tester.pumpAndSettle();
   await tester.tap(target);
   await tester.pumpAndSettle();
-}
-
-Future<void> _rejectUnlock(WidgetTester tester, _Access access) async {
-  final previous = access.failure;
-  access.failure = const VaultRejectedErrorV1(VaultFailureKindV1.credentials);
-  try {
-    final input = find.descendant(
-      of: find.byKey(const ValueKey('unlock-password')),
-      matching: find.bySubtype<EditableText>(),
-    );
-    await _enter(tester, input, _password);
-    await _tapKey(tester, 'vault-unlock');
-    expect(access.passwords.last, _password);
-  } finally {
-    access.failure = previous;
-  }
 }
 
 Future<void> _loadFonts(WidgetTester tester) async {
@@ -1572,6 +2554,7 @@ Future<void> _loadFonts(WidgetTester tester) async {
     rootBundle.evict('assets/brand/logo.svg');
     await rootBundle.loadString('assets/brand/logo.svg');
     for (final (family, asset) in [
+      ('MaterialIcons', 'fonts/MaterialIcons-Regular.otf'),
       (
         'packages/want_allure/Days One',
         'packages/want_allure/assets/fonts/DaysOne-Regular.ttf',

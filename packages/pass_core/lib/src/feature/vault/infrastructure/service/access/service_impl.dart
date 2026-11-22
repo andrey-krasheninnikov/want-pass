@@ -11,12 +11,19 @@ import 'package:want_pass_core/src/feature/vault/infrastructure/_barrel.dart'
 final class RustVaultAccessService implements VaultAccessService {
   final String _directory;
   final VaultReporter _reporter;
-  const RustVaultAccessService(this._directory, this._reporter);
+  final bool _application;
+  const RustVaultAccessService(
+    this._directory,
+    this._reporter, {
+    this._application = false,
+  });
   @override
   FutureDomainResult<VaultHandleV1> openV1() async {
     const op = 'RustVaultAccessService.openV1():';
     final result = await captureResult<VaultHandleV1>(() async {
-      final value = await native.Vault.open(directory: _directory);
+      final value = _application
+          ? await native.Vault.openApplicationV1(directory: _directory)
+          : await native.Vault.open(directory: _directory);
       return _NativeVaultHandle(value, _reporter);
     }, mapToDomainError: _mapNativeError);
     if (result.isError) {
@@ -145,6 +152,36 @@ final class RustVaultAccessService implements VaultAccessService {
   }
 
   @override
+  FutureDomainResult<PasswordPolicyStatusV4> passwordPolicyV4({
+    required String password,
+  }) async {
+    const op = 'RustVaultAccessService.passwordPolicyV4():';
+    final result = await captureResult<PasswordPolicyStatusV4>(() async {
+      final data = await native.passwordPolicyV4(password: password);
+      return PasswordPolicyStatusV4(
+        minimumLength: data.minimumLength,
+        maximumBytes: data.maximumBytes,
+        uppercase: data.uppercase,
+        lowercase: data.lowercase,
+        digit: data.digit,
+        special: data.special,
+        singleLine: data.singleLine,
+      );
+    }, mapToDomainError: _mapNativeError);
+    if (result.isError) {
+      reportVaultSafely(
+        _reporter,
+        layer: VaultDiagnosticLayer.infrastructure,
+        operation: op,
+        error: result.error is VaultErrorV1
+            ? result.error as VaultErrorV1
+            : const VaultUnexpectedErrorV1(),
+      );
+    }
+    return result;
+  }
+
+  @override
   FutureDomainResult<bool> validatePasswordV3({
     required String password,
   }) async {
@@ -249,6 +286,31 @@ final class RustVaultAccessService implements VaultAccessService {
     const op = 'RustVaultAccessService.validateRecoveryV3():';
     final result = await captureResult<void>(() async {
       await (handle as _NativeVaultHandle)._vault.validateRecoveryV3(
+        phrase: phrase,
+        generation: handle._vault.generation(),
+      );
+    }, mapToDomainError: _mapNativeError);
+    if (result.isError) {
+      reportVaultSafely(
+        _reporter,
+        layer: VaultDiagnosticLayer.infrastructure,
+        operation: op,
+        error: result.error is VaultErrorV1
+            ? result.error as VaultErrorV1
+            : const VaultUnexpectedErrorV1(),
+      );
+    }
+    return result;
+  }
+
+  @override
+  FutureDomainResult<void> resetApplicationV1({
+    required VaultHandleV1 handle,
+    required String phrase,
+  }) async {
+    const op = 'RustVaultAccessService.resetApplicationV1():';
+    final result = await captureResult<void>(() async {
+      await (handle as _NativeVaultHandle)._vault.resetApplicationV1(
         phrase: phrase,
         generation: handle._vault.generation(),
       );
@@ -755,6 +817,581 @@ final class RustVaultAccessService implements VaultAccessService {
     }
     return result;
   }
+
+  @override
+  FutureDomainResult<CardCatalogV1> cardCatalogV1() async {
+    const op = 'RustVaultAccessService.cardCatalogV1():';
+    final result = await captureResult<CardCatalogV1>(() async {
+      return CardCatalogV1(
+        services: await native.servicesV1(),
+        presets: (await native.cardPresetsV1())
+            .map(
+              (p) => CardPresetV1(
+                cardType: _cardType(p.cardType),
+                fields: p.fields
+                    .map(
+                      (f) => FieldSpecV1(
+                        id: _fieldId(f.id),
+                        required: f.required_,
+                        concealed: f.concealed,
+                        multiline: f.multiline,
+                        maxBytes: f.maxBytes,
+                      ),
+                    )
+                    .toList(),
+              ),
+            )
+            .toList(),
+      );
+    }, mapToDomainError: _mapNativeError);
+    if (result.isError) {
+      reportVaultSafely(
+        _reporter,
+        layer: VaultDiagnosticLayer.infrastructure,
+        operation: op,
+        error: result.error is VaultErrorV1
+            ? result.error as VaultErrorV1
+            : const VaultUnexpectedErrorV1(),
+      );
+    }
+    return result;
+  }
+
+  @override
+  FutureDomainResult<ContentSnapshotV2> contentV2({
+    required VaultHandleV1 handle,
+  }) async {
+    const op = 'RustVaultAccessService.contentV2():';
+    final result = await captureResult<ContentSnapshotV2>(() async {
+      final vault = (handle as _NativeVaultHandle)._vault;
+      return _cards(await vault.contentV2(generation: vault.generation()));
+    }, mapToDomainError: _mapNativeError);
+    if (result.isError) {
+      reportVaultSafely(
+        _reporter,
+        layer: VaultDiagnosticLayer.infrastructure,
+        operation: op,
+        error: result.error is VaultErrorV1
+            ? result.error as VaultErrorV1
+            : const VaultUnexpectedErrorV1(),
+      );
+    }
+    return result;
+  }
+
+  @override
+  FutureDomainResult<ContentSnapshotV2> saveGroupV2({
+    required VaultHandleV1 handle,
+    required GroupDraftV1 input,
+    required BigInt revision,
+  }) async {
+    const op = 'RustVaultAccessService.saveGroupV2():';
+    final result = await captureResult<ContentSnapshotV2>(() async {
+      final vault = (handle as _NativeVaultHandle)._vault;
+      return _cards(
+        await vault.saveGroupV2(
+          input: native.GroupInputV1(
+            id: input.id,
+            name: input.name,
+            description: input.description,
+            icon: input.icon,
+            logo: Uint8List.fromList(input.logo),
+          ),
+          revision: revision,
+          generation: vault.generation(),
+        ),
+      );
+    }, mapToDomainError: _mapNativeError);
+    if (result.isError) {
+      reportVaultSafely(
+        _reporter,
+        layer: VaultDiagnosticLayer.infrastructure,
+        operation: op,
+        error: result.error is VaultErrorV1
+            ? result.error as VaultErrorV1
+            : const VaultUnexpectedErrorV1(),
+      );
+    }
+    return result;
+  }
+
+  @override
+  FutureDomainResult<ContentSnapshotV2> deleteGroupV2({
+    required VaultHandleV1 handle,
+    required String id,
+    required BigInt revision,
+  }) async {
+    const op = 'RustVaultAccessService.deleteGroupV2():';
+    final result = await captureResult<ContentSnapshotV2>(() async {
+      final vault = (handle as _NativeVaultHandle)._vault;
+      return _cards(
+        await vault.deleteGroupV2(
+          id: id,
+          revision: revision,
+          generation: vault.generation(),
+        ),
+      );
+    }, mapToDomainError: _mapNativeError);
+    if (result.isError) {
+      reportVaultSafely(
+        _reporter,
+        layer: VaultDiagnosticLayer.infrastructure,
+        operation: op,
+        error: result.error is VaultErrorV1
+            ? result.error as VaultErrorV1
+            : const VaultUnexpectedErrorV1(),
+      );
+    }
+    return result;
+  }
+
+  @override
+  FutureDomainResult<CardMatchesV1> searchCardsV1({
+    required VaultHandleV1 handle,
+    required CardSearchV1 query,
+    required BigInt revision,
+  }) async {
+    const op = 'RustVaultAccessService.searchCardsV1():';
+    final result = await captureResult<CardMatchesV1>(() async {
+      final vault = (handle as _NativeVaultHandle)._vault;
+      final value = await vault.searchCardsV1(
+        query: native.CardSearchV1(
+          text: query.text,
+          cardType: query.cardType == null
+              ? null
+              : _nativeCardType(query.cardType!),
+          service: query.service,
+          environment: query.environment == null
+              ? null
+              : _nativeEnvironment(query.environment!),
+          withoutEnvironment: query.withoutEnvironment,
+        ),
+        revision: revision,
+        generation: vault.generation(),
+      );
+      return CardMatchesV1(
+        revision: value.revision,
+        cardIds: List.unmodifiable(value.cardIds),
+        groupIds: List.unmodifiable(value.groupIds),
+      );
+    }, mapToDomainError: _mapNativeError);
+    if (result.isError) {
+      reportVaultSafely(
+        _reporter,
+        layer: VaultDiagnosticLayer.infrastructure,
+        operation: op,
+        error: result.error is VaultErrorV1
+            ? result.error as VaultErrorV1
+            : const VaultUnexpectedErrorV1(),
+      );
+    }
+    return result;
+  }
+
+  @override
+  FutureDomainResult<List<CardListRowV1>> cardListRowsV1({
+    required VaultHandleV1 handle,
+    required List<String> ids,
+    required BigInt revision,
+  }) async {
+    const op = 'RustVaultAccessService.cardListRowsV1():';
+    final result = await captureResult<List<CardListRowV1>>(() async {
+      final vault = (handle as _NativeVaultHandle)._vault;
+      final rows = await vault.cardListRowsV1(
+        ids: ids,
+        revision: revision,
+        generation: vault.generation(),
+      );
+      return List.unmodifiable(
+        rows.map((row) => CardListRowV1(id: row.id, login: row.login)),
+      );
+    }, mapToDomainError: _mapNativeError);
+    if (result.isError) {
+      reportVaultSafely(
+        _reporter,
+        layer: VaultDiagnosticLayer.infrastructure,
+        operation: op,
+        error: result.error is VaultErrorV1
+            ? result.error as VaultErrorV1
+            : const VaultUnexpectedErrorV1(),
+      );
+    }
+    return result;
+  }
+
+  @override
+  FutureDomainResult<List<CardRowV1>> cardRowsV1({
+    required VaultHandleV1 handle,
+    required List<String> ids,
+    required BigInt revision,
+  }) async {
+    const op = 'RustVaultAccessService.cardRowsV1():';
+    final result = await captureResult<List<CardRowV1>>(() async {
+      final vault = (handle as _NativeVaultHandle)._vault;
+      final values = await vault.cardRowsV1(
+        ids: ids,
+        revision: revision,
+        generation: vault.generation(),
+      );
+      return List.unmodifiable(
+        values.map(
+          (v) => CardRowV1(
+            id: v.id,
+            fields: List.unmodifiable(v.fields.map(_fieldId)),
+            login: v.login,
+            otp: v.otp == null
+                ? null
+                : TotpCodeV1(
+                    code: v.otp!.code,
+                    validUntil: DateTime.fromMillisecondsSinceEpoch(
+                      v.otp!.validUntil.toInt() * 1000,
+                      isUtc: true,
+                    ),
+                    period: Duration(seconds: v.otp!.period.toInt()),
+                  ),
+            attachment: v.attachment == null
+                ? null
+                : AttachmentV1(
+                    name: v.attachment!.name,
+                    size: v.attachment!.size,
+                  ),
+          ),
+        ),
+      );
+    }, mapToDomainError: _mapNativeError);
+    if (result.isError) {
+      reportVaultSafely(
+        _reporter,
+        layer: VaultDiagnosticLayer.infrastructure,
+        operation: op,
+        error: result.error is VaultErrorV1
+            ? result.error as VaultErrorV1
+            : const VaultUnexpectedErrorV1(),
+      );
+    }
+    return result;
+  }
+
+  @override
+  FutureDomainResult<CardPreviewV1> cardPreviewV1({
+    required VaultHandleV1 handle,
+    required String id,
+    required BigInt revision,
+  }) async {
+    const op = 'RustVaultAccessService.cardPreviewV1():';
+    final result = await captureResult<CardPreviewV1>(() async {
+      final vault = (handle as _NativeVaultHandle)._vault;
+      final v = await vault.cardPreviewV1(
+        id: id,
+        revision: revision,
+        generation: vault.generation(),
+      );
+      return CardPreviewV1(
+        row: CardRowV1(
+          id: v.row.id,
+          fields: List.unmodifiable(v.row.fields.map(_fieldId)),
+          login: v.row.login,
+          otp: v.row.otp == null
+              ? null
+              : TotpCodeV1(
+                  code: v.row.otp!.code,
+                  validUntil: DateTime.fromMillisecondsSinceEpoch(
+                    v.row.otp!.validUntil.toInt() * 1000,
+                    isUtc: true,
+                  ),
+                  period: Duration(seconds: v.row.otp!.period.toInt()),
+                ),
+          attachment: v.row.attachment == null
+              ? null
+              : AttachmentV1(
+                  name: v.row.attachment!.name,
+                  size: v.row.attachment!.size,
+                ),
+        ),
+        description: v.description,
+        protectedContainer: v.protectedContainer,
+      );
+    }, mapToDomainError: _mapNativeError);
+    if (result.isError) {
+      reportVaultSafely(
+        _reporter,
+        layer: VaultDiagnosticLayer.infrastructure,
+        operation: op,
+        error: result.error is VaultErrorV1
+            ? result.error as VaultErrorV1
+            : const VaultUnexpectedErrorV1(),
+      );
+    }
+    return result;
+  }
+
+  @override
+  FutureDomainResult<CardV1> cardV1({
+    required VaultHandleV1 handle,
+    required String id,
+  }) async {
+    const op = 'RustVaultAccessService.cardV1():';
+    final result = await captureResult<CardV1>(() async {
+      final vault = (handle as _NativeVaultHandle)._vault;
+      final value = await vault.cardV1(id: id, generation: vault.generation());
+      return CardV1(
+        summary: _cardSummary(value.summary),
+        description: value.description,
+        fields: value.fields
+            .map((f) => CardValueV1(id: _fieldId(f.id), value: f.value))
+            .toList(),
+        attachment: value.attachment == null
+            ? null
+            : AttachmentV1(
+                name: value.attachment!.name,
+                size: value.attachment!.size,
+              ),
+        protectedContainer: value.protectedContainer,
+      );
+    }, mapToDomainError: _mapNativeError);
+    if (result.isError) {
+      reportVaultSafely(
+        _reporter,
+        layer: VaultDiagnosticLayer.infrastructure,
+        operation: op,
+        error: result.error is VaultErrorV1
+            ? result.error as VaultErrorV1
+            : const VaultUnexpectedErrorV1(),
+      );
+    }
+    return result;
+  }
+
+  @override
+  FutureDomainResult<ContentSnapshotV2> saveCardV1({
+    required VaultHandleV1 handle,
+    required CardDraftV1 input,
+    required BigInt revision,
+  }) async {
+    const op = 'RustVaultAccessService.saveCardV1():';
+    final result = await captureResult<ContentSnapshotV2>(() async {
+      final vault = (handle as _NativeVaultHandle)._vault;
+      return _cards(
+        await vault.saveCardV1(
+          input: native.CardInputV1(
+            id: input.id,
+            name: input.name,
+            description: input.description,
+            service: input.service,
+            cardType: _nativeCardType(input.cardType),
+            environment: input.environment == null
+                ? null
+                : _nativeEnvironment(input.environment!),
+            groupIds: List.of(input.groupIds),
+            fields: input.fields
+                .map(
+                  (f) => native.CardValueV1(
+                    id: _nativeFieldId(f.id),
+                    value: f.value,
+                  ),
+                )
+                .toList(),
+            attachment: input.attachment == null
+                ? null
+                : native.AttachmentInputV1(
+                    name: input.attachment!.name,
+                    bytes: Uint8List.fromList(input.attachment!.bytes),
+                  ),
+          ),
+          revision: revision,
+          generation: vault.generation(),
+        ),
+      );
+    }, mapToDomainError: _mapNativeError);
+    if (result.isError) {
+      reportVaultSafely(
+        _reporter,
+        layer: VaultDiagnosticLayer.infrastructure,
+        operation: op,
+        error: result.error is VaultErrorV1
+            ? result.error as VaultErrorV1
+            : const VaultUnexpectedErrorV1(),
+      );
+    }
+    return result;
+  }
+
+  @override
+  FutureDomainResult<ContentSnapshotV2> deleteCardV1({
+    required VaultHandleV1 handle,
+    required String id,
+    required BigInt revision,
+  }) async {
+    const op = 'RustVaultAccessService.deleteCardV1():';
+    final result = await captureResult<ContentSnapshotV2>(() async {
+      final vault = (handle as _NativeVaultHandle)._vault;
+      return _cards(
+        await vault.deleteCardV1(
+          id: id,
+          revision: revision,
+          generation: vault.generation(),
+        ),
+      );
+    }, mapToDomainError: _mapNativeError);
+    if (result.isError) {
+      reportVaultSafely(
+        _reporter,
+        layer: VaultDiagnosticLayer.infrastructure,
+        operation: op,
+        error: result.error is VaultErrorV1
+            ? result.error as VaultErrorV1
+            : const VaultUnexpectedErrorV1(),
+      );
+    }
+    return result;
+  }
+
+  @override
+  FutureDomainResult<HotpAdvanceV1> nextHotpV1({
+    required VaultHandleV1 handle,
+    required String id,
+    required BigInt revision,
+  }) async {
+    const op = 'RustVaultAccessService.nextHotpV1():';
+    final result = await captureResult<HotpAdvanceV1>(() async {
+      final vault = (handle as _NativeVaultHandle)._vault;
+      final response = await vault.nextHotpV1(
+        id: id,
+        revision: revision,
+        generation: vault.generation(),
+      );
+      return HotpAdvanceV1(
+        snapshot: _cards(response.snapshot),
+        code: response.code,
+      );
+    }, mapToDomainError: _mapNativeError);
+    if (result.isError) {
+      reportVaultSafely(
+        _reporter,
+        layer: VaultDiagnosticLayer.infrastructure,
+        operation: op,
+        error: result.error is VaultErrorV1
+            ? result.error as VaultErrorV1
+            : const VaultUnexpectedErrorV1(),
+      );
+    }
+    return result;
+  }
+
+  @override
+  FutureDomainResult<TotpCodeV1> currentTotpV1({
+    required VaultHandleV1 handle,
+    required String id,
+  }) async {
+    const op = 'RustVaultAccessService.currentTotpV1():';
+    final result = await captureResult<TotpCodeV1>(() async {
+      final vault = (handle as _NativeVaultHandle)._vault;
+      final value = await vault.currentTotpV1(
+        id: id,
+        generation: vault.generation(),
+      );
+      return TotpCodeV1(
+        code: value.code,
+        validUntil: DateTime.fromMillisecondsSinceEpoch(
+          value.validUntil.toInt() * 1000,
+          isUtc: true,
+        ),
+        period: Duration(seconds: value.period.toInt()),
+      );
+    }, mapToDomainError: _mapNativeError);
+    if (result.isError) {
+      reportVaultSafely(
+        _reporter,
+        layer: VaultDiagnosticLayer.infrastructure,
+        operation: op,
+        error: result.error is VaultErrorV1
+            ? result.error as VaultErrorV1
+            : const VaultUnexpectedErrorV1(),
+      );
+    }
+    return result;
+  }
+
+  @override
+  FutureDomainResult<String> copyCardFieldV1({
+    required VaultHandleV1 handle,
+    required String id,
+    required FieldIdV1 field,
+  }) async {
+    const op = 'RustVaultAccessService.copyCardFieldV1():';
+    final result = await captureResult<String>(() async {
+      final vault = (handle as _NativeVaultHandle)._vault;
+      return vault.copyCardFieldV1(
+        id: id,
+        field: _nativeFieldId(field),
+        generation: vault.generation(),
+      );
+    }, mapToDomainError: _mapNativeError);
+    if (result.isError) {
+      reportVaultSafely(
+        _reporter,
+        layer: VaultDiagnosticLayer.infrastructure,
+        operation: op,
+        error: result.error is VaultErrorV1
+            ? result.error as VaultErrorV1
+            : const VaultUnexpectedErrorV1(),
+      );
+    }
+    return result;
+  }
+
+  @override
+  FutureDomainResult<String> copyAccountV1({
+    required VaultHandleV1 handle,
+    required String id,
+  }) async {
+    const op = 'RustVaultAccessService.copyAccountV1():';
+    final result = await captureResult<String>(() async {
+      final vault = (handle as _NativeVaultHandle)._vault;
+      return vault.copyAccountV1(id: id, generation: vault.generation());
+    }, mapToDomainError: _mapNativeError);
+    if (result.isError) {
+      reportVaultSafely(
+        _reporter,
+        layer: VaultDiagnosticLayer.infrastructure,
+        operation: op,
+        error: result.error is VaultErrorV1
+            ? result.error as VaultErrorV1
+            : const VaultUnexpectedErrorV1(),
+      );
+    }
+    return result;
+  }
+
+  @override
+  FutureDomainResult<void> exportAttachmentV1({
+    required VaultHandleV1 handle,
+    required String id,
+    required String destination,
+    required BigInt revision,
+  }) async {
+    const op = 'RustVaultAccessService.exportAttachmentV1():';
+    final result = await captureResult<void>(() async {
+      final vault = (handle as _NativeVaultHandle)._vault;
+      await vault.exportAttachmentV1(
+        id: id,
+        destination: destination,
+        revision: revision,
+        generation: vault.generation(),
+      );
+    }, mapToDomainError: _mapNativeError);
+    if (result.isError) {
+      reportVaultSafely(
+        _reporter,
+        layer: VaultDiagnosticLayer.infrastructure,
+        operation: op,
+        error: result.error is VaultErrorV1
+            ? result.error as VaultErrorV1
+            : const VaultUnexpectedErrorV1(),
+      );
+    }
+    return result;
+  }
 }
 
 final class _NativeVaultHandle implements VaultHandleV1 {
@@ -871,3 +1508,278 @@ ContentSnapshotV1 _content(native.ContentSnapshotV1 value) => ContentSnapshotV1(
       )
       .toList(),
 );
+
+ContentSnapshotV2 _cards(native.ContentSnapshotV2 value) => ContentSnapshotV2(
+  revision: value.revision,
+  groups: value.groups
+      .map(
+        (g) => GroupV1(
+          id: g.id,
+          name: g.name,
+          description: g.description,
+          icon: g.icon,
+          logo: g.logo,
+        ),
+      )
+      .toList(),
+  cards: value.cards.map(_cardSummary).toList(),
+);
+CardSummaryV1 _cardSummary(native.CardSummaryV1 value) => CardSummaryV1(
+  id: value.id,
+  name: value.name,
+  service: value.service,
+  environment: value.environment == null
+      ? null
+      : _environment(value.environment!),
+  groupIds: value.groupIds,
+  cardType: _cardType(value.cardType),
+  templateVersion: value.templateVersion,
+);
+CardTypeV1 _cardType(native.CardTypeV1 value) => switch (value) {
+  native.CardTypeV1.account => CardTypeV1.account,
+  native.CardTypeV1.pat => CardTypeV1.pat,
+  native.CardTypeV1.rsa => CardTypeV1.rsa,
+  native.CardTypeV1.ed25519 => CardTypeV1.ed25519,
+  native.CardTypeV1.secretKey => CardTypeV1.secretKey,
+  native.CardTypeV1.passphrase => CardTypeV1.passphrase,
+  native.CardTypeV1.recoveryCodes => CardTypeV1.recoveryCodes,
+  native.CardTypeV1.recoveryUrl => CardTypeV1.recoveryUrl,
+  native.CardTypeV1.secretQa => CardTypeV1.secretQa,
+  native.CardTypeV1.vless => CardTypeV1.vless,
+  native.CardTypeV1.wireGuard => CardTypeV1.wireGuard,
+  native.CardTypeV1.gpg => CardTypeV1.gpg,
+  native.CardTypeV1.certificate => CardTypeV1.certificate,
+  native.CardTypeV1.oAuth => CardTypeV1.oauth,
+  native.CardTypeV1.dsn => CardTypeV1.dsn,
+  native.CardTypeV1.kubeconfig => CardTypeV1.kubeconfig,
+  native.CardTypeV1.webhookSecret => CardTypeV1.webhookSecret,
+  native.CardTypeV1.secureNote => CardTypeV1.secureNote,
+  native.CardTypeV1.file => CardTypeV1.file,
+  native.CardTypeV1.apiKey => CardTypeV1.apiKey,
+  native.CardTypeV1.totp => CardTypeV1.totp,
+  native.CardTypeV1.awsIam => CardTypeV1.awsIam,
+  native.CardTypeV1.googleCloudKey => CardTypeV1.googleCloudKey,
+  native.CardTypeV1.azureAppSecret => CardTypeV1.azureAppSecret,
+  native.CardTypeV1.bearerToken => CardTypeV1.bearerToken,
+  native.CardTypeV1.appPassword => CardTypeV1.appPassword,
+  native.CardTypeV1.sshCertificate => CardTypeV1.sshCertificate,
+  native.CardTypeV1.kubernetesToken => CardTypeV1.kubernetesToken,
+  native.CardTypeV1.openVpn => CardTypeV1.openVpn,
+  native.CardTypeV1.ipsec => CardTypeV1.ipsec,
+  native.CardTypeV1.keyContainer => CardTypeV1.keyContainer,
+  native.CardTypeV1.artifactSigningKey => CardTypeV1.artifactSigningKey,
+  native.CardTypeV1.apnsKey => CardTypeV1.apnsKey,
+  native.CardTypeV1.appStoreConnectKey => CardTypeV1.appStoreConnectKey,
+  native.CardTypeV1.registryAccess => CardTypeV1.registryAccess,
+  native.CardTypeV1.environmentVariables => CardTypeV1.environmentVariables,
+  native.CardTypeV1.smtpAccess => CardTypeV1.smtpAccess,
+  native.CardTypeV1.presignedUrl => CardTypeV1.presignedUrl,
+  native.CardTypeV1.sessionCookie => CardTypeV1.sessionCookie,
+  native.CardTypeV1.hotp => CardTypeV1.hotp,
+  native.CardTypeV1.licenseKey => CardTypeV1.licenseKey,
+  native.CardTypeV1.wifi => CardTypeV1.wifi,
+  native.CardTypeV1.devicePin => CardTypeV1.devicePin,
+  native.CardTypeV1.simPinPuk => CardTypeV1.simPinPuk,
+  native.CardTypeV1.paymentCard => CardTypeV1.paymentCard,
+  native.CardTypeV1.bankDetails => CardTypeV1.bankDetails,
+  native.CardTypeV1.identityDocument => CardTypeV1.identityDocument,
+  native.CardTypeV1.walletMnemonic => CardTypeV1.walletMnemonic,
+  native.CardTypeV1.walletPrivateKey => CardTypeV1.walletPrivateKey,
+};
+native.CardTypeV1 _nativeCardType(CardTypeV1 value) => switch (value) {
+  CardTypeV1.account => native.CardTypeV1.account,
+  CardTypeV1.pat => native.CardTypeV1.pat,
+  CardTypeV1.rsa => native.CardTypeV1.rsa,
+  CardTypeV1.ed25519 => native.CardTypeV1.ed25519,
+  CardTypeV1.secretKey => native.CardTypeV1.secretKey,
+  CardTypeV1.passphrase => native.CardTypeV1.passphrase,
+  CardTypeV1.recoveryCodes => native.CardTypeV1.recoveryCodes,
+  CardTypeV1.recoveryUrl => native.CardTypeV1.recoveryUrl,
+  CardTypeV1.secretQa => native.CardTypeV1.secretQa,
+  CardTypeV1.vless => native.CardTypeV1.vless,
+  CardTypeV1.wireGuard => native.CardTypeV1.wireGuard,
+  CardTypeV1.gpg => native.CardTypeV1.gpg,
+  CardTypeV1.certificate => native.CardTypeV1.certificate,
+  CardTypeV1.oauth => native.CardTypeV1.oAuth,
+  CardTypeV1.dsn => native.CardTypeV1.dsn,
+  CardTypeV1.kubeconfig => native.CardTypeV1.kubeconfig,
+  CardTypeV1.webhookSecret => native.CardTypeV1.webhookSecret,
+  CardTypeV1.secureNote => native.CardTypeV1.secureNote,
+  CardTypeV1.file => native.CardTypeV1.file,
+  CardTypeV1.apiKey => native.CardTypeV1.apiKey,
+  CardTypeV1.totp => native.CardTypeV1.totp,
+  CardTypeV1.awsIam => native.CardTypeV1.awsIam,
+  CardTypeV1.googleCloudKey => native.CardTypeV1.googleCloudKey,
+  CardTypeV1.azureAppSecret => native.CardTypeV1.azureAppSecret,
+  CardTypeV1.bearerToken => native.CardTypeV1.bearerToken,
+  CardTypeV1.appPassword => native.CardTypeV1.appPassword,
+  CardTypeV1.sshCertificate => native.CardTypeV1.sshCertificate,
+  CardTypeV1.kubernetesToken => native.CardTypeV1.kubernetesToken,
+  CardTypeV1.openVpn => native.CardTypeV1.openVpn,
+  CardTypeV1.ipsec => native.CardTypeV1.ipsec,
+  CardTypeV1.keyContainer => native.CardTypeV1.keyContainer,
+  CardTypeV1.artifactSigningKey => native.CardTypeV1.artifactSigningKey,
+  CardTypeV1.apnsKey => native.CardTypeV1.apnsKey,
+  CardTypeV1.appStoreConnectKey => native.CardTypeV1.appStoreConnectKey,
+  CardTypeV1.registryAccess => native.CardTypeV1.registryAccess,
+  CardTypeV1.environmentVariables => native.CardTypeV1.environmentVariables,
+  CardTypeV1.smtpAccess => native.CardTypeV1.smtpAccess,
+  CardTypeV1.presignedUrl => native.CardTypeV1.presignedUrl,
+  CardTypeV1.sessionCookie => native.CardTypeV1.sessionCookie,
+  CardTypeV1.hotp => native.CardTypeV1.hotp,
+  CardTypeV1.licenseKey => native.CardTypeV1.licenseKey,
+  CardTypeV1.wifi => native.CardTypeV1.wifi,
+  CardTypeV1.devicePin => native.CardTypeV1.devicePin,
+  CardTypeV1.simPinPuk => native.CardTypeV1.simPinPuk,
+  CardTypeV1.paymentCard => native.CardTypeV1.paymentCard,
+  CardTypeV1.bankDetails => native.CardTypeV1.bankDetails,
+  CardTypeV1.identityDocument => native.CardTypeV1.identityDocument,
+  CardTypeV1.walletMnemonic => native.CardTypeV1.walletMnemonic,
+  CardTypeV1.walletPrivateKey => native.CardTypeV1.walletPrivateKey,
+};
+EnvironmentV1 _environment(native.EnvironmentV1 value) => switch (value) {
+  native.EnvironmentV1.local => EnvironmentV1.local,
+  native.EnvironmentV1.unitTests => EnvironmentV1.unitTests,
+  native.EnvironmentV1.integrationTests => EnvironmentV1.integrationTests,
+  native.EnvironmentV1.e2ETests => EnvironmentV1.e2eTests,
+  native.EnvironmentV1.development => EnvironmentV1.development,
+  native.EnvironmentV1.stand => EnvironmentV1.stand,
+  native.EnvironmentV1.feature => EnvironmentV1.feature,
+  native.EnvironmentV1.stage => EnvironmentV1.stage,
+  native.EnvironmentV1.preRelease => EnvironmentV1.preRelease,
+  native.EnvironmentV1.production => EnvironmentV1.production,
+};
+native.EnvironmentV1 _nativeEnvironment(EnvironmentV1 value) => switch (value) {
+  EnvironmentV1.local => native.EnvironmentV1.local,
+  EnvironmentV1.unitTests => native.EnvironmentV1.unitTests,
+  EnvironmentV1.integrationTests => native.EnvironmentV1.integrationTests,
+  EnvironmentV1.e2eTests => native.EnvironmentV1.e2ETests,
+  EnvironmentV1.development => native.EnvironmentV1.development,
+  EnvironmentV1.stand => native.EnvironmentV1.stand,
+  EnvironmentV1.feature => native.EnvironmentV1.feature,
+  EnvironmentV1.stage => native.EnvironmentV1.stage,
+  EnvironmentV1.preRelease => native.EnvironmentV1.preRelease,
+  EnvironmentV1.production => native.EnvironmentV1.production,
+};
+FieldIdV1 _fieldId(native.FieldIdV1 value) => switch (value) {
+  native.FieldIdV1.login => FieldIdV1.login,
+  native.FieldIdV1.password => FieldIdV1.password,
+  native.FieldIdV1.totpSeed => FieldIdV1.totpSeed,
+  native.FieldIdV1.totpAlgorithm => FieldIdV1.totpAlgorithm,
+  native.FieldIdV1.totpDigits => FieldIdV1.totpDigits,
+  native.FieldIdV1.totpPeriod => FieldIdV1.totpPeriod,
+  native.FieldIdV1.recoveryCodes => FieldIdV1.recoveryCodes,
+  native.FieldIdV1.reserveLogins => FieldIdV1.reserveLogins,
+  native.FieldIdV1.value => FieldIdV1.value,
+  native.FieldIdV1.publicKey => FieldIdV1.publicKey,
+  native.FieldIdV1.privateKey => FieldIdV1.privateKey,
+  native.FieldIdV1.certificate => FieldIdV1.certificate,
+  native.FieldIdV1.clientId => FieldIdV1.clientId,
+  native.FieldIdV1.clientSecret => FieldIdV1.clientSecret,
+  native.FieldIdV1.accessToken => FieldIdV1.accessToken,
+  native.FieldIdV1.refreshToken => FieldIdV1.refreshToken,
+  native.FieldIdV1.question => FieldIdV1.question,
+  native.FieldIdV1.answer => FieldIdV1.answer,
+  native.FieldIdV1.keyId => FieldIdV1.keyId,
+  native.FieldIdV1.accessKeyId => FieldIdV1.accessKeyId,
+  native.FieldIdV1.sessionToken => FieldIdV1.sessionToken,
+  native.FieldIdV1.jsonKey => FieldIdV1.jsonKey,
+  native.FieldIdV1.project => FieldIdV1.project,
+  native.FieldIdV1.tenantId => FieldIdV1.tenantId,
+  native.FieldIdV1.expiresAt => FieldIdV1.expiresAt,
+  native.FieldIdV1.namespace => FieldIdV1.namespace,
+  native.FieldIdV1.accountName => FieldIdV1.accountName,
+  native.FieldIdV1.configuration => FieldIdV1.configuration,
+  native.FieldIdV1.identity => FieldIdV1.identity,
+  native.FieldIdV1.containerFormat => FieldIdV1.containerFormat,
+  native.FieldIdV1.teamId => FieldIdV1.teamId,
+  native.FieldIdV1.issuerId => FieldIdV1.issuerId,
+  native.FieldIdV1.endpoint => FieldIdV1.endpoint,
+  native.FieldIdV1.variables => FieldIdV1.variables,
+  native.FieldIdV1.url => FieldIdV1.url,
+  native.FieldIdV1.domain => FieldIdV1.domain,
+  native.FieldIdV1.cookieName => FieldIdV1.cookieName,
+  native.FieldIdV1.hotpSeed => FieldIdV1.hotpSeed,
+  native.FieldIdV1.counter => FieldIdV1.counter,
+  native.FieldIdV1.product => FieldIdV1.product,
+  native.FieldIdV1.ssid => FieldIdV1.ssid,
+  native.FieldIdV1.device => FieldIdV1.device,
+  native.FieldIdV1.pin => FieldIdV1.pin,
+  native.FieldIdV1.carrier => FieldIdV1.carrier,
+  native.FieldIdV1.puk => FieldIdV1.puk,
+  native.FieldIdV1.cardNumber => FieldIdV1.cardNumber,
+  native.FieldIdV1.holder => FieldIdV1.holder,
+  native.FieldIdV1.expiryMonth => FieldIdV1.expiryMonth,
+  native.FieldIdV1.iban => FieldIdV1.iban,
+  native.FieldIdV1.accountNumber => FieldIdV1.accountNumber,
+  native.FieldIdV1.bic => FieldIdV1.bic,
+  native.FieldIdV1.documentType => FieldIdV1.documentType,
+  native.FieldIdV1.documentNumber => FieldIdV1.documentNumber,
+  native.FieldIdV1.authority => FieldIdV1.authority,
+  native.FieldIdV1.mnemonic => FieldIdV1.mnemonic,
+  native.FieldIdV1.walletPassphrase => FieldIdV1.walletPassphrase,
+  native.FieldIdV1.network => FieldIdV1.network,
+  native.FieldIdV1.address => FieldIdV1.address,
+  native.FieldIdV1.scopes => FieldIdV1.scopes,
+};
+native.FieldIdV1 _nativeFieldId(FieldIdV1 value) => switch (value) {
+  FieldIdV1.login => native.FieldIdV1.login,
+  FieldIdV1.password => native.FieldIdV1.password,
+  FieldIdV1.totpSeed => native.FieldIdV1.totpSeed,
+  FieldIdV1.totpAlgorithm => native.FieldIdV1.totpAlgorithm,
+  FieldIdV1.totpDigits => native.FieldIdV1.totpDigits,
+  FieldIdV1.totpPeriod => native.FieldIdV1.totpPeriod,
+  FieldIdV1.recoveryCodes => native.FieldIdV1.recoveryCodes,
+  FieldIdV1.reserveLogins => native.FieldIdV1.reserveLogins,
+  FieldIdV1.value => native.FieldIdV1.value,
+  FieldIdV1.publicKey => native.FieldIdV1.publicKey,
+  FieldIdV1.privateKey => native.FieldIdV1.privateKey,
+  FieldIdV1.certificate => native.FieldIdV1.certificate,
+  FieldIdV1.clientId => native.FieldIdV1.clientId,
+  FieldIdV1.clientSecret => native.FieldIdV1.clientSecret,
+  FieldIdV1.accessToken => native.FieldIdV1.accessToken,
+  FieldIdV1.refreshToken => native.FieldIdV1.refreshToken,
+  FieldIdV1.question => native.FieldIdV1.question,
+  FieldIdV1.answer => native.FieldIdV1.answer,
+  FieldIdV1.keyId => native.FieldIdV1.keyId,
+  FieldIdV1.accessKeyId => native.FieldIdV1.accessKeyId,
+  FieldIdV1.sessionToken => native.FieldIdV1.sessionToken,
+  FieldIdV1.jsonKey => native.FieldIdV1.jsonKey,
+  FieldIdV1.project => native.FieldIdV1.project,
+  FieldIdV1.tenantId => native.FieldIdV1.tenantId,
+  FieldIdV1.expiresAt => native.FieldIdV1.expiresAt,
+  FieldIdV1.namespace => native.FieldIdV1.namespace,
+  FieldIdV1.accountName => native.FieldIdV1.accountName,
+  FieldIdV1.configuration => native.FieldIdV1.configuration,
+  FieldIdV1.identity => native.FieldIdV1.identity,
+  FieldIdV1.containerFormat => native.FieldIdV1.containerFormat,
+  FieldIdV1.teamId => native.FieldIdV1.teamId,
+  FieldIdV1.issuerId => native.FieldIdV1.issuerId,
+  FieldIdV1.endpoint => native.FieldIdV1.endpoint,
+  FieldIdV1.variables => native.FieldIdV1.variables,
+  FieldIdV1.url => native.FieldIdV1.url,
+  FieldIdV1.domain => native.FieldIdV1.domain,
+  FieldIdV1.cookieName => native.FieldIdV1.cookieName,
+  FieldIdV1.hotpSeed => native.FieldIdV1.hotpSeed,
+  FieldIdV1.counter => native.FieldIdV1.counter,
+  FieldIdV1.product => native.FieldIdV1.product,
+  FieldIdV1.ssid => native.FieldIdV1.ssid,
+  FieldIdV1.device => native.FieldIdV1.device,
+  FieldIdV1.pin => native.FieldIdV1.pin,
+  FieldIdV1.carrier => native.FieldIdV1.carrier,
+  FieldIdV1.puk => native.FieldIdV1.puk,
+  FieldIdV1.cardNumber => native.FieldIdV1.cardNumber,
+  FieldIdV1.holder => native.FieldIdV1.holder,
+  FieldIdV1.expiryMonth => native.FieldIdV1.expiryMonth,
+  FieldIdV1.iban => native.FieldIdV1.iban,
+  FieldIdV1.accountNumber => native.FieldIdV1.accountNumber,
+  FieldIdV1.bic => native.FieldIdV1.bic,
+  FieldIdV1.documentType => native.FieldIdV1.documentType,
+  FieldIdV1.documentNumber => native.FieldIdV1.documentNumber,
+  FieldIdV1.authority => native.FieldIdV1.authority,
+  FieldIdV1.mnemonic => native.FieldIdV1.mnemonic,
+  FieldIdV1.walletPassphrase => native.FieldIdV1.walletPassphrase,
+  FieldIdV1.network => native.FieldIdV1.network,
+  FieldIdV1.address => native.FieldIdV1.address,
+  FieldIdV1.scopes => native.FieldIdV1.scopes,
+};

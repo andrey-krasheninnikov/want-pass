@@ -142,9 +142,8 @@ pub fn validate_hints(hints: &VaultHints) -> Result<(), VaultFailure> {
     Ok(())
 }
 
-pub fn validate_password_v2(password: &str) -> Result<(), VaultFailure> {
+pub(crate) fn password_policy(password: &str) -> crate::api::v3::PasswordPolicyStatusV4 {
     use unicode_general_category::{GeneralCategory as G, get_general_category};
-    validate_password(password)?;
     let mut upper = false;
     let mut lower = false;
     let mut special = false;
@@ -167,17 +166,33 @@ pub fn validate_password_v2(password: &str) -> Result<(), VaultFailure> {
                 | G::OtherSymbol
         );
     }
-    if !upper
-        || !lower
-        || !special
-        || !password.chars().any(|c| c.is_ascii_digit())
-        || password
+    crate::api::v3::PasswordPolicyStatusV4 {
+        minimum_length: password.chars().count() >= 15,
+        maximum_bytes: password.len() <= 1024,
+        uppercase: upper,
+        lowercase: lower,
+        digit: password.bytes().any(|c| c.is_ascii_digit()),
+        special,
+        single_line: !password
             .chars()
-            .any(|c| matches!(c, '\r' | '\n' | '\u{85}' | '\u{2028}' | '\u{2029}'))
-    {
-        return Err(VaultFailure::InvalidPassword);
+            .any(|c| matches!(c, '\r' | '\n' | '\u{85}' | '\u{2028}' | '\u{2029}')),
     }
-    Ok(())
+}
+
+pub fn validate_password_v2(password: &str) -> Result<(), VaultFailure> {
+    let policy = password_policy(password);
+    if policy.minimum_length
+        && policy.maximum_bytes
+        && policy.uppercase
+        && policy.lowercase
+        && policy.digit
+        && policy.special
+        && policy.single_line
+    {
+        Ok(())
+    } else {
+        Err(VaultFailure::InvalidPassword)
+    }
 }
 
 pub fn seal(

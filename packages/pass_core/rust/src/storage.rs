@@ -1,15 +1,20 @@
+mod reset;
+
 use crate::{api::VaultFailure, format::MAX_FILE};
 use sha2::{Digest, Sha256};
-use std::os::unix::fs::{DirBuilderExt, OpenOptionsExt, PermissionsExt};
+use std::os::unix::fs::{DirBuilderExt, MetadataExt, OpenOptionsExt, PermissionsExt};
 use std::{
     fs::{self, File, OpenOptions},
     io::{Read, Write},
     path::{Path, PathBuf},
+    sync::atomic::{AtomicBool, Ordering},
 };
 
 pub struct Store {
     directory: PathBuf,
     lock: File,
+    application: bool,
+    reset_pending: AtomicBool,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -20,6 +25,14 @@ enum CommitStage {
 
 impl Store {
     pub fn open(directory: &Path) -> Result<Self, VaultFailure> {
+        let store = Self::open_locked(directory)?;
+        match fs::symlink_metadata(store.marker()) {
+            Ok(_) => Err(VaultFailure::WriteUncertain),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(store),
+            Err(_) => Err(VaultFailure::Storage),
+        }
+    }
+    fn open_locked(directory: &Path) -> Result<Self, VaultFailure> {
         fs::DirBuilder::new()
             .recursive(true)
             .mode(0o700)
@@ -41,6 +54,10 @@ impl Store {
             .custom_flags(libc::O_NOFOLLOW)
             .open(directory.join("vault.lock"))
             .map_err(|_| VaultFailure::Storage)?;
+        let metadata = lock.metadata().map_err(|_| VaultFailure::Storage)?;
+        if !metadata.is_file() || metadata.uid() != reset::owner() || metadata.nlink() != 1 {
+            return Err(VaultFailure::Storage);
+        }
         lock.try_lock().map_err(|error| match error {
             fs::TryLockError::WouldBlock => VaultFailure::Busy,
             fs::TryLockError::Error(_) => VaultFailure::Storage,
@@ -48,12 +65,17 @@ impl Store {
         Ok(Self {
             directory: directory.to_owned(),
             lock,
+            application: false,
+            reset_pending: AtomicBool::new(false),
         })
     }
     pub fn directory(&self) -> &Path {
         &self.directory
     }
     pub fn read(&self) -> Result<Option<Vec<u8>>, VaultFailure> {
+        if self.reset_pending.load(Ordering::SeqCst) {
+            return Err(VaultFailure::WriteUncertain);
+        }
         let file = match OpenOptions::new()
             .read(true)
             .custom_flags(libc::O_NOFOLLOW)

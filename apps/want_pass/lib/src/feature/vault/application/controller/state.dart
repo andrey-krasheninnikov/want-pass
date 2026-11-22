@@ -14,7 +14,8 @@ enum VaultPhase {
 final class VaultState extends Equatable {
   final VaultPhase phase;
   final bool busy;
-  final ContentSnapshotV1? content;
+  final ContentSnapshotV2? content;
+  final CardCatalogV1? catalog;
   final bool? passwordValid;
   final bool passwordChecking;
   final bool recovering;
@@ -24,11 +25,12 @@ final class VaultState extends Equatable {
   final VaultRecoveryChallengeV3? setupChallenge;
   final VaultHintsDtoV2 hints;
   final List<String?> setupAnswers;
-  final List<bool> quizPassed;
+  final bool recoveryExportCompleted;
   const VaultState({
     required this.phase,
     this.busy = false,
     this.content,
+    this.catalog,
     this.passwordValid,
     this.passwordChecking = false,
     this.recovering = false,
@@ -40,11 +42,12 @@ final class VaultState extends Equatable {
     this.setupChallenge,
     this.hints = const VaultHintsDtoV2(),
     this.setupAnswers = const [null, null, null],
-    this.quizPassed = const [false, false, false],
+    this.recoveryExportCompleted = false,
   });
   VaultState copyWith({
     bool? busy,
-    ContentSnapshotV1? Function()? content,
+    ContentSnapshotV2? Function()? content,
+    CardCatalogV1? Function()? catalog,
     bool? Function()? passwordValid,
     bool? passwordChecking,
     bool? passwordSaved,
@@ -53,11 +56,12 @@ final class VaultState extends Equatable {
     VaultErrorV1? Function()? error,
     VaultHintsDtoV2? hints,
     List<String?>? setupAnswers,
-    List<bool>? quizPassed,
+    bool? recoveryExportCompleted,
   }) => VaultState(
     phase: phase,
     busy: busy ?? this.busy,
     content: content == null ? this.content : content(),
+    catalog: catalog == null ? this.catalog : catalog(),
     passwordValid: passwordValid == null ? this.passwordValid : passwordValid(),
     passwordChecking: passwordChecking ?? this.passwordChecking,
     recovering: recovering,
@@ -68,7 +72,8 @@ final class VaultState extends Equatable {
     setupChallenge: setupChallenge,
     hints: hints ?? this.hints,
     setupAnswers: setupAnswers ?? this.setupAnswers,
-    quizPassed: quizPassed ?? this.quizPassed,
+    recoveryExportCompleted:
+        recoveryExportCompleted ?? this.recoveryExportCompleted,
     error: error == null ? this.error : error(),
   );
   @override
@@ -76,6 +81,7 @@ final class VaultState extends Equatable {
     phase,
     busy,
     content,
+    catalog,
     passwordValid,
     passwordChecking,
     recovering,
@@ -86,7 +92,7 @@ final class VaultState extends Equatable {
     setupChallenge,
     hints,
     setupAnswers,
-    quizPassed,
+    recoveryExportCompleted,
     error,
   ];
   @override

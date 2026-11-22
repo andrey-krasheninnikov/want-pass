@@ -241,7 +241,10 @@ void main() {
         'Synthetic\naccount value',
       );
       expect(account.summary.service, 'github');
-      expect(find.byType(VaultFilaments), findsNothing);
+      expect(
+        tester.widget<VaultFilaments>(find.byType(VaultFilaments)).enabled,
+        isFalse,
+      );
       expect(find.byType(WantBackgroundMotion), findsNothing);
       await _captureWorkspace(tester, captureBoundary, 'workspace-native');
       completed = true;

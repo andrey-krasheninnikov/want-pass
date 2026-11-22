@@ -167,6 +167,26 @@ final class _CardEditorState extends State<_CardEditor> {
   };
   late CardTypeV1 _type = widget.card?.summary.cardType ?? CardTypeV1.account;
   late String? _service = widget.card?.summary.service;
+  final _custom = _CardTemplateDraft();
+  bool _ready = true;
+  Future<void> _loadCustom() async {
+    final summary = widget.card?.summary;
+    if (summary == null || summary.cardType != CardTypeV1.custom) return;
+    final template = widget.controller.state.content!.templates
+        .where((t) => t.id == summary.customTemplateId)
+        .firstOrNull;
+    final version = template?.versions
+        .where((v) => v.number == summary.templateVersion)
+        .firstOrNull;
+    if (template == null || version == null) return;
+    final values = await widget.controller.readCustomValues(summary.id);
+    if (!mounted || values == null) return;
+    setState(() {
+      _custom.select(template.id, version, values: values);
+      _ready = true;
+    });
+  }
+
   late EnvironmentV1? _environment = widget.card?.summary.environment;
   late bool _totp = _values[FieldIdV1.totpSeed]!.text.isNotEmpty;
   late bool _recovery =
@@ -179,6 +199,12 @@ final class _CardEditorState extends State<_CardEditor> {
   @override
   void initState() {
     super.initState();
+    if (_type == CardTypeV1.custom) {
+      _ready = false;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) unawaited(_loadCustom());
+      });
+    }
     for (final field in [_name, _description, ..._values.values]) {
       field.addListener(_edited);
     }
@@ -206,17 +232,19 @@ final class _CardEditorState extends State<_CardEditor> {
       field.clear();
       field.dispose();
     }
+    _custom.dispose();
     _groups.clear();
     _attachment = null;
     super.dispose();
   }
 
   Future<bool> _save() async {
-    final spec = widget.controller.state.catalog!.presets.firstWhere(
-      (p) => p.cardType == _type,
-    );
+    if (!_ready) return false;
+    final spec = widget.controller.state.catalog!.presets
+        .where((p) => p.cardType == _type)
+        .firstOrNull;
     final fields = <CardFieldDraftV1>[];
-    for (final field in spec.fields) {
+    for (final field in spec?.fields ?? <FieldSpecV1>[]) {
       if (_type == CardTypeV1.account) {
         if ([
               FieldIdV1.totpSeed,
@@ -239,22 +267,58 @@ final class _CardEditorState extends State<_CardEditor> {
         CardFieldDraftV1(id: field.id, value: _values[field.id]!.text),
       );
     }
-    final saved = await widget.controller.saveCard(
-      CardDraftV1(
-        id: widget.card?.summary.id,
-        name: _name.text,
-        description: _description.text,
-        service: _service ?? '',
-        cardType: _type,
-        environment: _environment,
-        groupIds: List.unmodifiable(_groups),
-        fields: List.unmodifiable(fields),
-        attachment: _attachment,
-      ),
-      revision: widget.revision,
+    final draft = CardDraftV1(
+      id: widget.card?.summary.id,
+      name: _name.text,
+      description: _description.text,
+      service: _service ?? '',
+      cardType: _type,
+      environment: _environment,
+      groupIds: List.unmodifiable(_groups),
+      fields: List.unmodifiable(fields),
+      attachment: _attachment,
     );
+    final saved = _type == CardTypeV1.custom
+        ? _custom.version != null &&
+              await widget.controller.editCatalog(
+                SaveCustomCardV1(
+                  draft,
+                  _custom.id!,
+                  _custom.version!.number,
+                  _custom.accepted,
+                  _custom.input(),
+                ),
+                widget.revision,
+              )
+        : await widget.controller.saveCard(draft, revision: widget.revision);
     if (mounted && saved) widget.onDone();
     return saved;
+  }
+
+  Widget _customFields(
+    BuildContext c,
+    List<TemplateDefinitionV1> templates,
+    bool busy,
+  ) {
+    if (!_ready) {
+      return WantButton(
+        variant: WantButtonVariant.secondary,
+        onPressed: busy ? null : _loadCustom,
+        child: Text(_text(c, 'Load card fields', 'Загрузить поля карточки')),
+      );
+    }
+    final template = templates.where((t) => t.id == _custom.id).firstOrNull;
+    if (template == null || _custom.version == null) {
+      return const SizedBox.shrink();
+    }
+    return _CustomFields(
+      draft: _custom,
+      templates: templates,
+      controller: widget.controller,
+      existing: widget.card?.summary,
+      busy: busy,
+      onUpdate: (action) => _change(action),
+    );
   }
 
   Future<void> _selectFile() async {
@@ -342,6 +406,7 @@ final class _CardEditorState extends State<_CardEditor> {
         autofocus: false,
         last: false,
         preserveLineBreaks: true,
+        protectClipboard: widget.card != null,
         onSubmitted: () => unawaited(_save()),
       );
     } else {
@@ -354,6 +419,7 @@ final class _CardEditorState extends State<_CardEditor> {
         last: false,
         concealed: false,
         multiline: spec.multiline,
+        protectClipboard: widget.card != null,
         onSubmitted: () => unawaited(_save()),
       );
     }
@@ -393,7 +459,11 @@ final class _CardEditorState extends State<_CardEditor> {
     builder: (context, state) {
       final catalog = state.catalog;
       if (catalog == null) return const SizedBox.shrink();
-      final spec = catalog.presets.firstWhere((p) => p.cardType == _type);
+      final spec = catalog.presets
+          .where((p) => p.cardType == _type)
+          .firstOrNull;
+      final templates = state.content!.templates,
+          services = state.content!.services;
       return _EditorFrame(
         embedded: widget.embedded,
         title: _text(
@@ -411,7 +481,7 @@ final class _CardEditorState extends State<_CardEditor> {
             ),
             WantButton(
               key: const ValueKey('account-save'),
-              onPressed: state.busy || _service == null
+              onPressed: state.busy || !_ready || _service == null
                   ? null
                   : () => unawaited(_save()),
               child: Text(_text(context, 'Save', 'Сохранить')),
@@ -429,17 +499,29 @@ final class _CardEditorState extends State<_CardEditor> {
                   value: _type,
                   label: _text(context, 'Type', 'Тип'),
                   enabled: widget.card == null && !state.busy,
-                  values: _catalogTypes(catalog),
+                  values: [
+                    ..._catalogTypes(catalog),
+                    if (templates.isNotEmpty) CardTypeV1.custom,
+                  ],
                   itemLabel: (value) => _typeLabel(context, value),
                   searchTerms: (value) => _types[value]!.$1,
                   itemIcon: _typeIcon,
                   onChanged: (value) {
                     if (value == null || value == _type) return;
-                    for (final field in spec.fields) {
+                    for (final field in spec?.fields ?? <FieldSpecV1>[]) {
                       _values[field.id]!.text = _initialValues[field.id]!;
                     }
                     _change(() {
                       _type = value;
+                      _ready = true;
+                      if (value == CardTypeV1.custom) {
+                        _custom.select(
+                          templates.first.id,
+                          templates.first.versions.last,
+                        );
+                      } else {
+                        _custom.clear();
+                      }
                       _attachment = null;
                       _invalidKeyFile = false;
                     });
@@ -467,14 +549,23 @@ final class _CardEditorState extends State<_CardEditor> {
                   label: _text(context, 'Service *', 'Сервис *'),
                   hint: _text(context, 'Choose a service', 'Выберите сервис'),
                   enabled: !state.busy,
-                  values: catalog.services,
-                  itemLabel: (service) => _serviceLabel(context, service),
+                  values: [
+                    ...catalog.services,
+                    ...services
+                        .where((s) => !s.archived || s.id == _service)
+                        .map((s) => s.id),
+                  ],
+                  itemLabel: (service) =>
+                      _serviceLabel(context, service, services),
                   searchTerms: (service) =>
                       '$service ${_serviceAliases(service)}',
-                  itemIcon: (service) => _serviceIcon(context, service),
+                  itemIcon: (service) =>
+                      _serviceIcon(context, service, services),
                   onChanged: (value) => _change(() => _service = value),
                 ),
-                for (final field in spec.fields)
+                if (_type == CardTypeV1.custom)
+                  _customFields(context, templates, state.busy),
+                for (final field in spec?.fields ?? <FieldSpecV1>[])
                   if (_type != CardTypeV1.account ||
                       (![
                         FieldIdV1.totpSeed,
@@ -732,6 +823,7 @@ final class _CardTotpState extends State<_CardTotp>
   bool _loading = false;
   bool _foreground = true;
   bool _visible = false;
+  bool _requiresReveal = false;
   int _epoch = 0;
   bool get _active => _foreground && _visible;
   @override
@@ -758,7 +850,7 @@ final class _CardTotpState extends State<_CardTotp>
 
   void _schedule() {
     _timer?.cancel();
-    if (!mounted || !_active) return;
+    if (!mounted || !_active || (_requiresReveal && _code == null)) return;
     final remaining = _code?.validUntil.difference(DateTime.now().toUtc());
     final delay = remaining != null && remaining < const Duration(seconds: 1)
         ? (remaining > Duration.zero ? remaining : Duration.zero)
@@ -768,7 +860,7 @@ final class _CardTotpState extends State<_CardTotp>
       if (_code == null ||
           !DateTime.now().toUtc().isBefore(_code!.validUntil)) {
         setState(() => _code = null);
-        unawaited(_refresh());
+        if (!_requiresReveal) unawaited(_refresh());
       } else {
         setState(() {});
       }
@@ -776,19 +868,22 @@ final class _CardTotpState extends State<_CardTotp>
     });
   }
 
-  Future<void> _refresh() async {
+  Future<void> _refresh({bool explicitReveal = false}) async {
     if (_loading || !_active) return;
     final epoch = _epoch;
     _loading = true;
     try {
-      final code = await widget.controller.readTotp(widget.id);
+      final code = explicitReveal
+          ? await widget.controller.readTotp(widget.id)
+          : (await widget.controller.readCardPreview(widget.id))?.row.otp;
       if (mounted && _active && epoch == _epoch) {
-        setState(
-          () => _code =
+        setState(() {
+          if (!explicitReveal) _requiresReveal = code == null;
+          _code =
               code != null && DateTime.now().toUtc().isBefore(code.validUntil)
               ? code
-              : null,
-        );
+              : null;
+        });
       }
     } finally {
       _loading = false;
@@ -829,16 +924,25 @@ final class _CardTotpState extends State<_CardTotp>
                 code?.code ?? '••••••',
                 variant: WantTypographyVariant.h3,
               ),
-              Text(
-                _text(
-                  context,
-                  'Refresh in ${remaining.clamp(0, 86400)} s',
-                  'Обновление через ${remaining.clamp(0, 86400)} с',
+              if (code != null)
+                Text(
+                  _text(
+                    context,
+                    'Refresh in ${remaining.clamp(0, 86400)} s',
+                    'Обновление через ${remaining.clamp(0, 86400)} с',
+                  ),
                 ),
-              ),
             ],
           ),
         ),
+        if (_requiresReveal && code == null)
+          IconButton(
+            tooltip: _text(context, 'Show current OTP', 'Показать текущий OTP'),
+            onPressed: _loading || widget.controller.state.busy
+                ? null
+                : () => _refresh(explicitReveal: true),
+            icon: const Icon(Icons.visibility_outlined),
+          ),
         IconButton(
           key: const ValueKey('card-copy-otp'),
           tooltip: _text(
@@ -846,7 +950,8 @@ final class _CardTotpState extends State<_CardTotp>
             'Copy current OTP',
             'Скопировать текущий OTP',
           ),
-          onPressed: code == null || widget.controller.state.busy
+          onPressed:
+              (code == null && !_requiresReveal) || widget.controller.state.busy
               ? null
               : () => unawaited(
                   widget.controller.copyCard(widget.id, currentOtp: true),

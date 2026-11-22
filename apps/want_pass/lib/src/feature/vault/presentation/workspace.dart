@@ -3,6 +3,7 @@ part of 'content.dart';
 final class _VaultContentViewState extends State<VaultContentView>
     with WidgetsBindingObserver {
   final _search = TextEditingController();
+  _LocalToolsHost? _localTools;
   final _searchFocus = FocusNode();
   final _listFocus = FocusNode();
   final _detailsFocus = FocusNode();
@@ -30,6 +31,8 @@ final class _VaultContentViewState extends State<VaultContentView>
   int _navigation = 0;
   _VaultSection _section = _VaultSection.secrets;
   bool _menuExpanded = false, _dockMenu = false;
+  bool _restoreScheduled = false;
+  int _lastShortcut = -1;
   late WorkspaceLayoutV1 _paneWidths =
       widget.appearance?.state.settings.layout ?? const WorkspaceLayoutV1();
   bool get _browsing => _available && _section == _VaultSection.secrets;
@@ -47,6 +50,9 @@ final class _VaultContentViewState extends State<VaultContentView>
   void initState() {
     super.initState();
     _revision = widget.controller.state.content?.revision;
+    if (!kIsWeb && defaultTargetPlatform == TargetPlatform.macOS) {
+      _localTools = _LocalToolsHost(widget.controller, () => context)..start();
+    }
     _active =
         WidgetsBinding.instance.lifecycleState == null ||
         WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed;
@@ -121,6 +127,7 @@ final class _VaultContentViewState extends State<VaultContentView>
   @override
   void dispose() {
     _disposing = true;
+    _localTools?.dispose();
     _navigation++;
     _releaseAvailability();
     _epoch++;
@@ -399,6 +406,21 @@ final class _VaultContentViewState extends State<VaultContentView>
     }),
   );
 
+  Future<void> _showBackup(bool create) async {
+    if (_overlay != null || !_available || widget.controller.state.busy) return;
+    final route = DialogRoute<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => _withActivity(
+        _BackupDialog(controller: widget.controller, create: create),
+      ),
+    );
+    _overlay = route;
+    await Navigator.of(context).push(route);
+    await route.completed;
+    if (identical(_overlay, route)) _overlay = null;
+  }
+
   Future<void> _showReset() async {
     final appearance = widget.appearance;
     if (appearance == null ||
@@ -513,10 +535,13 @@ final class _VaultContentViewState extends State<VaultContentView>
     int? count(_VaultSection section) => switch (section) {
       _VaultSection.secrets => state.content!.cards.length,
       _VaultSection.services =>
-        catalog.services.where((service) => service != 'other').length,
-      _VaultSection.types => catalog.presets.length + 1,
+        catalog.services.where((service) => service != 'other').length +
+            state.content!.services.where((s) => !s.archived).length,
+      _VaultSection.types =>
+        catalog.presets.length + 1 + state.content!.templates.length,
       _VaultSection.environments => EnvironmentV1.values.length,
-      _VaultSection.resources || _VaultSection.integrations => 0,
+      _VaultSection.integrations => 0,
+      _VaultSection.resources || _VaultSection.history => null,
       _VaultSection.ai || _VaultSection.general => null,
     };
 
@@ -974,6 +999,7 @@ final class _VaultContentViewState extends State<VaultContentView>
             values: [
               'all',
               ..._catalogTypes(state.catalog!).map((type) => type.name),
+              if (state.content!.templates.isNotEmpty) CardTypeV1.custom.name,
             ],
             itemLabel: (value) => value == 'all'
                 ? _text(context, 'All', 'Все')
@@ -996,7 +1022,11 @@ final class _VaultContentViewState extends State<VaultContentView>
             key: const ValueKey('filter-service'),
             label: _text(context, 'Service', 'Сервис'),
             value: _service,
-            values: ['all', ...state.catalog!.services],
+            values: [
+              'all',
+              ...state.catalog!.services,
+              ...state.content!.services.map((s) => s.id),
+            ],
             itemLabel: (value) => value == 'all'
                 ? _text(context, 'All', 'Все')
                 : _serviceLabel(context, value),
@@ -1458,6 +1488,44 @@ final class _VaultContentViewState extends State<VaultContentView>
         );
       }
       final mac = Theme.of(context).platform == TargetPlatform.macOS;
+      final shortcut = widget.shortcutRequest;
+      if (shortcut != null && shortcut.$1 != _lastShortcut && !state.busy) {
+        _lastShortcut = shortcut.$1;
+        WidgetsBinding.instance.addPostFrameCallback((_) async {
+          if (!mounted ||
+              widget.controller.state.phase != VaultPhase.unlocked) {
+            return;
+          }
+          widget.onShortcutOpened?.call();
+          await _navigate(() {
+            _stopEditing();
+            _section = _VaultSection.secrets;
+            _compactDetail = true;
+            if (shortcut.$2 == 'create') {
+              _editing = true;
+              _editorRevision = widget.controller.state.content!.revision;
+            } else {
+              _selected = shortcut.$3;
+            }
+          });
+          if (shortcut.$2 == 'settings' &&
+              _available &&
+              _selected == shortcut.$3) {
+            await _editCard();
+          }
+        });
+      }
+      if (widget.restoreRequested && !_restoreScheduled && !state.busy) {
+        _restoreScheduled = true;
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!_available || widget.controller.state.busy || _overlay != null) {
+            _restoreScheduled = false;
+            return;
+          }
+          widget.onRestoreOpened?.call();
+          unawaited(_showBackup(false));
+        });
+      }
       SingleActivator key(LogicalKeyboardKey k, {bool shift = false}) =>
           SingleActivator(k, meta: mac, control: !mac, shift: shift);
       return _withActivity(
@@ -1503,9 +1571,11 @@ final class _VaultContentViewState extends State<VaultContentView>
               : _VaultSectionView(
                   key: ValueKey(_section),
                   section: _section,
+                  controller: widget.controller,
                   catalog: state.catalog!,
                   appearance: widget.appearance,
                   onReset: state.busy ? null : _showReset,
+                  onBackup: state.busy ? null : _showBackup,
                 ),
         ),
       );

@@ -75,6 +75,7 @@ impl DraftV2 {
         Ok(Self {
             opened: Opened {
                 key: Zeroizing::new(format::random()?),
+                backup_recipient: None,
                 document: Zeroizing::new(document.to_vec()),
                 id: match id {
                     Some(v) => v,
@@ -259,9 +260,10 @@ impl Vault {
             }
             return draft.challenge();
         }
-        let draft = DraftV2::new(&opened.document, Some(opened.id), Some(digest(&bytes)))?;
+        let recovered = super::policy::after_recovery(&opened.document)?;
+        let draft = DraftV2::new(&recovered, Some(opened.id), Some(digest(&bytes)))?;
         let challenge = draft.challenge()?;
-        state.active = None;
+        state.clear_active();
         state.draft_v2 = Some(draft);
         Ok(challenge)
     }
@@ -318,6 +320,7 @@ impl Vault {
             (
                 Opened {
                     key: draft.opened.key.clone(),
+                    backup_recipient: draft.opened.backup_recipient,
                     document: draft.opened.document.clone(),
                     id: draft.opened.id,
                 },
@@ -337,7 +340,8 @@ impl Vault {
             draft.input_digest = Some(input_digest);
         }
         let draft = state.draft_v2.as_ref().ok_or(VaultFailure::Confirmation)?;
-        state.store.commit(
+        Self::commit_credentials(
+            &state.store,
             &draft
                 .candidate
                 .as_ref()

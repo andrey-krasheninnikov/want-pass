@@ -221,14 +221,16 @@ final class ExportCardAttachmentParamsV1 extends Equatable {
   final String id;
   final String destination;
   final BigInt revision;
+  final String? fieldId;
   const ExportCardAttachmentParamsV1({
+    this.fieldId,
     required this.handle,
     required this.id,
     required this.destination,
     required this.revision,
   });
   @override
-  List<Object?> get props => [handle, id, destination, revision];
+  List<Object?> get props => [handle, id, destination, revision, fieldId];
   @override
   String toString() => 'ExportCardAttachmentParamsV1(<redacted>)';
 }
@@ -241,26 +243,48 @@ final class ExportCardAttachmentResultV1 extends Equatable {
   String toString() => 'ExportCardAttachmentResultV1(<redacted>)';
 }
 
-enum CardCopyKindV1 { account, otp, field }
+enum CardCopyKindV1 { account, otp, field, custom, quickCard }
 
 final class CopyCardParamsV1 extends Equatable {
   final VaultHandleV1 handle;
   final String id;
   final CardCopyKindV1 kind;
   final FieldIdV1? field;
+  final String? customField;
+  final BigInt? revision;
+  const CopyCardParamsV1.quickCard({
+    required this.handle,
+    required this.id,
+    required BigInt this.revision,
+  }) : kind = CardCopyKindV1.quickCard,
+       field = null,
+       customField = null;
+  const CopyCardParamsV1.custom({
+    required this.handle,
+    required this.id,
+    required String this.customField,
+    required BigInt this.revision,
+  }) : kind = CardCopyKindV1.custom,
+       field = null;
   const CopyCardParamsV1.account({required this.handle, required this.id})
-    : kind = CardCopyKindV1.account,
+    : customField = null,
+      revision = null,
+      kind = CardCopyKindV1.account,
       field = null;
   const CopyCardParamsV1.otp({required this.handle, required this.id})
-    : kind = CardCopyKindV1.otp,
+    : customField = null,
+      revision = null,
+      kind = CardCopyKindV1.otp,
       field = null;
   const CopyCardParamsV1.field({
     required this.handle,
     required this.id,
     required FieldIdV1 this.field,
-  }) : kind = CardCopyKindV1.field;
+  }) : customField = null,
+       revision = null,
+       kind = CardCopyKindV1.field;
   @override
-  List<Object?> get props => [handle, id, kind, field];
+  List<Object?> get props => [handle, id, kind, field, customField, revision];
   @override
   String toString() => 'CopyCardParamsV1(<redacted>)';
 }

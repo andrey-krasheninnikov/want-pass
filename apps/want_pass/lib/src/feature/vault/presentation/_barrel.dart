@@ -4,5 +4,6 @@ export 'group_logo.dart';
 export 'moment.dart';
 export 'padlock.dart';
 export 'page.dart';
+export 'recovery_phrase_input.dart';
 export 'secret_input.dart';
 export 'unlock_form.dart';

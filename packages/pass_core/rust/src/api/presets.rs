@@ -70,7 +70,7 @@ pub fn card_presets_v1() -> Vec<CardPresetV1> {
     })
     .collect()
 }
-fn specs(kind: C) -> Vec<FieldSpecV1> {
+pub(super) fn specs(kind: C) -> Vec<FieldSpecV1> {
     let fields: &[(F, bool)] = match kind {
         C::Account => &[
             (F::Login, true),
@@ -92,7 +92,7 @@ fn specs(kind: C) -> Vec<FieldSpecV1> {
         ],
         C::SecretQa => &[(F::Question, true), (F::Answer, true)],
         C::RecoveryCodes => &[(F::RecoveryCodes, true)],
-        C::File => &[],
+        C::File | C::Custom => &[],
         C::Pat => &[(F::Value, true), (F::Scopes, false), (F::ExpiresAt, false)],
         C::ApiKey => &[(F::Value, true), (F::KeyId, false)],
         C::Totp => &[

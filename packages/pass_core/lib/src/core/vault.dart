@@ -5,7 +5,15 @@ Future<VaultAccessService> initializeVaultAccess({
   required String directory,
   required VaultReporter reporter,
   bool application = false,
+  VaultCodePromptV1? codePrompt,
+  Future<bool> Function()? biometricAvailable,
 }) async {
   await initializeVaultBridge();
-  return RustVaultAccessService(directory, reporter, application: application);
+  return RustVaultAccessService(
+    directory,
+    reporter,
+    application: application,
+    codePrompt: codePrompt,
+    biometricAvailable: biometricAvailable,
+  );
 }

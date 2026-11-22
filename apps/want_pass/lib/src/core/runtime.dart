@@ -1,4 +1,7 @@
+import 'dart:io';
 import 'dart:ui';
+
+import 'package:flutter/services.dart';
 
 import 'package:want_pass/src/feature/appearance/application/_barrel.dart';
 
@@ -19,6 +22,7 @@ import 'package:want_pass/src/feature/vault/infrastructure/_barrel.dart';
 Future<AppRuntime>? _bootstrap;
 LaunchModeType? _bootstrapMode;
 VaultAccessService? _accessOverride;
+VaultCodePromptV1? _codePromptOverride;
 Stream<VaultLockSignal>? _eventsOverride;
 String? _preferencesOverride;
 
@@ -56,6 +60,7 @@ final class AppRuntime {
     VaultAccessService? vaultAccess,
     Stream<VaultLockSignal>? vaultLockEvents,
     String? preferencesDirectory,
+    VaultCodePromptV1? codePrompt,
   }) {
     const op = 'AppRuntime.bootstrap():';
     final mode = LaunchMode.current;
@@ -63,6 +68,7 @@ final class AppRuntime {
     if (pending != null) {
       if (_bootstrapMode != mode ||
           !identical(_accessOverride, vaultAccess) ||
+          !identical(_codePromptOverride, codePrompt) ||
           !identical(_eventsOverride, vaultLockEvents) ||
           _preferencesOverride != preferencesDirectory) {
         return Future<AppRuntime>.error(
@@ -76,6 +82,7 @@ final class AppRuntime {
     }
     _bootstrapMode = mode;
     _accessOverride = vaultAccess;
+    _codePromptOverride = codePrompt;
     _eventsOverride = vaultLockEvents;
     _preferencesOverride = preferencesDirectory;
     return _bootstrap = _initialize(
@@ -83,7 +90,19 @@ final class AppRuntime {
       vaultAccess,
       vaultLockEvents,
       preferencesDirectory,
+      codePrompt,
     );
+  }
+
+  static Future<String> _applicationDirectory() async {
+    final base = await getApplicationSupportDirectory();
+    if (!Platform.isMacOS) return base.path;
+    const lifecycle = MethodChannel('want_pass/vault_lifecycle');
+    final channel = await lifecycle.invokeMethod<String>('storageChannel');
+    if (channel != 'development' && channel != 'production') {
+      throw const StartupConfigurationConflictErrorV1();
+    }
+    return '${base.path}/$channel';
   }
 
   static Future<AppRuntime> _initialize(
@@ -91,6 +110,7 @@ final class AppRuntime {
     VaultAccessService? vaultAccess,
     Stream<VaultLockSignal>? vaultLockEvents,
     String? preferencesDirectory,
+    VaultCodePromptV1? codePrompt,
   ) async {
     final container = GetIt.asNewInstance();
     final observer = SafeBlocObserver(talker: Talker());
@@ -107,13 +127,19 @@ final class AppRuntime {
         core.startupAccessService,
       );
       container.registerSingleton<StartupReporter>(observer);
-      final directory =
-          preferencesDirectory ?? (await getApplicationSupportDirectory()).path;
+      final directory = preferencesDirectory ?? await _applicationDirectory();
       final access =
           vaultAccess ??
           await initializeVaultAccess(
             directory: directory,
             application: true,
+            codePrompt: codePrompt,
+            biometricAvailable: () async {
+              if (!Platform.isMacOS) return false;
+              const channel = MethodChannel('want_pass/vault_lifecycle');
+              return await channel.invokeMethod<bool>('canUseBiometrics') ??
+                  false;
+            },
             reporter: observer,
           );
       final events = vaultLockEvents ?? await createVaultLockEvents(observer);
@@ -153,6 +179,7 @@ final class AppRuntime {
         _bootstrap = null;
         _bootstrapMode = null;
         _accessOverride = null;
+        _codePromptOverride = null;
         _eventsOverride = null;
         _preferencesOverride = null;
       }
@@ -182,6 +209,7 @@ final class AppRuntime {
       _bootstrap = null;
       _bootstrapMode = null;
       _accessOverride = null;
+      _codePromptOverride = null;
       _eventsOverride = null;
       _preferencesOverride = null;
     }

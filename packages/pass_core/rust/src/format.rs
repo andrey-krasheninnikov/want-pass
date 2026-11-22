@@ -18,6 +18,7 @@ pub struct Opened {
     pub key: Zeroizing<[u8; 32]>,
     pub document: Zeroizing<Vec<u8>>,
     pub id: [u8; 16],
+    pub backup_recipient: Option<[u8; 32]>,
 }
 
 pub struct Prepared {
@@ -120,6 +121,7 @@ pub fn prepare(
             key: Zeroizing::new(random()?),
             document: Zeroizing::new(document.to_vec()),
             id,
+            backup_recipient: None,
         },
         Zeroizing::new(random()?),
         &VaultHints::default(),
@@ -197,7 +199,7 @@ pub fn validate_password_v2(password: &str) -> Result<(), VaultFailure> {
 
 pub fn seal(
     password: &str,
-    opened: Opened,
+    mut opened: Opened,
     entropy: Zeroizing<[u8; 32]>,
     hints: &VaultHints,
 ) -> Result<Prepared, VaultFailure> {
@@ -214,7 +216,7 @@ pub fn seal(
     header.extend_from_slice(hints.password.as_bytes());
     header.extend_from_slice(hints.recovery.as_bytes());
     let base_len = header.len();
-    if opened.document.len() > MAX_FILE - base_len - 144 - 44 {
+    if opened.document.len() > MAX_FILE - base_len - 144 - 44 - 32 {
         return Err(VaultFailure::Unsupported);
     }
     let password_nonce = random::<24>()?;
@@ -238,8 +240,11 @@ pub fn seal(
     header.extend_from_slice(&recovery_nonce);
     header.extend_from_slice(&recovery_slot);
     let payload_nonce = random::<24>()?;
-    let mut plaintext = Zeroizing::new(1_u32.to_le_bytes().to_vec());
-    plaintext.extend_from_slice(&opened.document);
+    opened.backup_recipient = Some(crate::backup_crypto::recipient(
+        entropy.as_ref(),
+        &opened.id,
+    )?);
+    let plaintext = payload(&opened.document, opened.backup_recipient);
     let ciphertext = encrypt(
         opened.key.as_ref(),
         &payload_nonce,
@@ -254,6 +259,18 @@ pub fn seal(
         bytes,
         entropy,
     })
+}
+
+fn payload(document: &[u8], recipient: Option<[u8; 32]>) -> Zeroizing<Vec<u8>> {
+    let mut plain = Zeroizing::new(Vec::with_capacity(document.len() + 36));
+    if let Some(public_key) = recipient {
+        plain.extend_from_slice(&2_u32.to_le_bytes());
+        plain.extend_from_slice(&public_key);
+    } else {
+        plain.extend_from_slice(&1_u32.to_le_bytes());
+    }
+    plain.extend_from_slice(document);
+    plain
 }
 
 fn header(bytes: &[u8]) -> Result<usize, VaultFailure> {
@@ -297,7 +314,17 @@ pub fn read_hints(bytes: &[u8]) -> Result<VaultHints, VaultFailure> {
     })
 }
 
-fn open_key(bytes: &[u8], key: Zeroizing<Vec<u8>>) -> Result<Opened, VaultFailure> {
+#[cfg(target_os = "macos")]
+pub(crate) fn device_account(bytes: &[u8]) -> Result<String, VaultFailure> {
+    // Credential rotation replaces both wrappers even when the vault ID is preserved.
+    let end = header(bytes)? + 144;
+    Ok(crate::storage::digest(&bytes[..end])
+        .iter()
+        .map(|b| format!("{b:02x}"))
+        .collect())
+}
+
+pub(crate) fn open_key(bytes: &[u8], key: Zeroizing<Vec<u8>>) -> Result<Opened, VaultFailure> {
     let header_len = header(bytes)? + 144;
     if key.len() != 32 {
         return Err(VaultFailure::Corrupt);
@@ -308,14 +335,24 @@ fn open_key(bytes: &[u8], key: Zeroizing<Vec<u8>>) -> Result<Opened, VaultFailur
         &bytes[header_len + 24..],
         &context(&bytes[..header_len], b"/payload"),
     )?;
-    if plaintext.len() < 4 || plaintext[..4] != 1_u32.to_le_bytes() {
-        return Err(VaultFailure::Unsupported);
-    }
+    let (backup_recipient, document) = match plaintext.get(..4) {
+        Some(v) if v == 1_u32.to_le_bytes() => (None, &plaintext[4..]),
+        Some(v) if v == 2_u32.to_le_bytes() && plaintext.len() >= 36 => (
+            Some(
+                plaintext[4..36]
+                    .try_into()
+                    .map_err(|_| VaultFailure::Corrupt)?,
+            ),
+            &plaintext[36..],
+        ),
+        _ => return Err(VaultFailure::Unsupported),
+    };
     let mut data_key = Zeroizing::new([0; 32]);
     data_key.copy_from_slice(&key);
     Ok(Opened {
         key: data_key,
-        document: Zeroizing::new(plaintext[4..].to_vec()),
+        document: Zeroizing::new(document.to_vec()),
+        backup_recipient,
         id: bytes[14..30]
             .try_into()
             .map_err(|_| VaultFailure::Corrupt)?,
@@ -368,7 +405,7 @@ pub fn replace_document(
     document: &[u8],
 ) -> Result<Vec<u8>, VaultFailure> {
     let header_len = header(bytes)? + 144;
-    if document.len() > MAX_FILE - header_len - 44 {
+    if document.len() > MAX_FILE - header_len - 44 - opened.backup_recipient.map_or(0, |_| 32) {
         return Err(VaultFailure::Unsupported);
     }
     let verified = open_key(bytes, Zeroizing::new(opened.key.to_vec()))?;
@@ -376,8 +413,7 @@ pub fn replace_document(
         return Err(VaultFailure::Stale);
     }
     let nonce = random::<24>()?;
-    let mut plaintext = Zeroizing::new(1_u32.to_le_bytes().to_vec());
-    plaintext.extend_from_slice(document);
+    let plaintext = payload(document, verified.backup_recipient);
     let ciphertext = encrypt(
         opened.key.as_ref(),
         &nonce,

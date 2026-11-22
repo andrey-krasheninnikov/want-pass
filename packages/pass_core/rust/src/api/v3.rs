@@ -1,6 +1,5 @@
+use super::phrase::parse_phrase;
 use super::*;
-use serde::de::{Error, MapAccess, Visitor};
-use std::fmt;
 
 pub fn validate_password_v3(password: String) -> bool {
     let password = Zeroizing::new(password);
@@ -40,55 +39,6 @@ pub(super) fn recovery_json(words: &[String]) -> Zeroizing<String> {
             .collect::<Vec<_>>()
             .join(",")
     ))
-}
-
-fn parse_phrase(input: &str) -> Result<Zeroizing<String>, VaultFailure> {
-    if input.len() > 16 * 1024 {
-        return Err(VaultFailure::InvalidPhrase);
-    }
-    if !input.trim_start().starts_with('{') {
-        return Ok(Zeroizing::new(input.to_owned()));
-    }
-    struct Words;
-    impl<'de> Visitor<'de> for Words {
-        type Value = Zeroizing<String>;
-        fn expecting(&self, f: &mut fmt::Formatter) -> fmt::Result {
-            f.write_str("24 numbered recovery words")
-        }
-        fn visit_map<M: MapAccess<'de>>(self, mut map: M) -> Result<Self::Value, M::Error> {
-            let mut words: Vec<Option<Zeroizing<String>>> = (0..24).map(|_| None).collect();
-            while let Some((key, word)) = map.next_entry::<String, String>()? {
-                let word = Zeroizing::new(word);
-                let index = (1..=24)
-                    .find(|i| i.to_string() == key)
-                    .ok_or_else(|| M::Error::custom("invalid recovery key"))?
-                    - 1;
-                if words[index].is_some()
-                    || !bip39::Language::English
-                        .word_list()
-                        .contains(&word.as_str())
-                {
-                    return Err(M::Error::custom("invalid recovery word"));
-                }
-                words[index] = Some(word);
-            }
-            if words.iter().any(Option::is_none) {
-                return Err(M::Error::custom("missing recovery word"));
-            }
-            Ok(Zeroizing::new(
-                words
-                    .iter()
-                    .map(|w| w.as_ref().unwrap().as_str())
-                    .collect::<Vec<_>>()
-                    .join(" "),
-            ))
-        }
-    }
-    let mut decoder = serde_json::Deserializer::from_str(input);
-    let phrase = serde::Deserializer::deserialize_map(&mut decoder, Words)
-        .map_err(|_| VaultFailure::InvalidPhrase)?;
-    decoder.end().map_err(|_| VaultFailure::InvalidPhrase)?;
-    Ok(phrase)
 }
 
 fn challenge(value: RecoveryChallengeV2, revision: u64) -> RecoveryChallengeV3 {
@@ -134,6 +84,7 @@ impl Vault {
         phrase: String,
         generation: u64,
     ) -> Result<(), VaultFailure> {
+        self.require_operation(super::OperationV1::Delete, "reset", generation)?;
         self.reset_application_after_validation(phrase, generation, || {})
     }
 
@@ -169,6 +120,7 @@ impl Vault {
             return Err(VaultFailure::Stale);
         }
         let plan = state.store.plan_reset()?;
+        super::biometric::retire(&state.store, &bytes)?;
         self.epoch
             .compare_exchange(
                 generation,
@@ -177,7 +129,7 @@ impl Vault {
                 Ordering::SeqCst,
             )
             .map_err(|_| VaultFailure::Stale)?;
-        state.active = None;
+        state.clear_active();
         state.draft = None;
         state.draft_v2 = None;
         state.store.reset_application(&plan)
@@ -365,6 +317,27 @@ mod tests {
         );
     }
 
+    #[test]
+    fn paste_accepts_word_sequences_arrays_and_numbered_lines() {
+        let words = format::words(&[0; 32]).unwrap();
+        for input in [
+            words.join(", "),
+            words.join("\r\n"),
+            serde_json::to_string(&words).unwrap(),
+            words
+                .iter()
+                .enumerate()
+                .rev()
+                .map(|(i, w)| format!("{}) {w}", i + 1))
+                .collect::<Vec<_>>()
+                .join("\n"),
+        ] {
+            assert!(parse_phrase(&input).is_ok_and(|p| p.as_str() == words.join(" ")));
+        }
+        let mut bad = words.clone();
+        bad[23] = words[0].clone();
+        assert!(parse_phrase(&bad.join(" ")).is_err());
+    }
     #[test]
     fn json_is_strict_and_allows_repeated_words() {
         let words = format::words(&[0; 32]).unwrap();

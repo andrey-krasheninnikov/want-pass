@@ -359,6 +359,16 @@ impl Vault {
         generation: u64,
         operation: impl FnOnce(&[u8]) -> Result<(Zeroizing<Vec<u8>>, T), VaultFailure>,
     ) -> Result<T, VaultFailure> {
+        self.update_document_scoped(generation, |bytes| {
+            let (encoded, value) = operation(bytes)?;
+            Ok((encoded, value, false))
+        })
+    }
+    pub(super) fn update_document_scoped<T>(
+        &self,
+        generation: u64,
+        operation: impl FnOnce(&[u8]) -> Result<(Zeroizing<Vec<u8>>, T, bool), VaultFailure>,
+    ) -> Result<T, VaultFailure> {
         let _job = self.job.try_lock().map_err(|_| VaultFailure::Busy)?;
         let (opened, bytes, store) = {
             let state = self.state.lock().map_err(|_| VaultFailure::Unavailable)?;
@@ -369,6 +379,7 @@ impl Vault {
             (
                 format::Opened {
                     key: active.key.clone(),
+                    backup_recipient: active.backup_recipient,
                     document: active.document.clone(),
                     id: active.id,
                 },
@@ -376,31 +387,50 @@ impl Vault {
                 std::sync::Arc::clone(&state.store),
             )
         };
-        let (encoded, value) = operation(&opened.document)?;
-        let candidate = format::replace_document(&bytes, &opened, &encoded)?;
+        let (encoded, value, invalidate) = operation(&opened.document)?;
+        let candidate = if encoded == opened.document {
+            None
+        } else {
+            Some(format::replace_document(&bytes, &opened, &encoded)?)
+        };
         let _publication = self
             .export_publication
             .lock()
             .map_err(|_| VaultFailure::Unavailable)?;
-        let state = self.state.lock().map_err(|_| VaultFailure::Unavailable)?;
+        let mut state = self.state.lock().map_err(|_| VaultFailure::Unavailable)?;
         if state.closed || self.generation() != generation || state.active.is_none() {
             return Err(VaultFailure::Stale);
         }
-        drop(state);
-        // The publication barrier retains exclusive storage ownership until completion.
-        let result = store.commit(&candidate, Some(digest(&bytes)));
-        if let Err(error) = result {
-            if error == VaultFailure::WriteUncertain {
-                self.lock()?;
+        if let Some(candidate) = candidate {
+            drop(state);
+            // The publication barrier retains exclusive storage ownership until completion.
+            if let Err(error) = store.commit(&candidate, Some(digest(&bytes))) {
+                if error == VaultFailure::WriteUncertain {
+                    self.lock()?;
+                }
+                return Err(error);
             }
-            return Err(error);
+            state = self.state.lock().map_err(|_| VaultFailure::Unavailable)?;
+            if self.generation() != generation || state.closed {
+                return Err(VaultFailure::Stale);
+            }
+            if !state.tool_grants.is_empty() {
+                if let Ok(document) = super::cards::DocumentV2::decode(&encoded) {
+                    state
+                        .tool_grants
+                        .retain(|scope| document.check_scope(scope).is_ok());
+                } else {
+                    state.tool_grants.clear();
+                }
+            }
+            state.active.as_mut().ok_or(VaultFailure::Locked)?.document = encoded;
         }
-        let mut state = self.state.lock().map_err(|_| VaultFailure::Unavailable)?;
-        if self.generation() != generation || state.closed {
-            return Err(VaultFailure::Stale);
+        if invalidate {
+            self.epoch.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            state.authorization = Default::default();
+            state.account_import = None;
+            state.tool_grants.clear();
         }
-        let active = state.active.as_mut().ok_or(VaultFailure::Locked)?;
-        active.document = encoded;
         Ok(value)
     }
 }

@@ -1,6 +1,12 @@
+export 'account_import.dart';
+export 'backup.dart';
 export 'cards.dart';
+export 'catalog.dart';
 export 'content.dart';
+export 'local_tools.dart';
 export 'otp.dart';
+export 'phrase.dart';
+export 'policy.dart';
 export 'presets.dart';
 export 'v2.dart';
 export 'v3.dart';

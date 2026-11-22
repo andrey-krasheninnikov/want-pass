@@ -20,6 +20,360 @@ import 'package:want_pass_core/want_pass_core.dart';
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   LaunchMode.initializeAutomatically();
+  test(
+    'quick search ranks exact matches, frequency and recency, and returns five',
+    () {
+      final cards = [
+        for (final (i, n) in [
+          'Project',
+          'Project area',
+          'Project map',
+          'Project team',
+          'Project work',
+          'Project yard',
+          'External',
+        ].indexed)
+          CardSummaryV1(
+            id: i.toRadixString(16).padLeft(32, '0'),
+            name: n,
+            service: 'github',
+            groupIds: const [],
+            cardType: CardTypeV1.account,
+            templateVersion: 1,
+          ),
+      ];
+      final usage = {
+        cards[1].id: [3, 10],
+        cards[2].id: [3, 42],
+        cards[3].id: [1, 59],
+        cards[4].id: [8, 2],
+        cards[6].id: [100, 99],
+      };
+      expect(rankQuickCards(cards, 'project', usage).map((c) => c.name), [
+        'Project',
+        'Project work',
+        'Project map',
+        'Project area',
+        'Project team',
+      ]);
+      expect(rankQuickCards(cards, '', usage).first.name, 'External');
+    },
+  );
+  testWidgets(
+    'backup directory permission is released after success or failure and cancellation writes nothing',
+    (tester) async {
+      const picker = MethodChannel('want_pass/backup_directory');
+      const path = '/chosen/fixture.wpassbackup';
+      final calls = <String>[];
+      String? selection = path;
+      final messenger = tester.binding.defaultBinaryMessenger;
+      messenger.setMockMethodCallHandler(picker, (call) async {
+        calls.add(call.method);
+        if (call.method == 'choose') return selection;
+        expect(call.arguments, path);
+        return null;
+      });
+      addTearDown(() => messenger.setMockMethodCallHandler(picker, null));
+      final files = PlatformCredentialFileService(_Reporter());
+      final saved = await files.withBackupDestinationV1((destination) async {
+        expect(destination, path);
+        calls.add('write');
+        return true;
+      });
+      expect(saved.value, path);
+      expect(calls, ['choose', 'write', 'release']);
+      calls.clear();
+      final failed = await files.withBackupDestinationV1((_) async {
+        throw StateError('fixture');
+      });
+      expect(failed.isError, isTrue);
+      expect(calls, ['choose', 'release']);
+      selection = null;
+      calls.clear();
+      final cancelled = await files.withBackupDestinationV1(
+        (_) => throw StateError('unexpected write'),
+      );
+      expect(cancelled.value, isNull);
+      expect(calls, ['choose']);
+    },
+    variant: TargetPlatformVariant.only(TargetPlatform.macOS),
+  );
+
+  testWidgets(
+    'quick panel copies a secure note with its explicit copy action',
+    (tester) async {
+      final fixture = (await tester.runAsync(_Fixture.create))!;
+      final controller = fixture.controller;
+      await tester.runAsync(() async {
+        await controller.loadContent();
+        await controller.saveCard(
+          const CardDraftV1(
+            name: 'Fixture note',
+            service: 'github',
+            cardType: CardTypeV1.secureNote,
+            fields: [
+              CardFieldDraftV1(id: FieldIdV1.value, value: 'only in fixture'),
+            ],
+            groupIds: [],
+          ),
+        );
+      });
+      await tester.pumpWidget(const MaterialApp(home: SizedBox.shrink()));
+      final context = tester.element(find.byType(SizedBox).last);
+      final messenger = tester.binding.defaultBinaryMessenger;
+      const clipboard = MethodChannel('want_pass/clipboard');
+      String? written;
+      messenger.setMockMethodCallHandler(clipboard, (call) async {
+        if (call.method == 'write') written = call.arguments as String;
+        return null;
+      });
+      final access = VaultQuickAccess(controller, () => context, (_, _) {});
+      const codec = StandardMethodCodec();
+      Future<dynamic> invoke(String method, Object arg) async {
+        final response = await messenger.handlePlatformMessage(
+          VaultQuickAccess.channel.name,
+          codec.encodeMethodCall(MethodCall(method, arg)),
+          null,
+        );
+        return codec.decodeEnvelope(response!);
+      }
+
+      try {
+        await tester.runAsync(() async {
+          final matches = await invoke('query', {
+            'text': 'Fixture note',
+            'usage': {},
+          });
+          final id = (matches as List).single['id'] as String;
+          final actions = await invoke('actions', id) as List;
+          expect(actions.map((a) => a['id']), contains('all'));
+          expect(await invoke('copy', {'id': id, 'action': 'all'}), isTrue);
+          expect(written, 'value: only in fixture');
+        });
+      } finally {
+        access.dispose();
+        await _closeFixture(tester, fixture);
+        messenger.setMockMethodCallHandler(clipboard, null);
+      }
+    },
+    variant: TargetPlatformVariant.only(TargetPlatform.macOS),
+  );
+  testWidgets(
+    'desktop create shortcut opens the existing form and keyboard cancellation saves no card',
+    (tester) async {
+      final fixture = (await tester.runAsync(_Fixture.create))!;
+      addTearDown(() => _closeFixture(tester, fixture));
+      await tester.runAsync(fixture.controller.loadContent);
+      var consumed = false;
+      await tester.pumpWidget(
+        MaterialApp(
+          builder: (context, child) =>
+              WantTheme(data: WantThemeData.light(), child: child!),
+          home: Scaffold(
+            body: VaultContentView(
+              controller: fixture.controller,
+              shortcutRequest: (1, 'create', null),
+              onShortcutOpened: () => consumed = true,
+            ),
+          ),
+        ),
+      );
+      await _pump(tester);
+      expect(consumed, isTrue);
+      expect(find.byKey(const ValueKey('card-type')), findsOneWidget);
+      expect(find.byKey(const ValueKey('account-name')), findsOneWidget);
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+      await tester.sendKeyEvent(LogicalKeyboardKey.keyK);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+      await _pump(tester);
+      expect(find.byKey(const ValueKey('account-save')), findsNothing);
+      expect(fixture.controller.state.content!.cards, isEmpty);
+      await tester.pumpWidget(const SizedBox.shrink());
+      await _closeFixture(tester, fixture);
+      await _pump(tester);
+    },
+  );
+  testWidgets(
+    'restore opens from first setup, previews a merge and applies the selected backup',
+    (tester) async {
+      tester.view.physicalSize = const Size(1240, 1000);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final source = (await tester.runAsync(() => _Fixture.create()))!;
+      addTearDown(() => _closeFixture(tester, source));
+      final path = '${source.directory.path}/portable.wpassbackup';
+      await tester.runAsync(() async {
+        await source.controller.loadContent();
+        expect(
+          await source.controller.saveGroup(
+            const GroupDraftV1(name: 'From backup'),
+          ),
+          isTrue,
+        );
+        expect(
+          await source.controller.exportBackup(
+            path,
+            source.controller.state.content!.revision,
+          ),
+          isTrue,
+        );
+      });
+      final target = (await tester.runAsync(
+        () => _Fixture.create(files: _BackupFixtureFile(path)),
+      ))!;
+      addTearDown(() => _closeFixture(tester, target));
+      await tester.runAsync(target.controller.loadContent);
+      await tester.pumpWidget(
+        MaterialApp(
+          localizationsDelegates: const [
+            ...GlobalMaterialLocalizations.delegates,
+            ...FLocalizations.localizationsDelegates,
+          ],
+          builder: (context, child) =>
+              WantTheme(data: WantThemeData.dark(), child: child!),
+          home: Scaffold(
+            body: VaultContentView(
+              controller: target.controller,
+              restoreRequested: true,
+            ),
+          ),
+        ),
+      );
+      await _pump(tester);
+      await _tap(tester, 'backup-select-file');
+      final preview = find.byKey(const ValueKey('backup-preview'));
+      expect(tester.widget<WantButton>(preview).onPressed, isNull);
+      await _enter(tester, 'backup-recovery-phrase', source.recoveryJson);
+      expect(tester.widget<WantButton>(preview).onPressed, isNull);
+      await _tap(tester, 'backup-mode');
+      await tester.tap(find.text('Merge with this vault').last);
+      await _pump(tester);
+      await _tap(tester, 'backup-preview');
+      await _idle(tester, target.controller);
+      expect(find.textContaining('Added 1'), findsOneWidget);
+      await _tap(tester, 'backup-apply');
+      await _idle(tester, target.controller);
+      expect(
+        target.controller.state.content!.groups.single.name,
+        'From backup',
+      );
+      await tester.runAsync(target.controller.lock);
+      await tester.runAsync(source.controller.lock);
+      await tester.pumpWidget(const SizedBox.shrink());
+    },
+  );
+  testWidgets(
+    'saved field editing supports paste and keeps copy in the vault action',
+    (tester) async {
+      final input = TextEditingController(text: 'synthetic saved value');
+      final keyboard = tester.binding.defaultBinaryMessenger;
+      var writes = 0;
+      keyboard.setMockMethodCallHandler(SystemChannels.platform, (call) async {
+        if (call.method == 'Clipboard.setData') writes++;
+        if (call.method == 'Clipboard.getData') {
+          return {'text': 'synthetic pasted value'};
+        }
+        return null;
+      });
+      addTearDown(() {
+        keyboard.setMockMethodCallHandler(SystemChannels.platform, null);
+        input.dispose();
+      });
+      await tester.pumpWidget(
+        MaterialApp(
+          localizationsDelegates: const [
+            ...GlobalMaterialLocalizations.delegates,
+            ...FLocalizations.localizationsDelegates,
+          ],
+          home: Scaffold(
+            body: WantTheme(
+              data: WantThemeData.dark(),
+              child: VaultSecretInput(
+                label: 'Value',
+                controller: input,
+                enabled: true,
+                autofocus: true,
+                last: true,
+                protectClipboard: true,
+                concealed: false,
+                onSubmitted: () {},
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+      expect(
+        tester
+            .widget<EditableText>(find.byType(EditableText))
+            .enableInteractiveSelection,
+        isFalse,
+      );
+      input.selection = TextSelection(
+        baseOffset: 0,
+        extentOffset: input.text.length,
+      );
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+      await tester.sendKeyEvent(LogicalKeyboardKey.keyC);
+      await tester.sendKeyEvent(LogicalKeyboardKey.keyX);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+      expect(writes, 0);
+      expect(input.text, 'synthetic saved value');
+      await tester.tap(find.byIcon(Icons.content_paste_outlined));
+      await tester.pump(const Duration(milliseconds: 200));
+      expect(input.text, 'synthetic pasted value');
+      await tester.pumpWidget(const SizedBox.shrink());
+    },
+  );
+
+  testWidgets(
+    'operation confirmation accepts six digits and closes when the vault locks',
+    (tester) async {
+      final fixture = (await tester.runAsync(() => _Fixture.create()))!;
+      addTearDown(() => _closeFixture(tester, fixture));
+      await tester.runAsync(fixture.controller.loadContent);
+      final navigator = GlobalKey<NavigatorState>();
+      await tester.pumpWidget(
+        MaterialApp(
+          navigatorKey: navigator,
+          localizationsDelegates: const [
+            ...GlobalMaterialLocalizations.delegates,
+            ...FLocalizations.localizationsDelegates,
+          ],
+          builder: (context, child) =>
+              WantTheme(data: WantThemeData.dark(), child: child!),
+          home: const Scaffold(),
+        ),
+      );
+      final first = promptVaultOperation(
+        navigator,
+        fixture.controller,
+        ProtectedOperationV1.copy,
+      );
+      await tester.pumpAndSettle();
+      final confirm = find.widgetWithText(WantButton, 'Confirm');
+      expect(tester.widget<WantButton>(confirm).onPressed, isNull);
+      await tester.enterText(find.byType(EditableText), '123456');
+      await tester.pump();
+      expect(tester.widget<WantButton>(confirm).onPressed, isNotNull);
+      await tester.tap(confirm);
+      await _pump(tester);
+      expect(find.byType(AlertDialog), findsNothing);
+      expect(await first, '123456');
+      final second = promptVaultOperation(
+        navigator,
+        fixture.controller,
+        ProtectedOperationV1.delete,
+      );
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byType(EditableText), '456789');
+      await tester.runAsync(fixture.controller.lock);
+      await _pump(tester);
+      expect(find.byType(EditableText), findsNothing);
+      expect(await second, isNull);
+    },
+  );
   testWidgets('catalog search works in a narrow Russian dark workspace', (
     tester,
   ) async {
@@ -238,6 +592,59 @@ void main() {
       await tester.pumpWidget(const SizedBox.shrink());
     },
   );
+  testWidgets(
+    'account import previews names, skips duplicates and closes on lock',
+    (tester) async {
+      final files = _PendingFileService();
+      final fixture = (await tester.runAsync(
+        () => _Fixture.create(files: files),
+      ))!;
+      final controller = fixture.controller;
+      addTearDown(() => _closeFixture(tester, fixture));
+      await tester.runAsync(controller.loadContent);
+      await tester.pumpWidget(
+        MaterialApp(
+          builder: (context, child) =>
+              WantTheme(data: WantThemeData.light(), child: child!),
+          home: Scaffold(
+            body: Builder(
+              builder: (context) => TextButton(
+                key: const ValueKey('open-account-import'),
+                onPressed: () => showAccountImportDialog(context, controller),
+                child: const Text('Import'),
+              ),
+            ),
+          ),
+        ),
+      );
+      const csv =
+          'Title,URL,Username,Password,Notes\nExample,https://example.invalid/,tenant,synthetic-input,example-note\n';
+      files.importPayload = [csv];
+      await _tap(tester, 'open-account-import');
+      await _tap(tester, 'account-import-apple');
+      await _tap(tester, 'account-import-row-0');
+      expect(find.text('Example'), findsOneWidget);
+      expect(find.text('tenant'), findsNothing);
+      expect(find.text('synthetic-input'), findsNothing);
+      expect(find.text('example-note'), findsNothing);
+      expect(find.text('Import (0)'), findsOneWidget);
+      await _tap(tester, 'account-import-row-0');
+      await _tap(tester, 'account-import-apply');
+      await _idle(tester, controller);
+      expect(controller.state.content!.cards.length, 1);
+      await _tap(tester, 'open-account-import');
+      await _tap(tester, 'account-import-apple');
+      await _idle(tester, controller);
+      expect(find.text('Example · Add a copy'), findsOneWidget);
+      expect(find.text('Import (0)'), findsOneWidget);
+      await tester.runAsync(controller.lock);
+      await _pump(tester);
+      expect(find.text('Example · Add a copy'), findsNothing);
+      expect(find.byKey(const ValueKey('account-import-apply')), findsNothing);
+      await tester.pumpWidget(const SizedBox.shrink());
+    },
+  );
+
   testWidgets('lock discards a late secret file selection', (tester) async {
     final files = _PendingFileService();
     final fixture = (await tester.runAsync(
@@ -364,7 +771,13 @@ void main() {
       await _idle(tester, controller);
       final toggle = find.descendant(
         of: find.byKey(const ValueKey('card-field-totpSeed')),
-        matching: find.byType(FButton),
+        matching: find.byWidgetPredicate(
+          (button) =>
+              button is FButton &&
+              button.semanticsLabel ==
+                  FDefaultLocalizations()
+                      .passwordFieldUnobscureTextButtonSemanticsLabel,
+        ),
       );
       await tester.ensureVisible(toggle);
       await tester.tap(toggle);
@@ -685,6 +1098,12 @@ void main() {
     final confirm = find.byKey(const ValueKey('vault-reset-confirm'));
     expect(tester.widget<WantButton>(confirm).onPressed, isNull);
     await _enter(tester, 'vault-reset-phrase', 'Invalid fixture phrase');
+    expect(tester.widget<WantButton>(confirm).onPressed, isNull);
+    await _enter(
+      tester,
+      'vault-reset-phrase',
+      [...List.filled(23, 'abandon'), 'art'].join(' '),
+    );
     await _tap(tester, 'vault-reset-confirm');
     await _idle(tester, controller);
     expect(find.text('Check your recovery phrase.'), findsOneWidget);
@@ -1186,6 +1605,20 @@ final class _FixedLogoService implements GroupLogoService {
 }
 
 final class _PendingFileService implements CredentialFileService {
+  @override
+  FutureDomainResult<String?> withBackupDestinationV1(
+    Future<bool> Function(String) save,
+  ) async => const Result.success(null);
+  @override
+  FutureDomainResult<String?> selectBackupSourceV1() async =>
+      const Result.success(null);
+  @override
+  FutureDomainResult<List<String>?> selectAccountImportV1(
+    AccountImportSourceV1 source, {
+    required bool clipboard,
+  }) async => Result.success(importPayload);
+
+  List<String>? importPayload;
   final reply = Completer<DomainResult<AttachmentDraftV1?>>();
   @override
   FutureDomainResult<AttachmentDraftV1?> selectAttachmentV1() => reply.future;
@@ -1194,7 +1627,28 @@ final class _PendingFileService implements CredentialFileService {
       const Result.success(null);
 }
 
+final class _BackupFixtureFile extends _ReplacementFileService {
+  final String path;
+  _BackupFixtureFile(this.path);
+  @override
+  FutureDomainResult<String?> selectBackupSourceV1() async =>
+      Result.success(path);
+}
+
 final class _ReplacementFileService implements CredentialFileService {
+  @override
+  FutureDomainResult<String?> withBackupDestinationV1(
+    Future<bool> Function(String) save,
+  ) async => const Result.success(null);
+  @override
+  FutureDomainResult<String?> selectBackupSourceV1() async =>
+      const Result.success(null);
+  @override
+  FutureDomainResult<List<String>?> selectAccountImportV1(
+    AccountImportSourceV1 source, {
+    required bool clipboard,
+  }) async => const Result.success(null);
+
   @override
   FutureDomainResult<AttachmentDraftV1?> selectAttachmentV1() async =>
       const Result.success(

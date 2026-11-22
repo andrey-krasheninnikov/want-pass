@@ -2,6 +2,7 @@ export 'account_summary_v1.dart';
 export 'account_v1.dart';
 export 'attachment_v1.dart';
 export 'card_catalog_v1.dart';
+export 'vault_catalog_v1.dart';
 export 'card_preset_v1.dart';
 export 'card_summary_v1.dart';
 export 'card_type_v1.dart';

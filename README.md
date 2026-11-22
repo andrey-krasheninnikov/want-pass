@@ -3,20 +3,23 @@
 
 ## Project status / Статус проекта
 
-The macOS client creates, locks, unlocks and recovers one offline encrypted vault. Secret cards, integrations, synchronization and release channels remain backlog tasks.
+Want Pass stores groups, secret cards, custom services, types and card history in an encrypted vault on the Mac. Import and backup recovery run locally.
 
-Клиент macOS создаёт, блокирует, разблокирует и восстанавливает один офлайн-сейф с шифрованием. Карточки секретов, интеграции, синхронизация и каналы релиза остаются задачами backlog.
+Want Pass хранит группы, карточки секретов, пользовательские сервисы, типы и историю изменений в зашифрованном сейфе на Mac. Импорт и восстановление копии работают локально.
 
 - [Product concept / Концепция](docs/ideas/want-pass.md)
 - [Specification / Спецификация](docs/product/spec.md) ([GitHub](https://github.com/andrey-krasheninnikov/want-pass/issues/1))
 - [Roadmap and issue dependencies / План и зависимости](docs/product/roadmap.md)
 - [Domain glossary / Словарь](GLOSSARY.md)
+- [macOS build and release / Сборка и выпуск macOS](docs/product/macos-release.md)
+- [Account import / Импорт учётных записей](docs/product/account-import.md)
+- [Portable backups / Переносимые копии](docs/product/portable-backup.md)
 - [Architecture decisions / Архитектурные решения](docs/adr/)
 - [Project rules / Правила проекта](AGENTS.md)
 
-The first target is a local macOS vault and search widget. Flutter uses want_allure, domain_error, package_context, launch_mode and talker_bloc_effects; the backend uses Rust. Later work covers Windows, Linux, Android, iOS, passkeys, encrypted sync, browser and developer-tool integrations.
+The desktop client uses Flutter, Want Allure and a Rust vault. The optional Rust backend has a separate lifecycle.
 
-Первая цель: локальный macOS-сейф и поисковый виджет. Flutter использует want_allure, domain_error, package_context, launch_mode и talker_bloc_effects; backend использует Rust. Последующие этапы охватывают Windows, Linux, Android, iOS, passkeys, зашифрованную синхронизацию, браузеры и инструменты разработчика.
+Клиент написан на Flutter и использует Want Allure. Сейф работает на Rust. Дополнительный Rust-сервер запускается отдельно.
 
 ## Development foundation / Фундамент разработки
 
@@ -58,9 +61,9 @@ Health возвращает `200` и `{"status":"ok"}`. Неизвестные �
 - `packages/pass_core`: Dart access services, versioned domain errors, package-owned startup context and a Rust vault through Flutter Rust Bridge Native Assets. The foreground startup guard is callable without Flutter widgets or a server. / Access services на Dart, версионированные доменные ошибки, собственный startup package context и Rust-сейф через Flutter Rust Bridge Native Assets. Проверка foreground-запуска доступна без Flutter-виджетов и сервера.
 - `server`: a Rust HTTP service with a static health route and request-failure tests. / Rust HTTP-сервис со статическим health-маршрутом и проверками ошибочных запросов.
 
-All workspace members use one committed pub lockfile; the vault library, backend and native pods have their own committed lockfiles. `want_allure 1.2.2` is a hosted immutable dependency, not an external path override. Internal workspace modules are versioned in this repository. The native identifier `foundation.want.pass` and branded app icon identify this development build; they do not imply store publication.
+The workspace uses one committed pub lockfile. Rust and CocoaPods have separate lockfiles. The app pins the released `want_allure 1.2.2` package.
 
-Все участники workspace используют один закоммиченный pub lockfile; библиотека сейфа, backend и нативные pods имеют собственные lockfiles. `want_allure 1.2.2` является опубликованной неизменяемой зависимостью, а не внешней path-подменой. Внутренние модули workspace версионируются в этом репозитории. Native identifier и фирменная иконка обозначают эту сборку разработки и не означают публикацию в сторе.
+В workspace один общий pub lockfile. У Rust и CocoaPods свои lockfiles. Приложение использует выпущенный пакет `want_allure 1.2.2`.
 
 Diagnostics forward only fixed event markers. Arbitrary states, effects, error objects and traces are neither formatted nor retained by the logging adapter. Framework failures render generic text. Vault-format tests include published cryptographic vectors and interrupted writes; source review does not replace an external security audit.
 
@@ -76,21 +79,21 @@ Choose a master password with at least 15 Unicode scalars, an uppercase letter, 
 
 Выберите мастер-пароль минимум из 15 Unicode scalars, с заглавной и строчной буквами, ASCII-цифрой и спецсимволом; максимум 1024 UTF-8 байта. Однострочное поле поддерживает показ и скрытие. Необязательные подсказки хранятся открыто и видны до разблокировки. Сохраните 24 recovery-слова через JSON, буфер обмена или локальный QR и пройдите три отдельных проверки слов. Экспорт даёт доступ к существующему файлу сейфа и не восстанавливает удалённый файл.
 
-The current bundle ID is `foundation.want.pass`; Dart package name remains `want_pass`. The file lives in the application's Application Support `vault/vault.wpass`. Lock is explicit, after five idle minutes, and on native macOS lock/sleep events. Passwords and recovery words cross Dart strings, whose memory cannot be reliably zeroed. [ADR 0007](docs/adr/0007-vault-v2-hints-and-setup.md) defines V2 and its plaintext-hint exception; [ADR 0006](docs/adr/0006-vault-format-and-native-key-lifecycle.md) records the unchanged cryptographic profiles and threat limits.
+The production bundle is `foundation.want.pass` and the development bundle is `foundation.want.pass.dev`. Each uses its own macOS Application Support directory. Their vault files are `production/vault/vault.wpass` and `development/vault/vault.wpass` respectively. Want Pass locks after five idle minutes, when macOS sleeps or locks, or when the owner locks it. Dart strings containing passwords and recovery words have no reliable memory-erasure guarantee. [Vault format](docs/adr/0006-vault-format-and-native-key-lifecycle.md) · [Pre-unlock hints](docs/adr/0007-vault-v2-hints-and-setup.md)
 
-Текущий bundle ID: `foundation.want.pass`; Dart package name остаётся `want_pass`. Файл находится в Application Support приложения: `vault/vault.wpass`. Блокировка выполняется вручную, через пять минут бездействия и по native событиям lock/sleep macOS. Пароль и recovery-слова проходят через Dart-строки, память которых нельзя надёжно обнулить. [ADR 0007](docs/adr/0007-vault-v2-hints-and-setup.md) определяет V2 и исключение для открытых подсказок; [ADR 0006](docs/adr/0006-vault-format-and-native-key-lifecycle.md) фиксирует неизменённые криптографические профили и границы защиты.
+У релизного приложения bundle ID `foundation.want.pass`, у приложения для разработки — `foundation.want.pass.dev`. Каждая сборка использует свой каталог Application Support. Относительные пути к сейфам — `production/vault/vault.wpass` и `development/vault/vault.wpass`. Сейф блокируется вручную, через пять минут бездействия, при блокировке macOS или переходе в сон. Dart не гарантирует обнуление строк с паролями и словами восстановления. [Формат сейфа](docs/adr/0006-vault-format-and-native-key-lifecycle.md) · [Подсказки до входа](docs/adr/0007-vault-v2-hints-and-setup.md)
 
-The eight-step first setup separates password and phrase hints and requires storage acknowledgments. A wrong quiz word creates a new phrase and restarts all phrase checks. Download, clipboard and QR carry identical numbered JSON; recovery accepts that JSON or the 24 words and verifies access before continuing. The safe dial opens the password dialog or locks an open vault. Its rotation follows the actual five-minute idle deadline, renewed by activity. [ADR 0008](docs/adr/0008-recovery-json-and-guided-setup.md) defines this flow without changing the V2 vault file.
+During setup, save the recovery words and then confirm three different positions. A wrong answer takes you back to the same phrase. Download, copy and QR use the same numbered JSON. For recovery, enter the words manually or paste the phrase or numbered JSON.
 
-Мастер из восьми шагов отделяет подсказки пароля и фразы и требует подтверждения сохранения. Неверное слово создаёт новую фразу и сбрасывает все её проверки. Файл, буфер и QR содержат одинаковый JSON с номерами слов; восстановление принимает JSON или 24 слова и проверяет доступ до продолжения. Замок открывает диалог пароля или блокирует открытый сейф. Поворот отражает настоящие пять минут бездействия, продлеваемые активностью. [ADR 0008](docs/adr/0008-recovery-json-and-guided-setup.md) определяет этот сценарий без изменения файла сейфа V2.
+Во время настройки сохраните фразу восстановления и подтвердите слова на трёх разных позициях. Ошибка возвращает к той же фразе. Скачивание, копирование и QR используют один JSON с пронумерованными словами. При восстановлении слова можно ввести вручную, вставить текстом или в формате JSON.
 
-Unlock uses the strict native V3 password policy. Recovery and hint actions appear only after a credentials rejection; the saved hint opens in a popover. Invalid styling starts after submission; format copy stays in the field's help, and operational errors remain accessible inside the dialog. The header renders the approved SVG in 3D, the background alternates every 30 seconds, and the unlocked view shows the existing inactivity deadline. [ADR 0009](docs/adr/0009-unlock-policy-and-motion.md) records the intentional restriction on older passwords and the unchanged V1/V2 contracts.
+The password field offers a saved hint and recovery in its help popover. On supported Macs, enable Touch ID in General settings after unlocking with the master password.
 
-Вход использует строгую native-политику V3. Кнопки восстановления и подсказки появляются только после отказа credentials; сохранённая подсказка открывается в popover. Красное состояние появляется после отправки; объяснение формата находится в справке поля, системные ошибки доступны внутри диалога. Header показывает утверждённый SVG в 3D, фон меняется каждые 30 секунд, открытый сейф показывает существующий срок бездействия. [ADR 0009](docs/adr/0009-unlock-policy-and-motion.md) фиксирует намеренное ограничение старых паролей и сохранение контрактов V1/V2.
+Справка поля пароля открывает сохранённую подсказку и восстановление доступа. На совместимом Mac можно включить Touch ID в общих настройках после входа с мастер-паролем.
 
-For a clean acceptance run, close Want Pass and run `make clean-data`, then `make run`. Reset deletes the current namespace's vault and appearance preferences. Back up a needed vault first. Old bundle data and exported recovery files remain untouched; V1 files are not migrated automatically. Unknown files, symlinks or a busy vault cause reset to refuse.
+To erase the development vault and appearance preferences, quit **Want Pass Dev** and run `make clean-data`. Run `make run` to start a new development vault. Production uses a separate bundle and directory. Existing files from older development builds stay in their original location.
 
-Для чистого прогона приёмки закройте Want Pass и выполните `make clean-data`, затем `make run`. Сброс удаляет сейф и оформление текущего namespace. Предварительно сохраните нужный файл сейфа. Старый bundle namespace и экспортированные recovery-файлы сохраняются; автоматической миграции V1 нет. Неизвестные файлы, symlink или занятый сейф блокируют сброс.
+Чтобы удалить сейф и настройки оформления разработки, закройте **Want Pass Dev** и выполните `make clean-data`. Команда `make run` откроет новый тестовый стенд. У production отдельные приложение и каталог. Файлы прежних сборок разработки остаются на своих местах.
 
 `make check` runs local Dart, Flutter and both Rust suites. `make native-ui` runs creation, group/card editing, recovery and reopening in two macOS application processes using a separate disposable Application Support directory; it removes that directory after reopening. An interrupted run can leave only its `integration-issue-3-local_*` fixture. Real OS lock/sleep delivery and other platforms require separate verification.
 
@@ -102,12 +105,12 @@ After changing the Rust bridge API, install `flutter_rust_bridge_codegen 2.13.0`
 
 ## Groups and cards / Группы и карточки
 
-After unlocking, create groups and any of 19 secret-card presets. Every card requires a built-in service and may have an environment and several groups. Accounts support TOTP, recovery codes and reserve logins. Copy-all includes login, password and current OTP; other sensitive values have separate copy actions. Developer presets store locally validated values without configuring or executing tools. Files are limited to 20 MiB within the 64-MiB encrypted vault.
+Choose a built-in or custom service and card type. A card can belong to several groups and can specify an environment and resource bindings. Accounts support TOTP, recovery codes and alternate logins. Copy all includes the login, password and current OTP. The size limit is 20 MiB per attachment and 64 MiB for the encrypted vault.
 
-После разблокировки создавайте группы и карточки 19 типов. Сервис обязателен; окружение и несколько групп необязательны. Аккаунты поддерживают TOTP, recovery-коды и резервные логины. «Скопировать всё» включает логин, пароль и текущий OTP; остальные чувствительные поля копируются отдельно. Пресеты разработчика хранят значения с локальной проверкой формата без настройки и выполнения инструментов. Файл ограничен 20 MiB, зашифрованный сейф целиком ограничен 64 MiB.
+Укажите встроенный или собственный сервис и тип карточки. Карточку можно добавить в несколько групп, назначить ей окружение и ресурсы. Учётные записи поддерживают TOTP, коды восстановления и запасные логины. Действие «Скопировать всё» копирует логин, пароль и текущий OTP. Лимит вложения — 20 МиБ, зашифрованного сейфа — 64 МиБ.
 
-Schema-2 cards intentionally have no migration from the earlier schema-1 development data. Unsupported content is preserved and rejected rather than overwritten. Use a new vault for this acceptance run. The agreed stand reset removes only the current vault and preserves appearance preferences; the existing `make clean-data` command still resets both.
+The current reader supports card schemas 2 and 3. Keep the backup file and the 24-word phrase used when you exported it. During restore, select full replacement or merge. With merge, choose the local version, the incoming version or both for each conflict.
 
-Карточки schema-2 намеренно не мигрируют прежние данные schema-1 для разработки. Неподдержанное содержимое сохраняется и отклоняется без перезаписи. Для этой приёмки нужен новый сейф. Согласованный сброс стенда удаляет только текущий сейф и сохраняет оформление; существующая команда `make clean-data` по-прежнему сбрасывает оба вида данных.
+Клиент читает карточки схем 2 и 3. Сохраните файл копии и фразу из 24 слов, действовавшую на момент экспорта. При восстановлении выберите полную замену или объединение. При объединении для каждого конфликта можно оставить локальную версию, входящую или обе.
 
 See / См. [ADR 0011](docs/adr/0011-versioned-secret-cards.md) for supported formats and limits; [ADR 0010](docs/adr/0010-encrypted-groups-and-account-cards.md) for groups and the earlier document contract.

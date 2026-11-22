@@ -24,6 +24,10 @@ final class _CardPreviewState extends State<_CardPreview>
   (BigInt, String)? _hotp;
   final _revealed = <FieldIdV1, String>{};
   final _revealing = <FieldIdV1>{};
+  final _customRevealed = <String, String>{};
+  List<ResourceBindingV1> _bindings = const [];
+  String? _binding;
+  bool _showTargets = false;
   Timer? _expiry, _refresh;
   int _epoch = 0;
   bool _active = true, _ticker = true, _loading = false, _pending = true;
@@ -75,6 +79,10 @@ final class _CardPreviewState extends State<_CardPreview>
     _refresh?.cancel();
     _revealed.clear();
     _revealing.clear();
+    _customRevealed.clear();
+    _bindings = const [];
+    _binding = null;
+    _showTargets = false;
     _preview = null;
     _hotp = null;
     _pending = true;
@@ -160,6 +168,69 @@ final class _CardPreviewState extends State<_CardPreview>
     });
   }
 
+  Widget _customValue(TemplateFieldV1 field) {
+    final value = _customRevealed[field.id];
+    if (field.kind == CustomFieldKindV1.file) {
+      return ListTile(
+        contentPadding: EdgeInsets.zero,
+        title: Text(field.label),
+        trailing: IconButton(
+          tooltip: _text(context, 'Export file', 'Выгрузить файл'),
+          icon: const Icon(Icons.download_outlined),
+          onPressed: () => widget.controller.downloadAttachment(
+            widget.id,
+            'attachment',
+            fieldId: field.id,
+          ),
+        ),
+      );
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(field.label),
+        Row(
+          children: [
+            Expanded(child: Text(value ?? '••••••••')),
+            if (field.kind != CustomFieldKindV1.otp)
+              VaultSecretAction(
+                label: _text(
+                  context,
+                  'Show or hide value',
+                  'Показать или скрыть значение',
+                ),
+                onPressed: () async {
+                  if (value != null) {
+                    setState(() => _customRevealed.remove(field.id));
+                    return;
+                  }
+                  final epoch = _epoch;
+                  final revealed = await widget.controller.revealCustomField(
+                    widget.id,
+                    field.id,
+                  );
+                  if (_available && _epoch == epoch && revealed != null) {
+                    setState(() => _customRevealed[field.id] = revealed);
+                  }
+                },
+                child: Icon(
+                  value == null
+                      ? Icons.visibility_outlined
+                      : Icons.visibility_off_outlined,
+                ),
+              ),
+            VaultSecretAction(
+              label: _text(context, 'Copy value', 'Скопировать значение'),
+              onPressed: () =>
+                  widget.controller.copyCard(widget.id, customField: field.id),
+              child: const Icon(Icons.copy),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
   Widget _value(FieldIdV1 field, String? visible) {
     final value = visible ?? _revealed[field];
     final label = _fieldLabel(context, field);
@@ -191,7 +262,7 @@ final class _CardPreviewState extends State<_CardPreview>
                             '••••••••',
                             style: TextStyle(letterSpacing: 2),
                           )
-                        : SelectableText(
+                        : Text(
                             value,
                             style: const TextStyle(
                               fontFamily: 'monospace',
@@ -252,7 +323,19 @@ final class _CardPreviewState extends State<_CardPreview>
             .firstOrNull;
         if (summary == null) return const SizedBox.shrink();
         final preview = _preview;
-        final code = preview?.row.otp;
+        final template = _cardTemplate(
+          widget.controller.state.content!,
+          summary,
+        );
+        final binding = _bindings.where((b) => b.id == _binding).firstOrNull;
+        final choosingTarget =
+            _showTargets && _bindings.length > 1 && binding == null;
+        bool allows(String field) =>
+            !choosingTarget &&
+            (binding == null || binding.fields.contains(field));
+        final code = allows(_fieldKey(FieldIdV1.totpSeed))
+            ? preview?.row.otp
+            : null;
         final validCode =
             code != null && DateTime.now().toUtc().isBefore(code.validUntil);
         return SingleChildScrollView(
@@ -293,7 +376,7 @@ final class _CardPreviewState extends State<_CardPreview>
                   ),
                   _catalogLabel(
                     _typeIcon(summary.cardType),
-                    _typeLabel(context, summary.cardType),
+                    template?.name ?? _typeLabel(context, summary.cardType),
                   ),
                   if (summary.environment != null)
                     Text(_environmentLabel(summary.environment!)),
@@ -320,11 +403,65 @@ final class _CardPreviewState extends State<_CardPreview>
                 ),
               ] else ...[
                 if (preview.description.isNotEmpty) Text(preview.description),
-                for (final field in preview.row.fields)
-                  _value(
-                    field,
-                    field == FieldIdV1.login ? preview.row.login : null,
+                if (!_showTargets)
+                  WantButton(
+                    variant: WantButtonVariant.secondary,
+                    onPressed: () async {
+                      final epoch = _epoch;
+                      final bindings = await widget.controller.readBindings(
+                        widget.id,
+                      );
+                      if (_available && epoch == _epoch && bindings != null) {
+                        setState(() {
+                          _showTargets = true;
+                          _bindings = bindings;
+                          if (bindings.length == 1) {
+                            _binding = bindings.single.id;
+                          }
+                        });
+                      }
+                    },
+                    child: Text(
+                      _text(context, 'Target resources', 'Ресурсы назначения'),
+                    ),
+                  )
+                else if (_bindings.isEmpty)
+                  Text(
+                    _text(
+                      context,
+                      'No target resources',
+                      'Нет ресурсов назначения',
+                    ),
                   ),
+                if (_bindings.isNotEmpty)
+                  _pick<String>(
+                    context,
+                    _text(context, 'Use a target', 'Выбрать назначение'),
+                    _binding,
+                    _bindings.map((b) => b.id),
+                    (id) {
+                      final b = _bindings.firstWhere((b) => b.id == id);
+                      return '${_methodName(b.method)} · ${b.target}';
+                    },
+                    (id) => setState(() => _binding = id),
+                  ),
+                if (choosingTarget)
+                  Text(
+                    _text(
+                      context,
+                      'Choose a target to use its fields.',
+                      'Выберите назначение, чтобы использовать его поля.',
+                    ),
+                  ),
+                if (template != null)
+                  for (final f in template.fields)
+                    if (allows(f.id)) _customValue(f),
+                for (final field in preview.row.fields)
+                  if (allows(_fieldKey(field)))
+                    _value(
+                      field,
+                      field == FieldIdV1.login ? preview.row.login : null,
+                    ),
                 if (code != null)
                   DecoratedBox(
                     decoration: BoxDecoration(
@@ -367,7 +504,8 @@ final class _CardPreviewState extends State<_CardPreview>
                       ),
                     ),
                   ),
-                if (summary.cardType == CardTypeV1.hotp) ...[
+                if (summary.cardType == CardTypeV1.hotp &&
+                    allows(_fieldKey(FieldIdV1.hotpSeed))) ...[
                   if (_hotp case (final revision, final code)
                       when revision == widget.revision)
                     Text(
@@ -384,7 +522,9 @@ final class _CardPreviewState extends State<_CardPreview>
                     child: Text(_text(context, 'Next code', 'Следующий код')),
                   ),
                 ],
-                if (summary.cardType == CardTypeV1.account)
+                if (summary.cardType == CardTypeV1.account &&
+                    !choosingTarget &&
+                    binding == null)
                   Row(
                     children: [
                       const Spacer(),
@@ -410,7 +550,8 @@ final class _CardPreviewState extends State<_CardPreview>
                     variant: WantTypographyVariant.caption,
                     colorRole: 'muted-foreground',
                   ),
-                if (preview.row.attachment case final file?) ...[
+                if (preview.row.attachment case final file?
+                    when allows('attachment')) ...[
                   Text(
                     '${file.name} · ${file.size} ${_text(context, 'bytes', 'байт')}',
                   ),

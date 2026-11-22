@@ -5,11 +5,11 @@ from pathlib import Path
 import stat
 import subprocess
 
-BUNDLE_ID = "foundation.want.pass"
+BUNDLE_ID = "foundation.want.pass.dev"
 
 def targets(home):
-    return [home / "Library/Application Support" / BUNDLE_ID,
-            home / "Library/Containers" / BUNDLE_ID / "Data/Library/Application Support" / BUNDLE_ID]
+    return [home / "Library/Application Support" / BUNDLE_ID / "development",
+            home / "Library/Containers" / BUNDLE_ID / "Data/Library/Application Support" / BUNDLE_ID / "development"]
 
 def fingerprint(path):
     value = path.lstat()
@@ -59,8 +59,8 @@ def clean(home):
             os.close(descriptor)
 
 if __name__ == "__main__":
-    if subprocess.run(["/usr/bin/pgrep", "-x", "Want Pass"], capture_output=True).returncode == 0:
-        raise SystemExit("Close Want Pass before resetting local data.")
+    if subprocess.run(["/usr/bin/pgrep", "-x", "Want Pass Dev"], capture_output=True).returncode == 0:
+        raise SystemExit("Close Want Pass Dev before resetting development data.")
     try:
         print(f"Removed {clean(Path.home())} application data files. Exports and old bundle data are preserved.")
     except (OSError, RuntimeError):

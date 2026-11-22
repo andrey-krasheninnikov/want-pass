@@ -1,3 +1,12 @@
+pub(crate) mod account_import;
+pub(crate) mod biometric;
+pub mod local_tools;
+pub use account_import::{AccountImportPreviewV1, AccountImportRowV1, AccountImportSourceV1};
+pub use local_tools::{LocalToolCommandV1, local_tool_subject_v1};
+pub(crate) mod catalog;
+pub use catalog::*;
+pub(crate) mod policy;
+pub use policy::{OperationV1, ProtectionSettingsV1};
 pub(crate) mod presets;
 pub(crate) mod validation;
 pub use presets::{CardPresetV1, FieldSpecV1, card_presets_v1};
@@ -10,13 +19,20 @@ pub use content::{
     AccountInputV1, AccountRecordV1, AccountSummaryV1, ContentSnapshotV1, GroupInputV1,
     GroupRecordV1,
 };
+pub(crate) mod backup;
+pub(crate) mod phrase;
 pub(crate) mod v2;
 pub(crate) mod v3;
 use crate::{
     format::{self, Opened, Prepared},
     storage::{Store, digest},
 };
+pub use backup::{
+    BackupChoiceV1, BackupConflictV1, BackupEntityV1, BackupPreviewV1, BackupResolutionV1,
+    BackupStrategyV1,
+};
 use flutter_rust_bridge::frb;
+pub use phrase::{RecoveryInputV1, inspect_recovery_input_v1};
 use std::{
     path::Path,
     sync::{
@@ -65,10 +81,22 @@ struct Draft {
 }
 struct State {
     store: Arc<Store>,
+    authorization: policy::Pending,
+    account_import: Option<account_import::PendingImport>,
+    tool_grants: std::collections::BTreeSet<local_tools::Scope>,
     active: Option<Opened>,
     draft: Option<Draft>,
     draft_v2: Option<v2::DraftV2>,
     closed: bool,
+}
+
+impl State {
+    fn clear_active(&mut self) {
+        self.active = None;
+        self.authorization = policy::Pending::default();
+        self.account_import = None;
+        self.tool_grants.clear();
+    }
 }
 
 #[frb(opaque)]
@@ -76,6 +104,7 @@ pub struct Vault {
     state: Mutex<State>,
     job: Mutex<()>,
     export_publication: Mutex<()>,
+    tool_job: Mutex<()>,
     epoch: AtomicU64,
 }
 
@@ -97,6 +126,9 @@ impl Vault {
         Self {
             state: Mutex::new(State {
                 store: Arc::new(store),
+                authorization: policy::Pending::default(),
+                account_import: None,
+                tool_grants: Default::default(),
                 active: None,
                 draft: None,
                 draft_v2: None,
@@ -104,6 +136,7 @@ impl Vault {
             }),
             job: Mutex::new(()),
             export_publication: Mutex::new(()),
+            tool_job: Mutex::new(()),
             epoch: AtomicU64::new(0),
         }
     }
@@ -189,7 +222,8 @@ impl Vault {
             state.store.read()?.ok_or(VaultFailure::Missing)?
         };
         let opened = format::open_recovery(&bytes, &phrase)?;
-        let prepared = format::prepare(&password, &opened.document, Some(opened.id))?;
+        let recovered = policy::after_recovery(&opened.document)?;
+        let prepared = format::prepare(&password, &recovered, Some(opened.id))?;
         let words = format::words(prepared.entropy.as_ref())?;
         let mut positions = std::collections::BTreeSet::new();
         while positions.len() < 3 {
@@ -200,7 +234,7 @@ impl Vault {
         if state.closed || self.epoch.load(Ordering::SeqCst) != epoch {
             return Err(VaultFailure::Stale);
         }
-        state.active = None;
+        state.clear_active();
         state.draft = Some(Draft {
             prepared,
             positions: positions.clone(),
@@ -231,19 +265,28 @@ impl Vault {
         {
             return Err(VaultFailure::Confirmation);
         }
-        state.store.commit(&draft.prepared.bytes, draft.expected)?;
+        Self::commit_credentials(&state.store, &draft.prepared.bytes, draft.expected)?;
         let draft = state.draft.take().ok_or(VaultFailure::Confirmation)?;
         state.active = Some(draft.prepared.opened);
         Ok(())
     }
     pub fn unlock(&self, password: String, generation: u64) -> Result<(), VaultFailure> {
         let password = Zeroizing::new(password);
+        self.unlock_with(generation, |bytes, _| {
+            format::open_password(bytes, &password)
+        })
+    }
+    fn unlock_with(
+        &self,
+        generation: u64,
+        opener: impl FnOnce(&[u8], &Store) -> Result<Opened, VaultFailure>,
+    ) -> Result<(), VaultFailure> {
         let _job = self.job.try_lock().map_err(|_| VaultFailure::Busy)?;
         let epoch = generation;
         if self.epoch.load(Ordering::SeqCst) != epoch {
             return Err(VaultFailure::Stale);
         }
-        let bytes = {
+        let (bytes, store) = {
             let state = self.state.lock().map_err(|_| VaultFailure::Unavailable)?;
             if state.closed {
                 return Err(VaultFailure::Closed);
@@ -254,9 +297,12 @@ impl Vault {
             if state.draft.is_some() || state.draft_v2.is_some() {
                 return Err(VaultFailure::Busy);
             }
-            state.store.read()?.ok_or(VaultFailure::Missing)?
+            (
+                state.store.read()?.ok_or(VaultFailure::Missing)?,
+                state.store.clone(),
+            )
         };
-        let opened = format::open_password(&bytes, &password)?;
+        let opened = opener(&bytes, &store)?;
         let mut state = self.state.lock().map_err(|_| VaultFailure::Unavailable)?;
         if state.closed || self.epoch.load(Ordering::SeqCst) != epoch {
             return Err(VaultFailure::Stale);
@@ -275,7 +321,7 @@ impl Vault {
         if state.closed {
             return Err(VaultFailure::Closed);
         }
-        state.active = None;
+        state.clear_active();
         state.draft = None;
         state.draft_v2 = None;
         Ok(())
@@ -284,7 +330,7 @@ impl Vault {
         self.epoch.fetch_add(1, Ordering::SeqCst);
         let mut state = self.state.lock().map_err(|_| VaultFailure::Unavailable)?;
         let store = if !state.closed {
-            state.active = None;
+            state.clear_active();
             state.draft = None;
             state.draft_v2 = None;
             state.closed = true;

@@ -2,8 +2,33 @@ import 'package:domain_error/domain_error.dart';
 import 'package:want_pass/src/feature/vault/application/_barrel.dart';
 import 'package:want_pass_core/want_pass_core.dart';
 
-abstract interface class VaultUseCase {
+abstract interface class VaultUseCase
+    implements VaultCatalogAccessV1, VaultBackupAccessV1 {
   const VaultUseCase();
+  FutureDomainResult<String?> selectBackupSourceV1();
+  FutureDomainResult<String?> withBackupDestinationV1(
+    Future<bool> Function(String) save,
+  );
+  FutureDomainResult<AccountImportPreviewV1> prepareAccountImportV1({
+    required VaultHandleV1 handle,
+    required AccountImportSourceV1 source,
+    required List<String> payloads,
+    required BigInt revision,
+  });
+  FutureDomainResult<ContentSnapshotV2> applyAccountImportV1({
+    required VaultHandleV1 handle,
+    required String token,
+    required List<int> selected,
+  });
+  FutureDomainResult<void> cancelAccountImportV1({
+    required VaultHandleV1 handle,
+    required String token,
+  });
+  FutureDomainResult<List<String>?> selectAccountImportV1({
+    required AccountImportSourceV1 source,
+    required bool clipboard,
+  });
+
   FutureDomainResult<InitializeVaultResultV1> initializeV1({
     required InitializeVaultParamsV1 params,
   });
@@ -139,6 +164,7 @@ abstract interface class VaultUseCase {
   });
   FutureDomainResult<CopyCardResultV1> copyCardV1({
     required CopyCardParamsV1 params,
+    required bool Function() mayPublish,
   });
   FutureDomainResult<SelectAttachmentResultV1> selectAttachmentV1({
     required SelectAttachmentParamsV1 params,

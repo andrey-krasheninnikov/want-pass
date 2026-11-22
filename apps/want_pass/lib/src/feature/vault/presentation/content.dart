@@ -7,6 +7,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:forui/forui.dart';
+import 'package:qr_flutter/qr_flutter.dart';
 import 'package:bloc_effects/bloc_effects.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:image/image.dart' as img;
@@ -18,9 +19,18 @@ import 'package:want_pass/src/feature/vault/presentation/_barrel.dart';
 import 'package:want_pass_core/want_pass_core.dart';
 
 part 'card_editor.dart';
+part 'account_import.dart';
+part 'local_tools.dart';
 part 'catalog.dart';
+part 'catalog_editor.dart';
+part 'resource_history.dart';
+part 'custom_fields.dart';
 part 'group_icon_picker.dart';
+part 'quick_access.dart';
+part 'shortcut_settings.dart';
+part 'backup_dialog.dart';
 part 'sections.dart';
+part 'protection.dart';
 part 'workspace.dart';
 part 'preview.dart';
 
@@ -30,10 +40,18 @@ String _text(BuildContext context, String en, String ru) =>
 final class VaultContentView extends StatefulWidget {
   final VaultController controller;
   final AppearanceController? appearance;
+  final (int, String, String?)? shortcutRequest;
+  final VoidCallback? onShortcutOpened;
+  final bool restoreRequested;
+  final VoidCallback? onRestoreOpened;
   const VaultContentView({
     super.key,
     required this.controller,
     this.appearance,
+    this.shortcutRequest,
+    this.onShortcutOpened,
+    this.restoreRequested = false,
+    this.onRestoreOpened,
   });
   @override
   State<VaultContentView> createState() => _VaultContentViewState();

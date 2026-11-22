@@ -2,8 +2,24 @@ import 'package:domain_error/domain_error.dart';
 import 'package:want_pass_core/src/feature/vault/application/_barrel.dart';
 import 'package:want_pass_core/src/feature/vault/domain/_barrel.dart';
 
-abstract interface class VaultAccessService {
+abstract interface class VaultAccessService implements VaultBackupAccessV1 {
   const VaultAccessService();
+  FutureDomainResult<AccountImportPreviewV1> prepareAccountImportV1({
+    required VaultHandleV1 handle,
+    required AccountImportSourceV1 source,
+    required List<String> payloads,
+    required BigInt revision,
+  });
+  FutureDomainResult<ContentSnapshotV2> applyAccountImportV1({
+    required VaultHandleV1 handle,
+    required String token,
+    required List<int> selected,
+  });
+  FutureDomainResult<void> cancelAccountImportV1({
+    required VaultHandleV1 handle,
+    required String token,
+  });
+
   FutureDomainResult<VaultHandleV1> openV1();
   FutureDomainResult<VaultAccessStateV1> statusV1({
     required VaultHandleV1 handle,

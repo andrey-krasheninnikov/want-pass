@@ -11,6 +11,7 @@ final class CardSummaryV1 extends Equatable {
   final List<String> groupIds;
   final CardTypeV1 cardType;
   final int templateVersion;
+  final String? customTemplateId;
   const CardSummaryV1._({
     required this.id,
     required this.name,
@@ -19,6 +20,7 @@ final class CardSummaryV1 extends Equatable {
     required this.groupIds,
     required this.cardType,
     required this.templateVersion,
+    this.customTemplateId,
   });
   factory CardSummaryV1({
     required String id,
@@ -28,14 +30,17 @@ final class CardSummaryV1 extends Equatable {
     required List<String> groupIds,
     required CardTypeV1 cardType,
     required int templateVersion,
+    String? customTemplateId,
   }) {
     if (!RegExp(r'^[0-9a-f]{32}$').hasMatch(id) ||
         name.trim().isEmpty ||
         utf8.encode(name).length > 512 ||
         service.trim().isEmpty ||
         utf8.encode(service).length > 512 ||
-        (templateVersion != 1 &&
-            !(cardType == CardTypeV1.pat && templateVersion == 2)) ||
+        (cardType == CardTypeV1.custom
+            ? (customTemplateId == null || templateVersion < 1)
+            : templateVersion != 1 &&
+                  !(cardType == CardTypeV1.pat && templateVersion == 2)) ||
         groupIds.toSet().length != groupIds.length ||
         groupIds.any((id) => !RegExp(r'^[0-9a-f]{32}$').hasMatch(id))) {
       throw const VaultRejectedErrorV1(VaultFailureKindV1.unsupported);
@@ -48,6 +53,7 @@ final class CardSummaryV1 extends Equatable {
       groupIds: List.unmodifiable(groupIds),
       cardType: cardType,
       templateVersion: templateVersion,
+      customTemplateId: customTemplateId,
     );
   }
   CardSummaryV1 copyWith({
@@ -58,6 +64,7 @@ final class CardSummaryV1 extends Equatable {
     List<String>? groupIds,
     CardTypeV1? cardType,
     int? templateVersion,
+    String? Function()? customTemplateId,
   }) => CardSummaryV1(
     id: id ?? this.id,
     name: name ?? this.name,
@@ -66,6 +73,9 @@ final class CardSummaryV1 extends Equatable {
     groupIds: groupIds ?? this.groupIds,
     cardType: cardType ?? this.cardType,
     templateVersion: templateVersion ?? this.templateVersion,
+    customTemplateId: customTemplateId == null
+        ? this.customTemplateId
+        : customTemplateId(),
   );
   @override
   List<Object?> get props => [
@@ -76,6 +86,7 @@ final class CardSummaryV1 extends Equatable {
     groupIds,
     cardType,
     templateVersion,
+    customTemplateId,
   ];
   @override
   String toString() => 'CardSummaryV1(<redacted>)';

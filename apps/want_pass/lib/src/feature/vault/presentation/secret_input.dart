@@ -1,4 +1,4 @@
-import 'package:flutter/widgets.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:forui/forui.dart';
 
@@ -11,6 +11,7 @@ final class VaultSecretInput extends StatefulWidget {
   final bool last;
   final bool multiline;
   final bool preserveLineBreaks;
+  final bool protectClipboard;
   final bool concealed;
   final ValueNotifier<bool>? sharedObscure;
   final bool showVisibilityToggle;
@@ -28,6 +29,7 @@ final class VaultSecretInput extends StatefulWidget {
     required this.last,
     this.multiline = false,
     this.preserveLineBreaks = false,
+    this.protectClipboard = false,
     this.concealed = true,
     this.sharedObscure,
     this.showVisibilityToggle = true,
@@ -57,7 +59,8 @@ final class _VaultSecretInputState extends State<VaultSecretInput> {
       final multiline =
           widget.multiline || (widget.preserveLineBreaks && !obscure);
       // Concealed single-line editing strips LF, so reveal before editing these values.
-      return FTextField(
+      final input = FTextField(
+        enableInteractiveSelection: !widget.protectClipboard,
         label: Text(widget.label),
         description: widget.concealed && widget.preserveLineBreaks && obscure
             ? Text(
@@ -126,8 +129,68 @@ final class _VaultSecretInputState extends State<VaultSecretInput> {
                 );
               },
       );
+      if (!widget.protectClipboard) return input;
+      final editable =
+          widget.enabled &&
+          !(widget.preserveLineBreaks && obscure && widget.concealed);
+      void paste() {
+        if (editable) _pasteSavedValue(multiline);
+      }
+
+      void selectAll() {
+        if (editable) {
+          widget.controller.selection = TextSelection(
+            baseOffset: 0,
+            extentOffset: widget.controller.text.length,
+          );
+        }
+      }
+
+      return CallbackShortcuts(
+        bindings: {
+          const SingleActivator(LogicalKeyboardKey.keyV, meta: true): paste,
+          const SingleActivator(LogicalKeyboardKey.keyV, control: true): paste,
+          const SingleActivator(LogicalKeyboardKey.keyA, meta: true): selectAll,
+          const SingleActivator(LogicalKeyboardKey.keyA, control: true):
+              selectAll,
+        },
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            Expanded(child: input),
+            VaultSecretAction(
+              label: Localizations.localeOf(context).languageCode == 'ru'
+                  ? 'Вставить'
+                  : 'Paste',
+              onPressed: editable ? paste : null,
+              child: const Icon(Icons.content_paste_outlined, size: 18),
+            ),
+          ],
+        ),
+      );
     },
   );
+
+  Future<void> _pasteSavedValue(bool multiline) async {
+    final controller = widget.controller;
+    final previous = controller.value;
+    final data = await Clipboard.getData(Clipboard.kTextPlain);
+    if (!mounted ||
+        !widget.enabled ||
+        !identical(controller, widget.controller) ||
+        previous != controller.value ||
+        data?.text == null) {
+      return;
+    }
+    final text = multiline
+        ? data!.text!
+        : data!.text!.replaceAll(RegExp(r'[\r\n]'), '');
+    final selection = previous.selection.isValid
+        ? previous.selection
+        : TextSelection.collapsed(offset: previous.text.length);
+    controller.value = previous.replaced(selection, text);
+    widget.onChanged?.call(controller.text);
+  }
 }
 
 final class VaultSecretAction extends StatelessWidget {

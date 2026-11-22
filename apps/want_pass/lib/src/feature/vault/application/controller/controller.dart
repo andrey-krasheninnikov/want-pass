@@ -1167,6 +1167,28 @@ final class VaultController extends CubitWithEffects<VaultState, VaultEffect> {
     }
   }
 
+  Future<HotpAdvanceV1?> nextHotp(String id, BigInt revision) async {
+    if (state.phase != VaultPhase.unlocked ||
+        state.content?.revision != revision ||
+        !LaunchMode.isInitialized ||
+        !LaunchMode.isForeground) {
+      return null;
+    }
+    HotpAdvanceV1? issued;
+    await _perform(
+      'VaultController.nextHotp():',
+      (handle) => _useCase.nextHotpV1(
+        params: NextHotpParamsV1(handle: handle, id: id, revision: revision),
+      ),
+      (value) {
+        issued = value;
+        emit(state.copyWith(content: () => value.snapshot, busy: false));
+      },
+      contentMutation: true,
+    );
+    return issued;
+  }
+
   Future<TotpCodeV1?> readTotp(String id) async {
     const op = 'VaultController.readTotp():';
     if (_closing ||

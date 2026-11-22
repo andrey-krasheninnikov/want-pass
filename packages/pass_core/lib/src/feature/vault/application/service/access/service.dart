@@ -161,6 +161,11 @@ abstract interface class VaultAccessService {
     required String id,
     required BigInt revision,
   });
+  FutureDomainResult<HotpAdvanceV1> nextHotpV1({
+    required VaultHandleV1 handle,
+    required String id,
+    required BigInt revision,
+  });
   FutureDomainResult<TotpCodeV1> currentTotpV1({
     required VaultHandleV1 handle,
     required String id,

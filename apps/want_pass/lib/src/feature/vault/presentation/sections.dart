@@ -38,16 +38,27 @@ final class _VaultSectionView extends StatelessWidget {
         addLabel: _text(context, 'Add service', 'Добавить сервис'),
         label: _text(context, 'Built-in services', 'Встроенные сервисы'),
         entries: [
-          for (final service in catalog.services)
-            Text(_serviceLabel(context, service)),
+          for (final service in catalog.services.where((id) => id != 'other'))
+            _catalogLabel(
+              _serviceIcon(context, service),
+              _serviceLabel(context, service),
+            ),
         ],
       ),
       _VaultSection.types => _CatalogPanel(
         addLabel: _text(context, 'Add type', 'Добавить тип'),
         label: _text(context, 'Built-in types', 'Встроенные типы'),
         entries: [
-          for (final preset in catalog.presets)
-            Text(_typeLabel(context, preset.cardType)),
+          for (final type in _catalogTypes(catalog))
+            _catalogLabel(_typeIcon(type), _typeLabel(context, type)),
+          _catalogLabel(
+            const Icon(Icons.lock_person_outlined, size: 20),
+            _text(
+              context,
+              'Passkey · requires a system provider',
+              'Passkey · требуется системный провайдер',
+            ),
+          ),
         ],
       ),
       _VaultSection.environments => _CatalogPanel(

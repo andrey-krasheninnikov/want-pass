@@ -1151,6 +1151,29 @@ final class VaultUseCaseImpl implements VaultUseCase {
   }
 
   @override
+  FutureDomainResult<HotpAdvanceV1> nextHotpV1({
+    required NextHotpParamsV1 params,
+  }) async {
+    const op = 'VaultUseCaseImpl.nextHotpV1():';
+    final result = await _access.nextHotpV1(
+      handle: params.handle,
+      id: params.id,
+      revision: params.revision,
+    );
+    if (result.isError) {
+      reportVaultSafely(
+        _reporter,
+        layer: VaultDiagnosticLayer.application,
+        operation: op,
+        error: result.error is VaultErrorV1
+            ? result.error as VaultErrorV1
+            : const VaultUnexpectedErrorV1(),
+      );
+    }
+    return result;
+  }
+
+  @override
   FutureDomainResult<ReadTotpResultV1> readTotpV1({
     required ReadTotpParamsV1 params,
   }) async {

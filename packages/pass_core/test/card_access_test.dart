@@ -31,7 +31,8 @@ void main() {
       isTrue,
     );
     final catalog = (await access.cardCatalogV1()).value;
-    expect(catalog.presets.length, 19);
+    expect(catalog.presets.length, 49);
+    expect(catalog.services.length, 101);
     expect(catalog.services, contains('github'));
     final saved = await access.saveCardV1(
       handle: handle,

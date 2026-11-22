@@ -25,6 +25,7 @@ dependencies:
   forui: 0.27.7
   ditredi: 2.0.2
   file_selector: 1.1.0
+  flutter_svg: 2.3.2
   qr_flutter: 4.1.0
   url_launcher: 6.3.3
   image: 4.12.0
@@ -47,6 +48,7 @@ flutter:
     - shaders/filaments.frag
   assets:
     - assets/brand/
+    - assets/services/
 
 flutter_launcher_icons:
   image_path: assets/brand/app-icon.png

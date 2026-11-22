@@ -4,6 +4,7 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:forui/forui.dart';
 import 'package:domain_error/domain_error.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -19,6 +20,49 @@ import 'package:want_pass_core/want_pass_core.dart';
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   LaunchMode.initializeAutomatically();
+  testWidgets('catalog search works in a narrow Russian dark workspace', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(560, 920);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final fixture = (await tester.runAsync(() => _Fixture.create()))!;
+    addTearDown(() => _closeFixture(tester, fixture));
+    await tester.pumpWidget(
+      MaterialApp(
+        locale: const Locale('ru'),
+        supportedLocales: const [Locale('en'), Locale('ru')],
+        localizationsDelegates: const [
+          ...GlobalMaterialLocalizations.delegates,
+          ...FLocalizations.localizationsDelegates,
+        ],
+        builder: (context, child) => WantTheme(
+          data: WantThemeData.dark(),
+          child: WantToaster(child: child!),
+        ),
+        home: Scaffold(body: VaultContentView(controller: fixture.controller)),
+      ),
+    );
+    await _pump(tester);
+    await _tap(tester, 'account-create');
+    await _tap(tester, 'card-service');
+    await tester.enterText(_catalogField('Поиск в каталоге'), 'yandex');
+    await _pump(tester);
+    await tester.tap(find.text('Яндекс ID').last);
+    await _pump(tester);
+    expect(find.text('Яндекс ID'), findsOneWidget);
+
+    await _tap(tester, 'card-type');
+    await tester.enterText(_catalogField('Поиск в каталоге'), 'устройства');
+    await _pump(tester);
+    await tester.tap(find.text('PIN устройства').last);
+    await _pump(tester);
+    expect(find.byKey(const ValueKey('card-field-device')), findsOneWidget);
+    expect(find.byKey(const ValueKey('card-field-pin')), findsOneWidget);
+    await tester.runAsync(fixture.controller.lock);
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
   testWidgets('forms manage memberships, cancel deletion and close on lock', (
     tester,
   ) async {
@@ -65,6 +109,12 @@ void main() {
     await _tap(tester, 'account-create');
     await _enter(tester, 'account-name', 'Fixture account');
     await _tap(tester, 'card-service');
+    final catalogQuery = _catalogField('Search catalog');
+    await tester.enterText(catalogQuery, 'cloudinary');
+    await _pump(tester);
+    expect(find.text('Cloudinary'), findsOneWidget);
+    await tester.enterText(catalogQuery, 'github');
+    await _pump(tester);
     await tester.tap(find.text('GitHub').last);
     await _pump(tester);
     await tester.tap(find.text('Details (optional)'));
@@ -627,10 +677,7 @@ void main() {
     await _tap(tester, 'vault-menu-toggle');
     expect(servicesLabel, findsOneWidget);
     expect(
-      find.descendant(
-        of: find.byKey(services),
-        matching: find.text('${controller.state.catalog!.services.length}'),
-      ),
+      find.descendant(of: find.byKey(services), matching: find.text('100')),
       findsOneWidget,
     );
     await _tap(tester, 'vault-tab-general');
@@ -966,6 +1013,13 @@ Future<void> _closeFixture(WidgetTester tester, _Fixture fixture) async {
   expect(done, isTrue, reason: 'Pending native reads did not drain');
   await closing;
 }
+
+Finder _catalogField(String hint) => find.descendant(
+  of: find.byWidgetPredicate(
+    (widget) => widget is FTextField && widget.hint == hint,
+  ),
+  matching: find.byType(EditableText),
+);
 
 Future<void> _pump(WidgetTester tester) async {
   await tester.runAsync(

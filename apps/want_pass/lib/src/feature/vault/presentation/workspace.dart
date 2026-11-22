@@ -512,8 +512,9 @@ final class _VaultContentViewState extends State<VaultContentView>
 
     int? count(_VaultSection section) => switch (section) {
       _VaultSection.secrets => state.content!.cards.length,
-      _VaultSection.services => catalog.services.length,
-      _VaultSection.types => catalog.presets.length,
+      _VaultSection.services =>
+        catalog.services.where((service) => service != 'other').length,
+      _VaultSection.types => catalog.presets.length + 1,
       _VaultSection.environments => EnvironmentV1.values.length,
       _VaultSection.resources || _VaultSection.integrations => 0,
       _VaultSection.ai || _VaultSection.general => null,
@@ -966,15 +967,23 @@ final class _VaultContentViewState extends State<VaultContentView>
         mainAxisSize: MainAxisSize.min,
         spacing: 12,
         children: [
-          WantSelect<String>(
+          _CatalogSelect<String>(
             key: const ValueKey('filter-type'),
-            label: Text(_text(context, 'Type', 'Тип')),
+            label: _text(context, 'Type', 'Тип'),
             value: _type,
-            options: [
-              WantOption(value: 'all', label: _text(context, 'All', 'Все')),
-              for (final t in CardTypeV1.values)
-                WantOption(value: t.name, label: _typeLabel(context, t)),
+            values: [
+              'all',
+              ..._catalogTypes(state.catalog!).map((type) => type.name),
             ],
+            itemLabel: (value) => value == 'all'
+                ? _text(context, 'All', 'Все')
+                : _typeLabel(context, CardTypeV1.values.byName(value)),
+            itemIcon: (value) => value == 'all'
+                ? const Icon(Icons.list, size: 20)
+                : _typeIcon(CardTypeV1.values.byName(value)),
+            searchTerms: (value) => value == 'all'
+                ? ''
+                : _types[CardTypeV1.values.byName(value)]!.$1,
             onChanged: (v) {
               if (v != null) {
                 setState(() => _type = v);
@@ -983,15 +992,18 @@ final class _VaultContentViewState extends State<VaultContentView>
               }
             },
           ),
-          WantSelect<String>(
+          _CatalogSelect<String>(
             key: const ValueKey('filter-service'),
-            label: Text(_text(context, 'Service', 'Сервис')),
+            label: _text(context, 'Service', 'Сервис'),
             value: _service,
-            options: [
-              WantOption(value: 'all', label: _text(context, 'All', 'Все')),
-              for (final s in state.catalog!.services)
-                WantOption(value: s, label: _serviceLabel(context, s)),
-            ],
+            values: ['all', ...state.catalog!.services],
+            itemLabel: (value) => value == 'all'
+                ? _text(context, 'All', 'Все')
+                : _serviceLabel(context, value),
+            itemIcon: (value) => value == 'all'
+                ? const Icon(Icons.list, size: 20)
+                : _serviceIcon(context, value),
+            searchTerms: (value) => '$value ${_serviceAliases(value)}',
             onChanged: (v) {
               if (v != null) {
                 setState(() => _service = v);
@@ -1627,9 +1639,7 @@ final class _WorkspaceRowState extends State<_WorkspaceRow> {
           children: [
             SizedBox.square(
               dimension: 32,
-              child: Center(
-                child: Text(widget.card.service.substring(0, 1).toUpperCase()),
-              ),
+              child: Center(child: _typeIcon(widget.card.cardType, size: 22)),
             ),
             Expanded(
               child: Column(

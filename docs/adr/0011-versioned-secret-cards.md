@@ -20,9 +20,9 @@ Rust владеет описаниями полей, валидацией, вы�
 
 ## Presets and validation / Пресеты и валидация
 
-The 19 presets are account, PAT, RSA, Ed25519, secret key, passphrase, recovery codes, recovery URL, secret question/answer, VLESS, WireGuard, GPG, certificate/private key, OAuth, DSN, kubeconfig, webhook signing secret, secure note and file. Passkeys require their own provider and are not represented as a text preset.
+The initial 19 presets are account, PAT, RSA, Ed25519, secret key, passphrase, recovery codes, recovery URL, secret question/answer, VLESS, WireGuard, GPG, certificate/private key, OAuth, DSN, kubeconfig, webhook signing secret, secure note and file. Passkeys require their own provider and are not represented as a text preset.
 
-Доступны 19 пресетов: учётная запись, PAT, RSA, Ed25519, secret key, passphrase, recovery codes, recovery URL, секретный вопрос/ответ, VLESS, WireGuard, GPG, сертификат/закрытый ключ, OAuth, DSN, kubeconfig, webhook signing secret, защищённая заметка и файл. Passkeys требуют собственного provider и не представлены текстовым пресетом.
+Исходные 19 пресетов: учётная запись, PAT, RSA, Ed25519, secret key, passphrase, recovery codes, recovery URL, секретный вопрос/ответ, VLESS, WireGuard, GPG, сертификат/закрытый ключ, OAuth, DSN, kubeconfig, webhook signing secret, защищённая заметка и файл. Passkeys требуют собственного provider и не представлены текстовым пресетом.
 
 RSA and Ed25519 accept matching OpenSSH pairs or PEM public SPKI plus private PKCS8 (RSA also accepts private PKCS1). Certificates accept PEM X.509 and a PEM private key; clear RSA, Ed25519 and P-256/P-384/P-521 keys are matched to the certificate public key. GPG uses ASCII-armored public/private key containers with matching primary fingerprints. A protected OpenSSH or PKCS8 container can be stored without its passphrase. Its envelope is parsed, but protected contents and correspondence hidden by encryption cannot be verified. These checks do not establish certificate trust, expiry suitability or remote credential validity.
 
@@ -63,3 +63,18 @@ The workspace replaces group accordions with groups, a lazy secret list and sele
 `CardListRowV1` limits list reads to ID and primary login. `CardPreviewV1` returns description, a safe row projection and the protected-container flag under an expected revision and session generation. It never returns concealed field values. A separate explicit action reveals one selected field; only Edit reads a complete card. Presentation clears reveals on selection, revision, lock, hidden view and disposal. Copy feedback identifies its card, field and action without carrying values. Enter opens details; clipboard actions stay explicit. Dirty forms require Save, Discard or Stay before navigation. Lock bypasses that guard and clears the form. The encrypted schema, cryptography, clipboard lifetime and inactivity deadline do not change.
 
 `CardListRowV1` ограничивает чтение списка ID и основным логином. `CardPreviewV1` возвращает описание, безопасную проекцию строки и признак защищённого контейнера с проверкой ожидаемых revision и generation сессии. Скрытых значений полей в ответе нет. Отдельное явное действие раскрывает выбранное поле; полную карточку читает только «Изменить». Presentation очищает раскрытые значения при выборе другой карточки, смене revision, блокировке, скрытии экрана и disposal. Подтверждение копирования указывает карточку, поле и действие без передачи значения. Enter открывает подробности; работа с буфером остаётся явным действием. Переход из изменённой формы требует выбора «Сохранить», «Не сохранять» или «Остаться». Блокировка обходит это подтверждение и очищает форму. Зашифрованная схема, криптография, время жизни буфера и срок бездействия не меняются.
+
+
+## Built-in catalog expansion / Расширение встроенного каталога
+
+The catalog contains 100 named services, plus Other, and 50 secret types. Forty-nine types support local creation. Passkey appears as an informational entry until its system provider is available. Service IDs are stable. Logos and monograms work offline. Icons for saved cards reflect their type and service.
+
+Каталог содержит 100 именованных сервисов, отдельный вариант «Другое» и 50 типов секретов. Карточки 49 типов можно создать локально. Passkey показан в каталоге до появления системного провайдера. ID сервисов стабильны. Логотипы и буквенные знаки работают офлайн. Иконки сохранённых карточек отражают тип и сервис.
+
+New PAT cards use template version 2 with optional scopes and expiry. A version 1 PAT upgrades when the owner saves either new field. New type and field IDs extend the document schema 2 vocabulary. Current builds can read earlier schema 2 cards. An earlier build may reject a document containing a new ID or PAT template version. The encrypted container format and key slots are unchanged.
+
+Новые PAT используют шаблон версии 2 с необязательными областями доступа и сроком. PAT версии 1 обновляется при сохранении любого из новых полей. Новые ID типов и полей расширяют словарь схемы документа 2. Текущая сборка читает прежние карточки схемы 2. Прежняя сборка может отклонить документ с новым ID или версией шаблона PAT. Формат зашифрованного контейнера и слоты ключей сохраняются.
+
+Standalone TOTP uses the account TOTP configuration. HOTP advances its counter only on an explicit request with the current revision and generation. The code is returned after the encrypted write commits. Key containers use the authenticated attachment workflow. APNs and App Store Connect keys accept .p8 file input or pasted key text.
+
+Самостоятельный TOTP использует конфигурацию TOTP учётной записи. Счётчик HOTP продвигается по явному запросу с актуальными revision и generation. Код возвращается после завершения зашифрованной записи. Контейнеры ключей используют действующий сценарий вложений. Для ключей APNs и App Store Connect можно выбрать файл .p8 или вставить текст ключа.

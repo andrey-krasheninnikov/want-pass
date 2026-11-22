@@ -21,6 +21,7 @@ final class _CardPreview extends StatefulWidget {
 final class _CardPreviewState extends State<_CardPreview>
     with WidgetsBindingObserver {
   CardPreviewV1? _preview;
+  (BigInt, String)? _hotp;
   final _revealed = <FieldIdV1, String>{};
   final _revealing = <FieldIdV1>{};
   Timer? _expiry, _refresh;
@@ -45,7 +46,9 @@ final class _CardPreviewState extends State<_CardPreview>
   void didUpdateWidget(covariant _CardPreview old) {
     super.didUpdateWidget(old);
     if (old.id != widget.id || old.revision != widget.revision) {
+      final code = _hotp;
       _reset();
+      if (old.id == widget.id && code?.$1 == widget.revision) _hotp = code;
       WidgetsBinding.instance.addPostFrameCallback((_) => _load());
     }
   }
@@ -73,6 +76,7 @@ final class _CardPreviewState extends State<_CardPreview>
     _revealed.clear();
     _revealing.clear();
     _preview = null;
+    _hotp = null;
     _pending = true;
   }
 
@@ -125,6 +129,17 @@ final class _CardPreviewState extends State<_CardPreview>
       if (_available && _pending && !widget.controller.state.busy) {
         unawaited(_load());
       }
+    }
+  }
+
+  Future<void> _nextHotp() async {
+    final id = widget.id;
+    final result = await widget.controller.nextHotp(id, widget.revision);
+    if (result != null &&
+        _available &&
+        widget.id == id &&
+        widget.controller.state.content?.revision == result.snapshot.revision) {
+      setState(() => _hotp = (result.snapshot.revision, result.code));
     }
   }
 
@@ -272,8 +287,14 @@ final class _CardPreviewState extends State<_CardPreview>
                 spacing: 8,
                 runSpacing: 8,
                 children: [
-                  Text(_serviceLabel(context, summary.service)),
-                  Text(_typeLabel(context, summary.cardType)),
+                  _catalogLabel(
+                    _serviceIcon(context, summary.service),
+                    _serviceLabel(context, summary.service),
+                  ),
+                  _catalogLabel(
+                    _typeIcon(summary.cardType),
+                    _typeLabel(context, summary.cardType),
+                  ),
                   if (summary.environment != null)
                     Text(_environmentLabel(summary.environment!)),
                 ],
@@ -346,6 +367,23 @@ final class _CardPreviewState extends State<_CardPreview>
                       ),
                     ),
                   ),
+                if (summary.cardType == CardTypeV1.hotp) ...[
+                  if (_hotp case (final revision, final code)
+                      when revision == widget.revision)
+                    Text(
+                      code,
+                      style: const TextStyle(
+                        fontFamily: 'monospace',
+                        fontSize: 28,
+                      ),
+                    ),
+                  WantButton(
+                    key: const ValueKey('card-next-hotp'),
+                    variant: WantButtonVariant.secondary,
+                    onPressed: widget.controller.state.busy ? null : _nextHotp,
+                    child: Text(_text(context, 'Next code', 'Следующий код')),
+                  ),
+                ],
                 if (summary.cardType == CardTypeV1.account)
                   Row(
                     children: [

@@ -32,6 +32,36 @@ pub fn card_presets_v1() -> Vec<CardPresetV1> {
         C::WebhookSecret,
         C::SecureNote,
         C::File,
+        C::ApiKey,
+        C::Totp,
+        C::AwsIam,
+        C::GoogleCloudKey,
+        C::AzureAppSecret,
+        C::BearerToken,
+        C::AppPassword,
+        C::SshCertificate,
+        C::KubernetesToken,
+        C::OpenVpn,
+        C::Ipsec,
+        C::KeyContainer,
+        C::ArtifactSigningKey,
+        C::ApnsKey,
+        C::AppStoreConnectKey,
+        C::RegistryAccess,
+        C::EnvironmentVariables,
+        C::SmtpAccess,
+        C::PresignedUrl,
+        C::SessionCookie,
+        C::Hotp,
+        C::LicenseKey,
+        C::Wifi,
+        C::DevicePin,
+        C::SimPinPuk,
+        C::PaymentCard,
+        C::BankDetails,
+        C::IdentityDocument,
+        C::WalletMnemonic,
+        C::WalletPrivateKey,
     ]
     .into_iter()
     .map(|card_type| CardPresetV1 {
@@ -63,6 +93,95 @@ fn specs(kind: C) -> Vec<FieldSpecV1> {
         C::SecretQa => &[(F::Question, true), (F::Answer, true)],
         C::RecoveryCodes => &[(F::RecoveryCodes, true)],
         C::File => &[],
+        C::Pat => &[(F::Value, true), (F::Scopes, false), (F::ExpiresAt, false)],
+        C::ApiKey => &[(F::Value, true), (F::KeyId, false)],
+        C::Totp => &[
+            (F::TotpSeed, true),
+            (F::TotpAlgorithm, false),
+            (F::TotpDigits, false),
+            (F::TotpPeriod, false),
+        ],
+        C::AwsIam => &[
+            (F::AccessKeyId, true),
+            (F::Value, true),
+            (F::SessionToken, false),
+        ],
+        C::GoogleCloudKey => &[(F::JsonKey, true), (F::Project, true)],
+        C::AzureAppSecret => &[
+            (F::TenantId, true),
+            (F::ClientId, true),
+            (F::ClientSecret, true),
+        ],
+        C::BearerToken => &[(F::Value, true), (F::ExpiresAt, false)],
+        C::AppPassword => &[(F::Password, true)],
+        C::SshCertificate => &[(F::Certificate, true), (F::PrivateKey, true)],
+        C::KubernetesToken => &[
+            (F::Value, true),
+            (F::Namespace, true),
+            (F::AccountName, true),
+        ],
+        C::OpenVpn => &[
+            (F::Configuration, true),
+            (F::PrivateKey, false),
+            (F::Certificate, false),
+        ],
+        C::Ipsec => &[
+            (F::Identity, true),
+            (F::Value, false),
+            (F::Certificate, false),
+        ],
+        C::KeyContainer => &[(F::ContainerFormat, true), (F::Password, true)],
+        C::ArtifactSigningKey => &[(F::PrivateKey, true), (F::KeyId, true)],
+        C::ApnsKey => &[(F::PrivateKey, true), (F::KeyId, true), (F::TeamId, true)],
+        C::AppStoreConnectKey => &[(F::PrivateKey, true), (F::KeyId, true), (F::IssuerId, true)],
+        C::RegistryAccess => &[
+            (F::Endpoint, true),
+            (F::Login, true),
+            (F::Password, false),
+            (F::AccessToken, false),
+        ],
+        C::EnvironmentVariables => &[(F::Variables, true)],
+        C::SmtpAccess => &[
+            (F::Endpoint, true),
+            (F::Login, true),
+            (F::Password, false),
+            (F::AccessToken, false),
+        ],
+        C::PresignedUrl => &[(F::Url, true), (F::ExpiresAt, true)],
+        C::SessionCookie => &[
+            (F::Domain, true),
+            (F::CookieName, true),
+            (F::Value, true),
+            (F::ExpiresAt, false),
+        ],
+        C::Hotp => &[(F::HotpSeed, true), (F::Counter, true)],
+        C::LicenseKey => &[(F::Product, true), (F::Value, true), (F::ExpiresAt, false)],
+        C::Wifi => &[(F::Ssid, true), (F::Password, true)],
+        C::DevicePin => &[(F::Device, true), (F::Pin, true)],
+        C::SimPinPuk => &[(F::Carrier, true), (F::Pin, true), (F::Puk, true)],
+        C::PaymentCard => &[
+            (F::CardNumber, true),
+            (F::Holder, true),
+            (F::ExpiryMonth, true),
+        ],
+        C::BankDetails => &[
+            (F::Holder, true),
+            (F::Iban, false),
+            (F::AccountNumber, false),
+            (F::Bic, false),
+        ],
+        C::IdentityDocument => &[
+            (F::DocumentType, true),
+            (F::DocumentNumber, true),
+            (F::Authority, true),
+            (F::ExpiresAt, false),
+        ],
+        C::WalletMnemonic => &[(F::Mnemonic, true), (F::WalletPassphrase, false)],
+        C::WalletPrivateKey => &[
+            (F::Network, true),
+            (F::Address, true),
+            (F::PrivateKey, true),
+        ],
         _ => &[(F::Value, true)],
     };
     fields
@@ -70,7 +189,16 @@ fn specs(kind: C) -> Vec<FieldSpecV1> {
         .map(|(id, required)| {
             let multiline = matches!(
                 id,
-                F::PublicKey | F::PrivateKey | F::Certificate | F::RecoveryCodes | F::ReserveLogins
+                F::PublicKey
+                    | F::PrivateKey
+                    | F::Certificate
+                    | F::RecoveryCodes
+                    | F::ReserveLogins
+                    | F::JsonKey
+                    | F::Configuration
+                    | F::Variables
+                    | F::Scopes
+                    | F::Mnemonic
             ) || (*id == F::Value
                 && matches!(kind, C::WireGuard | C::Kubeconfig | C::SecureNote));
             FieldSpecV1 {
@@ -86,6 +214,29 @@ fn specs(kind: C) -> Vec<FieldSpecV1> {
                         | F::Certificate
                         | F::ClientId
                         | F::Question
+                        | F::KeyId
+                        | F::AccessKeyId
+                        | F::Project
+                        | F::TenantId
+                        | F::ExpiresAt
+                        | F::Namespace
+                        | F::AccountName
+                        | F::ContainerFormat
+                        | F::TeamId
+                        | F::IssuerId
+                        | F::Endpoint
+                        | F::Domain
+                        | F::CookieName
+                        | F::Counter
+                        | F::Product
+                        | F::Ssid
+                        | F::Device
+                        | F::Carrier
+                        | F::ExpiryMonth
+                        | F::DocumentType
+                        | F::Network
+                        | F::Address
+                        | F::Scopes
                 ),
                 multiline,
                 max_bytes: if *id == F::Login {

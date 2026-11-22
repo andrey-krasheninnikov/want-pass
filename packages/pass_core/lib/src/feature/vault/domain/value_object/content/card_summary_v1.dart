@@ -34,7 +34,8 @@ final class CardSummaryV1 extends Equatable {
         utf8.encode(name).length > 512 ||
         service.trim().isEmpty ||
         utf8.encode(service).length > 512 ||
-        templateVersion != 1 ||
+        (templateVersion != 1 &&
+            !(cardType == CardTypeV1.pat && templateVersion == 2)) ||
         groupIds.toSet().length != groupIds.length ||
         groupIds.any((id) => !RegExp(r'^[0-9a-f]{32}$').hasMatch(id))) {
       throw const VaultRejectedErrorV1(VaultFailureKindV1.unsupported);

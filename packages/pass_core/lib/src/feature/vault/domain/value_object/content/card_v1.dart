@@ -34,7 +34,7 @@ final class CardV1 extends Equatable {
               !summary.cardType.requiredFields.contains(f.id) &&
               !summary.cardType.optionalFields.contains(f.id),
         ) ||
-        (summary.cardType == CardTypeV1.file) != (attachment != null)) {
+        summary.cardType.requiresAttachment != (attachment != null)) {
       throw const VaultRejectedErrorV1(VaultFailureKindV1.unsupported);
     }
     return CardV1._(

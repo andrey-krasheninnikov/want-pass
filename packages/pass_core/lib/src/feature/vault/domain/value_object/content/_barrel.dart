@@ -13,4 +13,5 @@ export 'environment_v1.dart';
 export 'field_id_v1.dart';
 export 'field_spec_v1.dart';
 export 'group_v1.dart';
+export 'hotp_advance_v1.dart';
 export 'totp_code_v1.dart';

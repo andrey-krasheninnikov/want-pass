@@ -143,6 +143,9 @@ abstract class VaultRustLibApiImplPlatform
   GroupRecordV1 dco_decode_group_record_v_1(dynamic raw);
 
   @protected
+  HotpAdvanceV1 dco_decode_hotp_advance_v_1(dynamic raw);
+
+  @protected
   int dco_decode_i_32(dynamic raw);
 
   @protected
@@ -386,6 +389,9 @@ abstract class VaultRustLibApiImplPlatform
 
   @protected
   GroupRecordV1 sse_decode_group_record_v_1(SseDeserializer deserializer);
+
+  @protected
+  HotpAdvanceV1 sse_decode_hotp_advance_v_1(SseDeserializer deserializer);
 
   @protected
   int sse_decode_i_32(SseDeserializer deserializer);
@@ -699,6 +705,12 @@ abstract class VaultRustLibApiImplPlatform
   @protected
   void sse_encode_group_record_v_1(
     GroupRecordV1 self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_hotp_advance_v_1(
+    HotpAdvanceV1 self,
     SseSerializer serializer,
   );
 

@@ -27,6 +27,36 @@ pub enum CardTypeV1 {
     WebhookSecret,
     SecureNote,
     File,
+    ApiKey,
+    Totp,
+    AwsIam,
+    GoogleCloudKey,
+    AzureAppSecret,
+    BearerToken,
+    AppPassword,
+    SshCertificate,
+    KubernetesToken,
+    OpenVpn,
+    Ipsec,
+    KeyContainer,
+    ArtifactSigningKey,
+    ApnsKey,
+    AppStoreConnectKey,
+    RegistryAccess,
+    EnvironmentVariables,
+    SmtpAccess,
+    PresignedUrl,
+    SessionCookie,
+    Hotp,
+    LicenseKey,
+    Wifi,
+    DevicePin,
+    SimPinPuk,
+    PaymentCard,
+    BankDetails,
+    IdentityDocument,
+    WalletMnemonic,
+    WalletPrivateKey,
 }
 #[derive(Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
@@ -63,6 +93,47 @@ pub enum FieldIdV1 {
     RefreshToken,
     Question,
     Answer,
+    KeyId,
+    AccessKeyId,
+    SessionToken,
+    JsonKey,
+    Project,
+    TenantId,
+    ExpiresAt,
+    Namespace,
+    AccountName,
+    Configuration,
+    Identity,
+    ContainerFormat,
+    TeamId,
+    IssuerId,
+    Endpoint,
+    Variables,
+    Url,
+    Domain,
+    CookieName,
+    HotpSeed,
+    Counter,
+    Product,
+    Ssid,
+    Device,
+    Pin,
+    Carrier,
+    Puk,
+    CardNumber,
+    Holder,
+    ExpiryMonth,
+    Iban,
+    AccountNumber,
+    Bic,
+    DocumentType,
+    DocumentNumber,
+    Authority,
+    Mnemonic,
+    WalletPassphrase,
+    Network,
+    Address,
+    Scopes,
 }
 #[derive(Clone, Serialize, Deserialize, Zeroize)]
 #[serde(deny_unknown_fields)]
@@ -139,35 +210,121 @@ pub struct CardPreviewV1 {
     pub description: String,
     pub protected_container: bool,
 }
+const SERVICES_V1: &[&str] = &[
+    "google",
+    "apple",
+    "microsoft",
+    "github",
+    "gitlab",
+    "telegram",
+    "aws",
+    "azure",
+    "gcp",
+    "cloudflare",
+    "atlassian",
+    "jira",
+    "confluence",
+    "slack",
+    "discord",
+    "notion",
+    "docker",
+    "ghcr",
+    "npm",
+    "pypi",
+    "crates-io",
+    "firebase",
+    "supabase",
+    "sentry",
+    "vercel",
+    "digitalocean",
+    "hetzner-cloud",
+    "ovhcloud",
+    "oracle-cloud-infrastructure",
+    "akamai-cloud",
+    "netlify",
+    "render",
+    "railway",
+    "fly-io",
+    "heroku",
+    "bitbucket",
+    "azure-devops",
+    "gitea",
+    "circleci",
+    "jenkins",
+    "teamcity",
+    "jetbrains-account",
+    "jfrog-artifactory",
+    "sonatype-nexus-repository",
+    "hashicorp-vault",
+    "hcp-terraform",
+    "tailscale",
+    "auth0",
+    "okta",
+    "keycloak",
+    "1password",
+    "bitwarden",
+    "proton",
+    "yandex-id",
+    "vk-id",
+    "dropbox",
+    "nextcloud",
+    "figma",
+    "linear",
+    "zoom",
+    "miro",
+    "amazon",
+    "instagram",
+    "facebook",
+    "reddit",
+    "linkedin",
+    "steam",
+    "spotify",
+    "netflix",
+    "app-store-connect",
+    "google-play-console",
+    "stripe",
+    "paypal",
+    "paddle",
+    "shopify",
+    "twilio",
+    "sendgrid",
+    "mailgun",
+    "postmark",
+    "resend",
+    "mailchimp",
+    "grafana-cloud",
+    "datadog",
+    "new-relic",
+    "better-stack",
+    "elastic-cloud",
+    "mongodb-atlas",
+    "neon",
+    "planetscale",
+    "upstash",
+    "redis-cloud",
+    "snowflake",
+    "databricks",
+    "backblaze-b2",
+    "wasabi",
+    "minio",
+    "openai-api",
+    "anthropic-api",
+    "hugging-face",
+    "cloudinary",
+    "other",
+];
+
 pub fn services_v1() -> Vec<String> {
-    [
-        "microsoft",
-        "google",
-        "apple",
-        "github",
-        "gitlab",
-        "atlassian",
-        "jira",
-        "confluence",
-        "telegram",
-        "aws",
-        "azure",
-        "gcp",
-        "cloudflare",
-        "docker",
-        "ghcr",
-        "npm",
-        "pypi",
-        "crates-io",
-        "firebase",
-        "supabase",
-        "sentry",
-        "other",
-    ]
-    .iter()
-    .map(|v| (*v).into())
-    .collect()
+    SERVICES_V1
+        .iter()
+        .map(|service| (*service).into())
+        .collect()
 }
+pub struct HotpAdvanceV1 {
+    pub snapshot: ContentSnapshotV2,
+    pub code: String,
+}
+
 #[derive(Serialize, Deserialize, Zeroize, ZeroizeOnDrop)]
 #[serde(deny_unknown_fields)]
 struct DocumentV2 {
@@ -227,6 +384,12 @@ struct StoredCard {
     fields: Vec<CardValueV1>,
     attachment: Option<StoredAttachment>,
 }
+impl CardTypeV1 {
+    pub(super) fn requires_attachment(self) -> bool {
+        matches!(self, Self::File | Self::KeyContainer)
+    }
+}
+
 impl StoredCard {
     fn summary(&self) -> CardSummaryV1 {
         CardSummaryV1 {
@@ -242,15 +405,27 @@ impl StoredCard {
     fn validate(&self) -> Result<(), VaultFailure> {
         bounded(&self.name, 512, true)?;
         bounded(&self.description, 16384, false)?;
-        if self.template_version != 1 || !services_v1().contains(&self.service) {
+        if !(self.template_version == 1
+            || self.card_type == CardTypeV1::Pat && self.template_version == 2)
+            || !SERVICES_V1.contains(&self.service.as_str())
+            || (self.card_type == CardTypeV1::Pat
+                && self.template_version == 1
+                && self
+                    .fields
+                    .iter()
+                    .any(|f| matches!(f.id, FieldIdV1::Scopes | FieldIdV1::ExpiresAt)))
+        {
             return Err(VaultFailure::Unsupported);
         }
         super::presets::validate_fields(self.card_type, &self.fields)?;
-        match (&self.attachment, self.card_type) {
-            (Some(file), CardTypeV1::File) => {
-                file.bytes()?;
+        match (&self.attachment, self.card_type.requires_attachment()) {
+            (Some(file), true) => {
+                let bytes = file.bytes()?;
+                if self.card_type == CardTypeV1::KeyContainer {
+                    super::validation::validate_container(&self.fields, &bytes)?;
+                }
             }
-            (None, kind) if kind != CardTypeV1::File => {}
+            (None, false) => {}
             _ => return Err(VaultFailure::Unsupported),
         }
         Ok(())
@@ -329,7 +504,7 @@ impl Vault {
             || query
                 .service
                 .as_ref()
-                .is_some_and(|s| !services_v1().contains(s))
+                .is_some_and(|s| !SERVICES_V1.contains(&s.as_str()))
         {
             return Err(VaultFailure::Unsupported);
         }
@@ -402,7 +577,7 @@ impl Vault {
                         .ok_or(VaultFailure::Missing)?;
                     Ok(CardListRowV1 {
                         id: c.id.clone(),
-                        login: super::otp::field(&c.fields, FieldIdV1::Login).map(str::to_owned),
+                        login: c.primary_login(),
                     })
                 })
                 .collect()
@@ -482,6 +657,15 @@ impl Vault {
         generation: u64,
     ) -> Result<ContentSnapshotV2, VaultFailure> {
         let mut fields = Zeroizing::new(input.fields);
+        if fields
+            .iter()
+            .map(|field| field.id)
+            .collect::<BTreeSet<_>>()
+            .len()
+            != fields.len()
+        {
+            return Err(VaultFailure::Unsupported);
+        }
         let attachment = if let Some(mut input) = input.attachment {
             let bytes = Zeroizing::new(std::mem::take(&mut input.bytes));
             if bytes.len() > MAX_ATTACHMENT {
@@ -510,7 +694,7 @@ impl Vault {
             card.name = card.name.trim().into();
             card.group_ids.sort();
             card.group_ids.dedup();
-            if card.card_type == CardTypeV1::File && card.attachment.is_none() {
+            if card.card_type.requires_attachment() && card.attachment.is_none() {
                 let previous = d
                     .cards
                     .iter()
@@ -521,8 +705,27 @@ impl Vault {
                     data: a.data.clone(),
                 });
             }
-            if card.card_type == CardTypeV1::Account {
+            if matches!(card.card_type, CardTypeV1::Account | CardTypeV1::Totp) {
                 super::otp::normalize_totp(&mut card.fields)?;
+            }
+            if card.card_type == CardTypeV1::Pat {
+                card.fields.retain(|field| {
+                    !matches!(field.id, FieldIdV1::Scopes | FieldIdV1::ExpiresAt)
+                        || !field.value.is_empty()
+                });
+                if input.id.is_none()
+                    || card
+                        .fields
+                        .iter()
+                        .any(|field| matches!(field.id, FieldIdV1::Scopes | FieldIdV1::ExpiresAt))
+                    || d.cards.iter().any(|old| {
+                        Some(&old.id) == input.id.as_ref()
+                            && old.card_type == CardTypeV1::Pat
+                            && old.template_version == 2
+                    })
+                {
+                    card.template_version = 2;
+                }
             }
             card.validate()?;
             if card
@@ -549,6 +752,36 @@ impl Vault {
             Ok(())
         })
     }
+    pub fn next_hotp_v1(
+        &self,
+        id: String,
+        revision: u64,
+        generation: u64,
+    ) -> Result<HotpAdvanceV1, VaultFailure> {
+        let (snapshot, code) = self.mutate_cards_with(revision, generation, |document| {
+            let card = document
+                .cards
+                .iter_mut()
+                .find(|card| card.id == id)
+                .ok_or(VaultFailure::Missing)?;
+            if card.card_type != CardTypeV1::Hotp {
+                return Err(VaultFailure::Unsupported);
+            }
+            let (code, next) = super::otp::advance_hotp(&card.fields)?;
+            let counter = card
+                .fields
+                .iter_mut()
+                .find(|field| field.id == FieldIdV1::Counter)
+                .ok_or(VaultFailure::Corrupt)?;
+            counter.value = next.to_string();
+            Ok(code)
+        })?;
+        Ok(HotpAdvanceV1 {
+            snapshot,
+            code: code.to_string(),
+        })
+    }
+
     pub fn current_totp_v1(
         &self,
         id: String,
@@ -760,23 +993,41 @@ impl Vault {
         generation: u64,
         operation: impl FnOnce(&mut DocumentV2) -> Result<(), VaultFailure>,
     ) -> Result<ContentSnapshotV2, VaultFailure> {
+        self.mutate_cards_with(revision, generation, operation)
+            .map(|(snapshot, ())| snapshot)
+    }
+
+    fn mutate_cards_with<T>(
+        &self,
+        revision: u64,
+        generation: u64,
+        operation: impl FnOnce(&mut DocumentV2) -> Result<T, VaultFailure>,
+    ) -> Result<(ContentSnapshotV2, T), VaultFailure> {
         self.update_document(generation, |bytes| {
             let mut document = DocumentV2::decode(bytes)?;
             if document.revision != revision {
                 return Err(VaultFailure::Stale);
             }
-            operation(&mut document)?;
+            let result = operation(&mut document)?;
             document.revision = revision.checked_add(1).ok_or(VaultFailure::Unsupported)?;
             let bytes = Zeroizing::new(
                 serde_json::to_vec(&document).map_err(|_| VaultFailure::Unsupported)?,
             );
             DocumentV2::decode(&bytes)?;
-            Ok((bytes, document.snapshot()))
+            Ok((bytes, (document.snapshot(), result)))
         })
     }
 }
 
 impl StoredCard {
+    fn primary_login(&self) -> Option<String> {
+        if self.card_type == CardTypeV1::Account {
+            super::otp::field(&self.fields, FieldIdV1::Login).map(str::to_owned)
+        } else {
+            None
+        }
+    }
+
     fn row(&self) -> Result<CardRowV1, VaultFailure> {
         Ok(CardRowV1 {
             id: self.id.clone(),
@@ -786,7 +1037,7 @@ impl StoredCard {
                 .filter(|f| !f.value.is_empty())
                 .map(|f| f.id)
                 .collect(),
-            login: super::otp::field(&self.fields, FieldIdV1::Login).map(str::to_owned),
+            login: self.primary_login(),
             otp: if super::otp::field(&self.fields, FieldIdV1::TotpSeed).is_some() {
                 Some(super::otp::current_code(&self.fields)?)
             } else {
@@ -798,5 +1049,20 @@ impl StoredCard {
                 .map(StoredAttachment::summary)
                 .transpose()?,
         })
+    }
+}
+
+#[cfg(test)]
+mod compatibility_tests {
+    use super::*;
+
+    #[test]
+    fn legacy_pat_remains_readable_in_document_schema_two() {
+        let previous = br#"{"schema":2,"revision":7,"groups":[],"cards":[{"id":"0123456789abcdef0123456789abcdef","name":"Synthetic legacy card","description":"","service":"ghcr","environment":null,"group_ids":[],"card_type":"pat","template_version":1,"fields":[{"id":"value","value":" synthetic " }],"attachment":null}]}"#;
+        let document = DocumentV2::decode(previous).unwrap();
+        let card = &document.cards[0];
+        assert_eq!(card.template_version, 1);
+        assert_eq!(card.service, "ghcr");
+        assert_eq!(card.fields[0].value, " synthetic ");
     }
 }

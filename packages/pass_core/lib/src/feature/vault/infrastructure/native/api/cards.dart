@@ -4,7 +4,7 @@ import 'package:want_pass_core/src/feature/vault/infrastructure/_barrel.dart';
 
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `bytes`, `decode`, `mutate_cards`, `read_cards`, `row`, `snapshot`, `summary`, `summary`, `validate`
+// These functions are ignored because they are not marked as `pub`: `bytes`, `decode`, `mutate_cards_with`, `mutate_cards`, `primary_login`, `read_cards`, `requires_attachment`, `row`, `snapshot`, `summary`, `summary`, `validate`
 // These types are ignored because they are neither used by any `pub` functions nor (for structs and enums) marked `#[frb(unignore)]`: `DocumentV2`, `StoredAttachment`, `StoredCard`
 // These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_receiver_is_total_eq`, `assert_receiver_is_total_eq`, `assert_receiver_is_total_eq`, `clone`, `clone`, `clone`, `clone`, `cmp`, `drop`, `drop`, `drop`, `eq`, `eq`, `eq`, `partial_cmp`, `zeroize`, `zeroize`, `zeroize`, `zeroize`
 
@@ -333,6 +333,36 @@ enum CardTypeV1 {
   webhookSecret,
   secureNote,
   file,
+  apiKey,
+  totp,
+  awsIam,
+  googleCloudKey,
+  azureAppSecret,
+  bearerToken,
+  appPassword,
+  sshCertificate,
+  kubernetesToken,
+  openVpn,
+  ipsec,
+  keyContainer,
+  artifactSigningKey,
+  apnsKey,
+  appStoreConnectKey,
+  registryAccess,
+  environmentVariables,
+  smtpAccess,
+  presignedUrl,
+  sessionCookie,
+  hotp,
+  licenseKey,
+  wifi,
+  devicePin,
+  simPinPuk,
+  paymentCard,
+  bankDetails,
+  identityDocument,
+  walletMnemonic,
+  walletPrivateKey,
 }
 
 class CardValueV1 {
@@ -409,4 +439,63 @@ enum FieldIdV1 {
   refreshToken,
   question,
   answer,
+  keyId,
+  accessKeyId,
+  sessionToken,
+  jsonKey,
+  project,
+  tenantId,
+  expiresAt,
+  namespace,
+  accountName,
+  configuration,
+  identity,
+  containerFormat,
+  teamId,
+  issuerId,
+  endpoint,
+  variables,
+  url,
+  domain,
+  cookieName,
+  hotpSeed,
+  counter,
+  product,
+  ssid,
+  device,
+  pin,
+  carrier,
+  puk,
+  cardNumber,
+  holder,
+  expiryMonth,
+  iban,
+  accountNumber,
+  bic,
+  documentType,
+  documentNumber,
+  authority,
+  mnemonic,
+  walletPassphrase,
+  network,
+  address,
+  scopes,
+}
+
+class HotpAdvanceV1 {
+  final ContentSnapshotV2 snapshot;
+  final String code;
+
+  const HotpAdvanceV1({required this.snapshot, required this.code});
+
+  @override
+  int get hashCode => snapshot.hashCode ^ code.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is HotpAdvanceV1 &&
+          runtimeType == other.runtimeType &&
+          snapshot == other.snapshot &&
+          code == other.code;
 }

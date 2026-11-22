@@ -4,7 +4,7 @@ import 'package:want_pass_core/src/feature/vault/infrastructure/_barrel.dart';
 
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `build`, `code`, `current_code`, `field`, `normalize_totp`, `parameters`, `validate_account_totp`
+// These functions are ignored because they are not marked as `pub`: `advance_hotp`, `build`, `code`, `current_code`, `field`, `hotp_config`, `normalize_totp`, `parameters`, `validate_account_totp`, `validate_hotp`
 // These functions are ignored (category: IgnoreBecauseExplicitAttribute): `totp_code_v1`
 
 class TotpCodeV1 {

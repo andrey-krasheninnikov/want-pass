@@ -1,70 +1,11 @@
 part of 'content.dart';
 
-String _serviceLabel(BuildContext context, String id) => id == 'other'
-    ? _text(context, 'Other', 'Другое')
-    : const {
-            'microsoft': 'Microsoft',
-            'google': 'Google',
-            'apple': 'Apple',
-            'github': 'GitHub',
-            'gitlab': 'GitLab',
-            'atlassian': 'Atlassian',
-            'jira': 'Jira',
-            'confluence': 'Confluence',
-            'telegram': 'Telegram',
-            'aws': 'AWS',
-            'azure': 'Azure',
-            'gcp': 'GCP',
-            'cloudflare': 'Cloudflare',
-            'docker': 'Docker',
-            'ghcr': 'GHCR',
-            'npm': 'npm',
-            'pypi': 'PyPI',
-            'crates-io': 'crates.io',
-            'firebase': 'Firebase',
-            'supabase': 'Supabase',
-            'sentry': 'Sentry',
-          }[id] ??
-          id;
 String _environmentLabel(EnvironmentV1 value) => switch (value) {
   EnvironmentV1.unitTests => 'unit-tests',
   EnvironmentV1.integrationTests => 'integration-tests',
   EnvironmentV1.e2eTests => 'e2e-tests',
   EnvironmentV1.preRelease => 'pre-release',
   _ => value.name,
-};
-String _typeLabel(BuildContext context, CardTypeV1 type) => switch (type) {
-  CardTypeV1.account => _text(context, 'Account', 'Учётная запись'),
-  CardTypeV1.pat => 'PAT',
-  CardTypeV1.rsa => 'RSA',
-  CardTypeV1.ed25519 => 'Ed25519',
-  CardTypeV1.secretKey => _text(context, 'Secret key', 'Секретный ключ'),
-  CardTypeV1.passphrase => _text(context, 'Passphrase', 'Парольная фраза'),
-  CardTypeV1.recoveryCodes => _text(
-    context,
-    'Recovery codes',
-    'Коды восстановления',
-  ),
-  CardTypeV1.recoveryUrl => 'Recovery URL',
-  CardTypeV1.secretQa => _text(context, 'Secret question', 'Секретный вопрос'),
-  CardTypeV1.vless => 'VLESS',
-  CardTypeV1.wireGuard => 'WireGuard',
-  CardTypeV1.gpg => 'GPG',
-  CardTypeV1.certificate => _text(
-    context,
-    'Certificate and key',
-    'Сертификат и ключ',
-  ),
-  CardTypeV1.oauth => 'OAuth',
-  CardTypeV1.dsn => 'DSN',
-  CardTypeV1.kubeconfig => 'kubeconfig',
-  CardTypeV1.webhookSecret => _text(
-    context,
-    'Webhook signing secret',
-    'Ключ подписи webhook',
-  ),
-  CardTypeV1.secureNote => _text(context, 'Secure note', 'Защищённая заметка'),
-  CardTypeV1.file => _text(context, 'Secure file', 'Защищённый файл'),
 };
 String _fieldLabel(BuildContext context, FieldIdV1 field) => switch (field) {
   FieldIdV1.login => _text(context, 'Login / email', 'Логин / email'),
@@ -90,17 +31,86 @@ String _fieldLabel(BuildContext context, FieldIdV1 field) => switch (field) {
   FieldIdV1.value => _text(context, 'Value', 'Значение'),
   FieldIdV1.publicKey => _text(context, 'Public key', 'Публичный ключ'),
   FieldIdV1.privateKey => _text(context, 'Private key', 'Закрытый ключ'),
-  FieldIdV1.certificate => _text(
-    context,
-    'Certificate, PEM',
-    'Сертификат, PEM',
-  ),
+  FieldIdV1.certificate => _text(context, 'Certificate', 'Сертификат'),
   FieldIdV1.clientId => 'Client ID',
   FieldIdV1.clientSecret => 'Client secret',
   FieldIdV1.accessToken => 'Access token',
   FieldIdV1.refreshToken => 'Refresh token',
   FieldIdV1.question => _text(context, 'Question', 'Вопрос'),
   FieldIdV1.answer => _text(context, 'Answer', 'Ответ'),
+  FieldIdV1.keyId => _text(context, 'Key ID', 'ID ключа'),
+  FieldIdV1.accessKeyId => _text(context, 'Access Key ID', 'ID ключа доступа'),
+  FieldIdV1.sessionToken => _text(context, 'Session token', 'Токен сессии'),
+  FieldIdV1.jsonKey => _text(context, 'JSON key', 'Ключ JSON'),
+  FieldIdV1.project => _text(context, 'Project', 'Проект'),
+  FieldIdV1.tenantId => _text(context, 'Tenant ID', 'ID клиента организации'),
+  FieldIdV1.expiresAt => _text(
+    context,
+    'Expiry, YYYY-MM-DD or YYYY-MM-DDTHH:MM:SSZ',
+    'Срок, ГГГГ-ММ-ДД или время UTC в ISO 8601',
+  ),
+  FieldIdV1.namespace => _text(context, 'Namespace', 'Пространство имён'),
+  FieldIdV1.accountName => _text(
+    context,
+    'Service account',
+    'Имя учётной записи',
+  ),
+  FieldIdV1.configuration => _text(context, 'Configuration', 'Конфигурация'),
+  FieldIdV1.identity => _text(context, 'Identifier', 'Идентификатор'),
+  FieldIdV1.containerFormat => _text(
+    context,
+    'Container format',
+    'Формат контейнера',
+  ),
+  FieldIdV1.teamId => _text(context, 'Team ID', 'ID команды'),
+  FieldIdV1.issuerId => _text(context, 'Issuer ID', 'ID издателя'),
+  FieldIdV1.endpoint => _text(context, 'Host or address', 'Хост или адрес'),
+  FieldIdV1.variables => _text(
+    context,
+    'NAME=value, one per line',
+    'ИМЯ=значение, по одному в строке',
+  ),
+  FieldIdV1.url => _text(context, 'URL', 'URL'),
+  FieldIdV1.domain => _text(context, 'Domain', 'Домен'),
+  FieldIdV1.cookieName => _text(context, 'Cookie name', 'Имя cookie'),
+  FieldIdV1.hotpSeed => _text(
+    context,
+    'HOTP seed, Base32',
+    'Ключ HOTP, Base32',
+  ),
+  FieldIdV1.counter => _text(context, 'Counter', 'Счётчик'),
+  FieldIdV1.product => _text(context, 'Product', 'Продукт'),
+  FieldIdV1.ssid => _text(context, 'SSID', 'SSID'),
+  FieldIdV1.device => _text(context, 'Device', 'Устройство'),
+  FieldIdV1.pin => _text(context, 'PIN', 'PIN'),
+  FieldIdV1.carrier => _text(context, 'Carrier', 'Оператор'),
+  FieldIdV1.puk => _text(context, 'PUK', 'PUK'),
+  FieldIdV1.cardNumber => _text(context, 'Card number', 'Номер карты'),
+  FieldIdV1.holder => _text(context, 'Holder', 'Владелец'),
+  FieldIdV1.expiryMonth => _text(context, 'Expiry, YYYY-MM', 'Срок, ГГГГ-ММ'),
+  FieldIdV1.iban => _text(context, 'IBAN', 'IBAN'),
+  FieldIdV1.accountNumber => _text(context, 'Account number', 'Номер счёта'),
+  FieldIdV1.bic => _text(context, 'BIC', 'BIC'),
+  FieldIdV1.documentType => _text(context, 'Document type', 'Тип документа'),
+  FieldIdV1.documentNumber => _text(
+    context,
+    'Document number',
+    'Номер документа',
+  ),
+  FieldIdV1.authority => _text(context, 'Issuing authority', 'Орган выдачи'),
+  FieldIdV1.mnemonic => _text(context, 'Mnemonic words', 'Мнемоническая фраза'),
+  FieldIdV1.walletPassphrase => _text(
+    context,
+    'Wallet passphrase',
+    'Парольная фраза кошелька',
+  ),
+  FieldIdV1.network => _text(context, 'Network', 'Сеть'),
+  FieldIdV1.address => _text(context, 'Public address', 'Публичный адрес'),
+  FieldIdV1.scopes => _text(
+    context,
+    'Scopes, one per line',
+    'Области доступа, по одной в строке',
+  ),
 };
 
 final class _CardEditor extends StatefulWidget {
@@ -141,6 +151,8 @@ final class _CardEditorState extends State<_CardEditor> {
               FieldIdV1.totpAlgorithm => 'SHA1',
               FieldIdV1.totpDigits => '6',
               FieldIdV1.totpPeriod => '30',
+              FieldIdV1.counter => '0',
+              FieldIdV1.containerFormat => 'PKCS#12',
               _ => '',
             },
       ),
@@ -161,6 +173,7 @@ final class _CardEditorState extends State<_CardEditor> {
       _values[FieldIdV1.recoveryCodes]!.text.isNotEmpty ||
       _values[FieldIdV1.reserveLogins]!.text.isNotEmpty;
   AttachmentDraftV1? _attachment;
+  bool _invalidKeyFile = false;
   bool _dirty = false, _more = false;
   bool get dirty => _dirty;
   @override
@@ -253,6 +266,26 @@ final class _CardEditorState extends State<_CardEditor> {
     }
   }
 
+  Future<void> _selectP8() async {
+    final type = _type;
+    final file = await widget.controller.selectAttachment();
+    if (!mounted ||
+        file == null ||
+        type != _type ||
+        widget.controller.state.phase != VaultPhase.unlocked) {
+      return;
+    }
+    try {
+      final value = utf8.decode(file.bytes);
+      _change(() {
+        _invalidKeyFile = false;
+        _values[FieldIdV1.privateKey]!.text = value;
+      });
+    } on FormatException {
+      setState(() => _invalidKeyFile = true);
+    }
+  }
+
   bool get _copyAllowed =>
       widget.card != null &&
       (_type != CardTypeV1.account ||
@@ -281,12 +314,16 @@ final class _CardEditorState extends State<_CardEditor> {
       _ => 'card-field-${spec.id.name}',
     });
     Widget input;
-    if (spec.id == FieldIdV1.totpAlgorithm) {
+    if (spec.id == FieldIdV1.totpAlgorithm ||
+        spec.id == FieldIdV1.containerFormat) {
       input = WantSelect<String>(
         key: key,
         value: field.text,
         options: [
-          for (final value in ['SHA1', 'SHA256', 'SHA512'])
+          for (final value
+              in spec.id == FieldIdV1.containerFormat
+                  ? ['PKCS#12', 'JKS']
+                  : ['SHA1', 'SHA256', 'SHA512'])
             WantOption(value: value, label: value),
         ],
         onChanged: busy
@@ -387,20 +424,25 @@ final class _CardEditorState extends State<_CardEditor> {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               spacing: 16,
               children: [
-                WantSelect<CardTypeV1>(
+                _CatalogSelect<CardTypeV1>(
                   key: const ValueKey('card-type'),
                   value: _type,
-                  label: Text(_text(context, 'Type', 'Тип')),
+                  label: _text(context, 'Type', 'Тип'),
                   enabled: widget.card == null && !state.busy,
-                  options: [
-                    for (final preset in catalog.presets)
-                      WantOption(
-                        value: preset.cardType,
-                        label: _typeLabel(context, preset.cardType),
-                      ),
-                  ],
+                  values: _catalogTypes(catalog),
+                  itemLabel: (value) => _typeLabel(context, value),
+                  searchTerms: (value) => _types[value]!.$1,
+                  itemIcon: _typeIcon,
                   onChanged: (value) {
-                    if (value != null) _change(() => _type = value);
+                    if (value == null || value == _type) return;
+                    for (final field in spec.fields) {
+                      _values[field.id]!.text = _initialValues[field.id]!;
+                    }
+                    _change(() {
+                      _type = value;
+                      _attachment = null;
+                      _invalidKeyFile = false;
+                    });
                   },
                 ),
                 if (_type != CardTypeV1.account)
@@ -419,19 +461,17 @@ final class _CardEditorState extends State<_CardEditor> {
                   enabled: !state.busy,
                   autofocus: true,
                 ),
-                WantSelect<String>(
+                _CatalogSelect<String>(
                   key: const ValueKey('card-service'),
                   value: _service,
-                  label: Text(_text(context, 'Service *', 'Сервис *')),
+                  label: _text(context, 'Service *', 'Сервис *'),
                   hint: _text(context, 'Choose a service', 'Выберите сервис'),
                   enabled: !state.busy,
-                  options: [
-                    for (final service in catalog.services)
-                      WantOption(
-                        value: service,
-                        label: _serviceLabel(context, service),
-                      ),
-                  ],
+                  values: catalog.services,
+                  itemLabel: (service) => _serviceLabel(context, service),
+                  searchTerms: (service) =>
+                      '$service ${_serviceAliases(service)}',
+                  itemIcon: (service) => _serviceIcon(context, service),
                   onChanged: (value) => _change(() => _service = value),
                 ),
                 for (final field in spec.fields)
@@ -512,7 +552,28 @@ final class _CardEditorState extends State<_CardEditor> {
                     ),
                     colorRole: 'muted-foreground',
                   ),
-                if (_type == CardTypeV1.file) ...[
+                if (_type == CardTypeV1.apnsKey ||
+                    _type == CardTypeV1.appStoreConnectKey) ...[
+                  WantButton(
+                    variant: WantButtonVariant.secondary,
+                    onPressed: state.busy ? null : _selectP8,
+                    child: Text(
+                      _text(context, 'Choose .p8 key', 'Выбрать ключ .p8'),
+                    ),
+                  ),
+                  if (_invalidKeyFile)
+                    Semantics(
+                      liveRegion: true,
+                      child: Text(
+                        _text(
+                          context,
+                          'Choose a UTF-8 .p8 key file',
+                          'Выберите файл ключа .p8 в UTF-8',
+                        ),
+                      ),
+                    ),
+                ],
+                if (_type.requiresAttachment) ...[
                   WantTypography(
                     _attachment?.name ??
                         widget.card?.attachment?.name ??

@@ -131,6 +131,9 @@ abstract interface class VaultUseCase {
   FutureDomainResult<DeleteCardResultV1> deleteCardV1({
     required DeleteCardParamsV1 params,
   });
+  FutureDomainResult<HotpAdvanceV1> nextHotpV1({
+    required NextHotpParamsV1 params,
+  });
   FutureDomainResult<ReadTotpResultV1> readTotpV1({
     required ReadTotpParamsV1 params,
   });

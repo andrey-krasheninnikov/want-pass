@@ -182,6 +182,13 @@ final class _VaultAccess implements VaultAccessService {
   }) async =>
       const Result.error(VaultRejectedErrorV1(VaultFailureKindV1.unavailable));
   @override
+  FutureDomainResult<HotpAdvanceV1> nextHotpV1({
+    required VaultHandleV1 handle,
+    required String id,
+    required BigInt revision,
+  }) async => Result.error(const VaultUnexpectedErrorV1());
+
+  @override
   FutureDomainResult<TotpCodeV1> currentTotpV1({
     required VaultHandleV1 handle,
     required String id,

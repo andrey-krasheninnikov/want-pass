@@ -125,6 +125,12 @@ abstract class Vault implements RustOpaqueInterface {
 
   void lock();
 
+  Future<HotpAdvanceV1> nextHotpV1({
+    required String id,
+    required BigInt revision,
+    required BigInt generation,
+  });
+
   static Future<Vault> open({required String directory}) =>
       VaultRustLib.instance.api.crateApiVaultOpen(directory: directory);
 

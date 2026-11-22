@@ -981,3 +981,289 @@ fn search_orders_exact_and_prefix_names_before_other_matches() {
         ]
     );
 }
+
+#[test]
+fn expanded_catalog_round_trips_all_new_presets_and_advances_hotp_once() {
+    use want_pass_vault::api::{
+        AttachmentInputV1, CardTypeV1 as C, FieldIdV1 as F, card_presets_v1, services_v1,
+    };
+
+    let services = services_v1();
+    assert_eq!(services.len(), 101);
+    assert_eq!(
+        services
+            .iter()
+            .collect::<std::collections::BTreeSet<_>>()
+            .len(),
+        101
+    );
+    assert_eq!(services.last().unwrap(), "other");
+    assert_eq!(card_presets_v1().len(), 49);
+
+    use p256::pkcs8::{EncodePrivateKey, LineEnding};
+    let p8 = p256::SecretKey::from_slice(&[1; 32])
+        .unwrap()
+        .to_pkcs8_pem(LineEnding::LF)
+        .unwrap();
+    let ssh_certificate = include_str!("fixtures/synthetic_ed25519_cert.pub");
+    let field = |id, value: &str| CardValueV1 {
+        id,
+        value: value.into(),
+    };
+    let cases = vec![
+        (C::ApiKey, vec![field(F::Value, "synthetic")]),
+        (
+            C::Totp,
+            vec![
+                field(F::TotpSeed, "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ"),
+                field(F::TotpAlgorithm, "SHA1"),
+                field(F::TotpDigits, "6"),
+                field(F::TotpPeriod, "30"),
+            ],
+        ),
+        (
+            C::AwsIam,
+            vec![
+                field(F::AccessKeyId, "synthetic"),
+                field(F::Value, "synthetic"),
+            ],
+        ),
+        (
+            C::GoogleCloudKey,
+            vec![
+                field(
+                    F::JsonKey,
+                    "{\"type\":\"service_account\",\"project_id\":\"fixture\"}",
+                ),
+                field(F::Project, "synthetic"),
+            ],
+        ),
+        (
+            C::AzureAppSecret,
+            vec![
+                field(F::TenantId, "synthetic"),
+                field(F::ClientId, "synthetic"),
+                field(F::ClientSecret, "synthetic"),
+            ],
+        ),
+        (C::BearerToken, vec![field(F::Value, "synthetic")]),
+        (C::AppPassword, vec![field(F::Password, "synthetic")]),
+        (
+            C::SshCertificate,
+            vec![
+                field(F::Certificate, ssh_certificate),
+                field(F::PrivateKey, include_str!("fixtures/synthetic_ed25519")),
+            ],
+        ),
+        (
+            C::KubernetesToken,
+            vec![
+                field(F::Value, "synthetic"),
+                field(F::Namespace, "synthetic"),
+                field(F::AccountName, "synthetic"),
+            ],
+        ),
+        (
+            C::OpenVpn,
+            vec![field(
+                F::Configuration,
+                "client\nremote example.invalid 1194",
+            )],
+        ),
+        (
+            C::Ipsec,
+            vec![
+                field(F::Identity, "synthetic"),
+                field(F::Value, "synthetic"),
+            ],
+        ),
+        (
+            C::KeyContainer,
+            vec![
+                field(F::ContainerFormat, "JKS"),
+                field(F::Password, "synthetic"),
+            ],
+        ),
+        (
+            C::ArtifactSigningKey,
+            vec![
+                field(
+                    F::PrivateKey,
+                    include_str!("fixtures/synthetic_certificate_key.pem"),
+                ),
+                field(F::KeyId, "synthetic"),
+            ],
+        ),
+        (
+            C::ApnsKey,
+            vec![
+                field(F::PrivateKey, &p8),
+                field(F::KeyId, "synthetic"),
+                field(F::TeamId, "synthetic"),
+            ],
+        ),
+        (
+            C::AppStoreConnectKey,
+            vec![
+                field(F::PrivateKey, &p8),
+                field(F::KeyId, "synthetic"),
+                field(F::IssuerId, "synthetic"),
+            ],
+        ),
+        (
+            C::RegistryAccess,
+            vec![
+                field(F::Endpoint, "example.invalid"),
+                field(F::Login, "synthetic"),
+                field(F::Password, "synthetic"),
+            ],
+        ),
+        (
+            C::EnvironmentVariables,
+            vec![field(F::Variables, "TEST_KEY=synthetic\nEMPTY=")],
+        ),
+        (
+            C::SmtpAccess,
+            vec![
+                field(F::Endpoint, "example.invalid"),
+                field(F::Login, "synthetic"),
+                field(F::AccessToken, "synthetic"),
+            ],
+        ),
+        (
+            C::PresignedUrl,
+            vec![
+                field(
+                    F::Url,
+                    "https://example.invalid/resource?signature=synthetic",
+                ),
+                field(F::ExpiresAt, "2030-06-01T00:00:00Z"),
+            ],
+        ),
+        (
+            C::SessionCookie,
+            vec![
+                field(F::Domain, "synthetic"),
+                field(F::CookieName, "synthetic"),
+                field(F::Value, "synthetic"),
+            ],
+        ),
+        (
+            C::Hotp,
+            vec![
+                field(F::HotpSeed, "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ"),
+                field(F::Counter, "0"),
+            ],
+        ),
+        (
+            C::LicenseKey,
+            vec![field(F::Product, "synthetic"), field(F::Value, "synthetic")],
+        ),
+        (
+            C::Wifi,
+            vec![field(F::Ssid, "synthetic"), field(F::Password, "synthetic")],
+        ),
+        (
+            C::DevicePin,
+            vec![field(F::Device, "synthetic"), field(F::Pin, "1234")],
+        ),
+        (
+            C::SimPinPuk,
+            vec![
+                field(F::Carrier, "synthetic"),
+                field(F::Pin, "1234"),
+                field(F::Puk, "01234567"),
+            ],
+        ),
+        (
+            C::PaymentCard,
+            vec![
+                field(F::CardNumber, "0000000000000000"),
+                field(F::Holder, "synthetic"),
+                field(F::ExpiryMonth, "2030-06"),
+            ],
+        ),
+        (
+            C::BankDetails,
+            vec![
+                field(F::Holder, "synthetic"),
+                field(F::Iban, "DE00000000000000000000"),
+            ],
+        ),
+        (
+            C::IdentityDocument,
+            vec![
+                field(F::DocumentType, "synthetic"),
+                field(F::DocumentNumber, "synthetic"),
+                field(F::Authority, "synthetic"),
+            ],
+        ),
+        (
+            C::WalletMnemonic,
+            vec![field(
+                F::Mnemonic,
+                "fixture example synthetic recovery words",
+            )],
+        ),
+        (
+            C::WalletPrivateKey,
+            vec![
+                field(F::Network, "synthetic"),
+                field(F::Address, "synthetic"),
+                field(F::PrivateKey, "synthetic"),
+            ],
+        ),
+    ];
+
+    let (_directory, vault) = create();
+    let mut revision = 0;
+    let mut expected = Vec::new();
+    for (kind, fields) in cases {
+        let mut input = account();
+        input.card_type = kind;
+        input.service = "cloudinary".into();
+        input.fields = fields.clone();
+        if kind == C::KeyContainer {
+            input.attachment = Some(AttachmentInputV1 {
+                name: "synthetic.jks".into(),
+                bytes: vec![0xfe, 0xed, 0xfe, 0xed, 0, 0, 0, 2, 0, 0, 0, 0],
+            });
+        }
+        let saved = vault
+            .save_card_v1(input, revision, vault.generation())
+            .unwrap_or_else(|_| panic!("failed to save catalog preset at revision {revision}"));
+        revision = saved.revision;
+        expected.push((saved.cards.last().unwrap().id.clone(), kind, fields));
+    }
+    vault.lock().unwrap();
+    vault
+        .unlock_v3(PASSWORD.into(), vault.generation())
+        .unwrap();
+    for (id, kind, fields) in expected {
+        let card = vault.card_v1(id.clone(), vault.generation()).unwrap();
+        assert!(card.summary.card_type == kind);
+        assert_eq!(card.fields.len(), fields.len());
+        for found in card.fields {
+            assert!(
+                fields
+                    .iter()
+                    .any(|expected| expected.id == found.id && expected.value == found.value)
+            );
+        }
+        if kind == C::Hotp {
+            let generation = vault.generation();
+            let one = vault
+                .next_hotp_v1(id.clone(), revision, generation)
+                .unwrap();
+            assert_eq!(one.code, "755224");
+            assert!(matches!(
+                vault.next_hotp_v1(id.clone(), revision, generation),
+                Err(VaultFailure::Stale)
+            ));
+            let two = vault
+                .next_hotp_v1(id, one.snapshot.revision, generation)
+                .unwrap();
+            assert_eq!(two.code, "287082");
+        }
+    }
+}

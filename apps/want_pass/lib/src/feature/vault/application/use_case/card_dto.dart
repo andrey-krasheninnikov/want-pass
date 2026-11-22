@@ -135,6 +135,24 @@ final class DeleteCardResultV1 extends Equatable {
   String toString() => 'DeleteCardResultV1(<redacted>)';
 }
 
+final class NextHotpParamsV1 extends Equatable {
+  final VaultHandleV1 handle;
+  final String id;
+  final BigInt revision;
+
+  const NextHotpParamsV1({
+    required this.handle,
+    required this.id,
+    required this.revision,
+  });
+
+  @override
+  List<Object?> get props => [handle, id, revision];
+
+  @override
+  String toString() => 'NextHotpParamsV1(<redacted>)';
+}
+
 final class ReadTotpParamsV1 extends Equatable {
   final VaultHandleV1 handle;
   final String id;

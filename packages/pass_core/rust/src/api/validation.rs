@@ -106,10 +106,147 @@ pub(super) fn validate(kind: C, fields: &[CardValueV1]) -> Result<bool, VaultFai
                 return rejected();
             }
         }
+        C::Totp => super::otp::validate_account_totp(fields)?,
+        C::Hotp => super::otp::validate_hotp(fields)?,
+        C::GoogleCloudKey => {
+            let json = get(fields, F::JsonKey);
+            if !json.trim_start().starts_with('{')
+                || serde_json::from_str::<serde::de::IgnoredAny>(json).is_err()
+            {
+                return rejected();
+            }
+        }
+        C::RegistryAccess | C::SmtpAccess => {
+            if get(fields, F::Password).is_empty() == get(fields, F::AccessToken).is_empty() {
+                return rejected();
+            }
+        }
+        C::Ipsec => {
+            let certificate = get(fields, F::Certificate);
+            if get(fields, F::Value).is_empty() == certificate.is_empty() {
+                return rejected();
+            }
+            if !certificate.is_empty() {
+                x509_cert::Certificate::from_pem(certificate)
+                    .map_err(|_| VaultFailure::Unsupported)?;
+            }
+        }
+        C::BankDetails => {
+            if get(fields, F::Iban).is_empty() && get(fields, F::AccountNumber).is_empty() {
+                return rejected();
+            }
+        }
+        C::DevicePin | C::SimPinPuk => {
+            for id in if kind == C::DevicePin {
+                &[F::Pin][..]
+            } else {
+                &[F::Pin, F::Puk]
+            } {
+                let pin = get(fields, *id);
+                if !(4..=16).contains(&pin.len()) || !pin.bytes().all(|b| b.is_ascii_digit()) {
+                    return rejected();
+                }
+            }
+        }
+        C::PaymentCard => {
+            let number = get(fields, F::CardNumber);
+            let digits = number.bytes().filter(|c| c.is_ascii_digit()).count();
+            let expiry = get(fields, F::ExpiryMonth);
+            if !(12..=19).contains(&digits)
+                || !number
+                    .bytes()
+                    .all(|c| c.is_ascii_digit() || matches!(c, b' ' | b'-'))
+                || expiry.len() != 7
+                || !date_or_timestamp(&format!("{expiry}-01"))
+            {
+                return rejected();
+            }
+        }
+        C::PresignedUrl => {
+            let url =
+                url::Url::parse(get(fields, F::Url)).map_err(|_| VaultFailure::Unsupported)?;
+            if !matches!(url.scheme(), "https" | "http")
+                || url.host_str().is_none()
+                || get(fields, F::ExpiresAt).len() != 20
+            {
+                return rejected();
+            }
+        }
+        C::EnvironmentVariables => {
+            let mut keys = BTreeSet::new();
+            for line in get(fields, F::Variables)
+                .lines()
+                .filter(|line| !line.trim().is_empty())
+            {
+                let (key, _) = line.split_once('=').ok_or(VaultFailure::Unsupported)?;
+                let mut chars = key.bytes();
+                if !chars
+                    .next()
+                    .is_some_and(|c| c.is_ascii_alphabetic() || c == b'_')
+                    || !chars.all(|c| c.is_ascii_alphanumeric() || c == b'_')
+                    || !keys.insert(key)
+                {
+                    return rejected();
+                }
+            }
+            if keys.is_empty() {
+                return rejected();
+            }
+        }
+        C::KeyContainer => {
+            if !matches!(get(fields, F::ContainerFormat), "PKCS#12" | "JKS") {
+                return rejected();
+            }
+        }
+        C::ApnsKey | C::AppStoreConnectKey => {
+            let key = get(fields, F::PrivateKey);
+            if !key.starts_with("-----BEGIN PRIVATE KEY-----") {
+                return rejected();
+            }
+            return private_key(key, Some("1.2.840.10045.2.1"));
+        }
+        C::ArtifactSigningKey => return private_key(get(fields, F::PrivateKey), None),
+        C::SshCertificate => {
+            let cert = ssh_key::Certificate::from_openssh(get(fields, F::Certificate))
+                .map_err(|_| VaultFailure::Unsupported)?;
+            let key = ssh_key::PrivateKey::from_openssh(get(fields, F::PrivateKey))
+                .map_err(|_| VaultFailure::Unsupported)?;
+            if cert.public_key() != key.public_key().key_data() {
+                return rejected();
+            }
+            return Ok(key.is_encrypted());
+        }
         _ => {}
+    }
+    let date = get(fields, F::ExpiresAt);
+    if !date.is_empty() && !date_or_timestamp(date) {
+        return rejected();
     }
     Ok(false)
 }
+
+fn date_or_timestamp(value: &str) -> bool {
+    use x509_cert::der::DateTime;
+    if value.len() == 10 {
+        format!("{value}T00:00:00Z").parse::<DateTime>().is_ok()
+    } else {
+        value.len() == 20 && value.parse::<DateTime>().is_ok()
+    }
+}
+
+pub(super) fn validate_container(fields: &[CardValueV1], bytes: &[u8]) -> Result<(), VaultFailure> {
+    use pkcs8::der::asn1::AnyRef;
+    let valid = match get(fields, F::ContainerFormat) {
+        "JKS" => bytes.len() >= 12 && bytes.starts_with(&[0xfe, 0xed, 0xfe, 0xed]),
+        "PKCS#12" => AnyRef::from_der(bytes).is_ok_and(|value| {
+            use pkcs8::der::Tagged;
+            value.tag() == pkcs8::der::Tag::Sequence && value.value().starts_with(&[2, 1, 3])
+        }),
+        _ => false,
+    };
+    if valid { Ok(()) } else { rejected() }
+}
+
 fn private_key(value: &str, algorithm: Option<&str>) -> Result<bool, VaultFailure> {
     if value.starts_with("-----BEGIN OPENSSH PRIVATE KEY-----") {
         let key =

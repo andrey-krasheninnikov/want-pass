@@ -37,7 +37,7 @@ flutter_rust_bridge::frb_generated_boilerplate!(
     default_rust_auto_opaque = RustAutoOpaqueMoi,
 );
 pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_VERSION: &str = "2.13.0";
-pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = -259760521;
+pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = -1995304540;
 
 // Section: executor
 
@@ -1347,6 +1347,63 @@ fn wire__crate__api__Vault_lock_impl(
                 let output_ok = crate::api::Vault::lock(&*api_that_guard)?;
                 std::result::Result::Ok(output_ok)
             })())
+        },
+    )
+}
+fn wire__crate__api__Vault_next_hotp_v1_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "Vault_next_hotp_v1",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_that = <RustOpaqueMoi<
+                flutter_rust_bridge::for_generated::RustAutoOpaqueInner<Vault>,
+            >>::sse_decode(&mut deserializer);
+            let api_id = <String>::sse_decode(&mut deserializer);
+            let api_revision = <u64>::sse_decode(&mut deserializer);
+            let api_generation = <u64>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| {
+                transform_result_sse::<_, crate::api::VaultFailure>((move || {
+                    let mut api_that_guard = None;
+                    let decode_indices_ =
+                        flutter_rust_bridge::for_generated::lockable_compute_decode_order(vec![
+                            flutter_rust_bridge::for_generated::LockableOrderInfo::new(
+                                &api_that, 0, false,
+                            ),
+                        ]);
+                    for i in decode_indices_ {
+                        match i {
+                            0 => api_that_guard = Some(api_that.lockable_decode_sync_ref()),
+                            _ => unreachable!(),
+                        }
+                    }
+                    let api_that_guard = api_that_guard.unwrap();
+                    let output_ok = crate::api::Vault::next_hotp_v1(
+                        &*api_that_guard,
+                        api_id,
+                        api_revision,
+                        api_generation,
+                    )?;
+                    std::result::Result::Ok(output_ok)
+                })())
+            }
         },
     )
 }
@@ -2840,6 +2897,36 @@ impl SseDecode for crate::api::cards::CardTypeV1 {
             16 => crate::api::cards::CardTypeV1::WebhookSecret,
             17 => crate::api::cards::CardTypeV1::SecureNote,
             18 => crate::api::cards::CardTypeV1::File,
+            19 => crate::api::cards::CardTypeV1::ApiKey,
+            20 => crate::api::cards::CardTypeV1::Totp,
+            21 => crate::api::cards::CardTypeV1::AwsIam,
+            22 => crate::api::cards::CardTypeV1::GoogleCloudKey,
+            23 => crate::api::cards::CardTypeV1::AzureAppSecret,
+            24 => crate::api::cards::CardTypeV1::BearerToken,
+            25 => crate::api::cards::CardTypeV1::AppPassword,
+            26 => crate::api::cards::CardTypeV1::SshCertificate,
+            27 => crate::api::cards::CardTypeV1::KubernetesToken,
+            28 => crate::api::cards::CardTypeV1::OpenVpn,
+            29 => crate::api::cards::CardTypeV1::Ipsec,
+            30 => crate::api::cards::CardTypeV1::KeyContainer,
+            31 => crate::api::cards::CardTypeV1::ArtifactSigningKey,
+            32 => crate::api::cards::CardTypeV1::ApnsKey,
+            33 => crate::api::cards::CardTypeV1::AppStoreConnectKey,
+            34 => crate::api::cards::CardTypeV1::RegistryAccess,
+            35 => crate::api::cards::CardTypeV1::EnvironmentVariables,
+            36 => crate::api::cards::CardTypeV1::SmtpAccess,
+            37 => crate::api::cards::CardTypeV1::PresignedUrl,
+            38 => crate::api::cards::CardTypeV1::SessionCookie,
+            39 => crate::api::cards::CardTypeV1::Hotp,
+            40 => crate::api::cards::CardTypeV1::LicenseKey,
+            41 => crate::api::cards::CardTypeV1::Wifi,
+            42 => crate::api::cards::CardTypeV1::DevicePin,
+            43 => crate::api::cards::CardTypeV1::SimPinPuk,
+            44 => crate::api::cards::CardTypeV1::PaymentCard,
+            45 => crate::api::cards::CardTypeV1::BankDetails,
+            46 => crate::api::cards::CardTypeV1::IdentityDocument,
+            47 => crate::api::cards::CardTypeV1::WalletMnemonic,
+            48 => crate::api::cards::CardTypeV1::WalletPrivateKey,
             _ => unreachable!("Invalid variant for CardTypeV1: {}", inner),
         };
     }
@@ -2929,6 +3016,47 @@ impl SseDecode for crate::api::cards::FieldIdV1 {
             15 => crate::api::cards::FieldIdV1::RefreshToken,
             16 => crate::api::cards::FieldIdV1::Question,
             17 => crate::api::cards::FieldIdV1::Answer,
+            18 => crate::api::cards::FieldIdV1::KeyId,
+            19 => crate::api::cards::FieldIdV1::AccessKeyId,
+            20 => crate::api::cards::FieldIdV1::SessionToken,
+            21 => crate::api::cards::FieldIdV1::JsonKey,
+            22 => crate::api::cards::FieldIdV1::Project,
+            23 => crate::api::cards::FieldIdV1::TenantId,
+            24 => crate::api::cards::FieldIdV1::ExpiresAt,
+            25 => crate::api::cards::FieldIdV1::Namespace,
+            26 => crate::api::cards::FieldIdV1::AccountName,
+            27 => crate::api::cards::FieldIdV1::Configuration,
+            28 => crate::api::cards::FieldIdV1::Identity,
+            29 => crate::api::cards::FieldIdV1::ContainerFormat,
+            30 => crate::api::cards::FieldIdV1::TeamId,
+            31 => crate::api::cards::FieldIdV1::IssuerId,
+            32 => crate::api::cards::FieldIdV1::Endpoint,
+            33 => crate::api::cards::FieldIdV1::Variables,
+            34 => crate::api::cards::FieldIdV1::Url,
+            35 => crate::api::cards::FieldIdV1::Domain,
+            36 => crate::api::cards::FieldIdV1::CookieName,
+            37 => crate::api::cards::FieldIdV1::HotpSeed,
+            38 => crate::api::cards::FieldIdV1::Counter,
+            39 => crate::api::cards::FieldIdV1::Product,
+            40 => crate::api::cards::FieldIdV1::Ssid,
+            41 => crate::api::cards::FieldIdV1::Device,
+            42 => crate::api::cards::FieldIdV1::Pin,
+            43 => crate::api::cards::FieldIdV1::Carrier,
+            44 => crate::api::cards::FieldIdV1::Puk,
+            45 => crate::api::cards::FieldIdV1::CardNumber,
+            46 => crate::api::cards::FieldIdV1::Holder,
+            47 => crate::api::cards::FieldIdV1::ExpiryMonth,
+            48 => crate::api::cards::FieldIdV1::Iban,
+            49 => crate::api::cards::FieldIdV1::AccountNumber,
+            50 => crate::api::cards::FieldIdV1::Bic,
+            51 => crate::api::cards::FieldIdV1::DocumentType,
+            52 => crate::api::cards::FieldIdV1::DocumentNumber,
+            53 => crate::api::cards::FieldIdV1::Authority,
+            54 => crate::api::cards::FieldIdV1::Mnemonic,
+            55 => crate::api::cards::FieldIdV1::WalletPassphrase,
+            56 => crate::api::cards::FieldIdV1::Network,
+            57 => crate::api::cards::FieldIdV1::Address,
+            58 => crate::api::cards::FieldIdV1::Scopes,
             _ => unreachable!("Invalid variant for FieldIdV1: {}", inner),
         };
     }
@@ -2984,6 +3112,18 @@ impl SseDecode for crate::api::content::GroupRecordV1 {
             description: var_description,
             icon: var_icon,
             logo: var_logo,
+        };
+    }
+}
+
+impl SseDecode for crate::api::cards::HotpAdvanceV1 {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_snapshot = <crate::api::cards::ContentSnapshotV2>::sse_decode(deserializer);
+        let mut var_code = <String>::sse_decode(deserializer);
+        return crate::api::cards::HotpAdvanceV1 {
+            snapshot: var_snapshot,
+            code: var_code,
         };
     }
 }
@@ -3422,32 +3562,33 @@ fn pde_ffi_dispatcher_primary_impl(
         20 => wire__crate__api__Vault_export_recovery_v2_impl(port, ptr, rust_vec_len, data_len),
         21 => wire__crate__api__Vault_export_recovery_v3_impl(port, ptr, rust_vec_len, data_len),
         23 => wire__crate__api__Vault_hints_v2_impl(port, ptr, rust_vec_len, data_len),
-        25 => wire__crate__api__Vault_open_impl(port, ptr, rust_vec_len, data_len),
-        26 => wire__crate__api__Vault_open_application_v1_impl(port, ptr, rust_vec_len, data_len),
-        27 => wire__crate__api__Vault_prepare_creation_impl(port, ptr, rust_vec_len, data_len),
-        28 => wire__crate__api__Vault_prepare_creation_v2_impl(port, ptr, rust_vec_len, data_len),
-        29 => wire__crate__api__Vault_prepare_creation_v3_impl(port, ptr, rust_vec_len, data_len),
-        30 => wire__crate__api__Vault_prepare_recovery_impl(port, ptr, rust_vec_len, data_len),
-        31 => wire__crate__api__Vault_prepare_recovery_v2_impl(port, ptr, rust_vec_len, data_len),
-        32 => wire__crate__api__Vault_prepare_recovery_v3_impl(port, ptr, rust_vec_len, data_len),
-        33 => {
+        25 => wire__crate__api__Vault_next_hotp_v1_impl(port, ptr, rust_vec_len, data_len),
+        26 => wire__crate__api__Vault_open_impl(port, ptr, rust_vec_len, data_len),
+        27 => wire__crate__api__Vault_open_application_v1_impl(port, ptr, rust_vec_len, data_len),
+        28 => wire__crate__api__Vault_prepare_creation_impl(port, ptr, rust_vec_len, data_len),
+        29 => wire__crate__api__Vault_prepare_creation_v2_impl(port, ptr, rust_vec_len, data_len),
+        30 => wire__crate__api__Vault_prepare_creation_v3_impl(port, ptr, rust_vec_len, data_len),
+        31 => wire__crate__api__Vault_prepare_recovery_impl(port, ptr, rust_vec_len, data_len),
+        32 => wire__crate__api__Vault_prepare_recovery_v2_impl(port, ptr, rust_vec_len, data_len),
+        33 => wire__crate__api__Vault_prepare_recovery_v3_impl(port, ptr, rust_vec_len, data_len),
+        34 => {
             wire__crate__api__Vault_regenerate_recovery_v3_impl(port, ptr, rust_vec_len, data_len)
         }
-        34 => wire__crate__api__Vault_reset_application_v1_impl(port, ptr, rust_vec_len, data_len),
-        35 => wire__crate__api__Vault_save_account_v1_impl(port, ptr, rust_vec_len, data_len),
-        36 => wire__crate__api__Vault_save_card_v1_impl(port, ptr, rust_vec_len, data_len),
-        37 => wire__crate__api__Vault_save_group_v1_impl(port, ptr, rust_vec_len, data_len),
-        38 => wire__crate__api__Vault_save_group_v2_impl(port, ptr, rust_vec_len, data_len),
-        39 => wire__crate__api__Vault_search_cards_v1_impl(port, ptr, rust_vec_len, data_len),
-        40 => wire__crate__api__Vault_status_impl(port, ptr, rust_vec_len, data_len),
-        41 => wire__crate__api__Vault_unlock_impl(port, ptr, rust_vec_len, data_len),
-        42 => wire__crate__api__Vault_unlock_v3_impl(port, ptr, rust_vec_len, data_len),
-        43 => wire__crate__api__Vault_validate_recovery_v3_impl(port, ptr, rust_vec_len, data_len),
-        44 => wire__crate__api__Vault_wait_for_exports_v2_impl(port, ptr, rust_vec_len, data_len),
-        45 => wire__crate__api__presets__card_presets_v1_impl(port, ptr, rust_vec_len, data_len),
-        46 => wire__crate__api__v3__password_policy_v4_impl(port, ptr, rust_vec_len, data_len),
-        47 => wire__crate__api__cards__services_v1_impl(port, ptr, rust_vec_len, data_len),
-        48 => wire__crate__api__v3__validate_password_v3_impl(port, ptr, rust_vec_len, data_len),
+        35 => wire__crate__api__Vault_reset_application_v1_impl(port, ptr, rust_vec_len, data_len),
+        36 => wire__crate__api__Vault_save_account_v1_impl(port, ptr, rust_vec_len, data_len),
+        37 => wire__crate__api__Vault_save_card_v1_impl(port, ptr, rust_vec_len, data_len),
+        38 => wire__crate__api__Vault_save_group_v1_impl(port, ptr, rust_vec_len, data_len),
+        39 => wire__crate__api__Vault_save_group_v2_impl(port, ptr, rust_vec_len, data_len),
+        40 => wire__crate__api__Vault_search_cards_v1_impl(port, ptr, rust_vec_len, data_len),
+        41 => wire__crate__api__Vault_status_impl(port, ptr, rust_vec_len, data_len),
+        42 => wire__crate__api__Vault_unlock_impl(port, ptr, rust_vec_len, data_len),
+        43 => wire__crate__api__Vault_unlock_v3_impl(port, ptr, rust_vec_len, data_len),
+        44 => wire__crate__api__Vault_validate_recovery_v3_impl(port, ptr, rust_vec_len, data_len),
+        45 => wire__crate__api__Vault_wait_for_exports_v2_impl(port, ptr, rust_vec_len, data_len),
+        46 => wire__crate__api__presets__card_presets_v1_impl(port, ptr, rust_vec_len, data_len),
+        47 => wire__crate__api__v3__password_policy_v4_impl(port, ptr, rust_vec_len, data_len),
+        48 => wire__crate__api__cards__services_v1_impl(port, ptr, rust_vec_len, data_len),
+        49 => wire__crate__api__v3__validate_password_v3_impl(port, ptr, rust_vec_len, data_len),
         _ => unreachable!(),
     }
 }
@@ -3829,6 +3970,36 @@ impl flutter_rust_bridge::IntoDart for crate::api::cards::CardTypeV1 {
             Self::WebhookSecret => 16.into_dart(),
             Self::SecureNote => 17.into_dart(),
             Self::File => 18.into_dart(),
+            Self::ApiKey => 19.into_dart(),
+            Self::Totp => 20.into_dart(),
+            Self::AwsIam => 21.into_dart(),
+            Self::GoogleCloudKey => 22.into_dart(),
+            Self::AzureAppSecret => 23.into_dart(),
+            Self::BearerToken => 24.into_dart(),
+            Self::AppPassword => 25.into_dart(),
+            Self::SshCertificate => 26.into_dart(),
+            Self::KubernetesToken => 27.into_dart(),
+            Self::OpenVpn => 28.into_dart(),
+            Self::Ipsec => 29.into_dart(),
+            Self::KeyContainer => 30.into_dart(),
+            Self::ArtifactSigningKey => 31.into_dart(),
+            Self::ApnsKey => 32.into_dart(),
+            Self::AppStoreConnectKey => 33.into_dart(),
+            Self::RegistryAccess => 34.into_dart(),
+            Self::EnvironmentVariables => 35.into_dart(),
+            Self::SmtpAccess => 36.into_dart(),
+            Self::PresignedUrl => 37.into_dart(),
+            Self::SessionCookie => 38.into_dart(),
+            Self::Hotp => 39.into_dart(),
+            Self::LicenseKey => 40.into_dart(),
+            Self::Wifi => 41.into_dart(),
+            Self::DevicePin => 42.into_dart(),
+            Self::SimPinPuk => 43.into_dart(),
+            Self::PaymentCard => 44.into_dart(),
+            Self::BankDetails => 45.into_dart(),
+            Self::IdentityDocument => 46.into_dart(),
+            Self::WalletMnemonic => 47.into_dart(),
+            Self::WalletPrivateKey => 48.into_dart(),
             _ => unreachable!(),
         }
     }
@@ -3957,6 +4128,47 @@ impl flutter_rust_bridge::IntoDart for crate::api::cards::FieldIdV1 {
             Self::RefreshToken => 15.into_dart(),
             Self::Question => 16.into_dart(),
             Self::Answer => 17.into_dart(),
+            Self::KeyId => 18.into_dart(),
+            Self::AccessKeyId => 19.into_dart(),
+            Self::SessionToken => 20.into_dart(),
+            Self::JsonKey => 21.into_dart(),
+            Self::Project => 22.into_dart(),
+            Self::TenantId => 23.into_dart(),
+            Self::ExpiresAt => 24.into_dart(),
+            Self::Namespace => 25.into_dart(),
+            Self::AccountName => 26.into_dart(),
+            Self::Configuration => 27.into_dart(),
+            Self::Identity => 28.into_dart(),
+            Self::ContainerFormat => 29.into_dart(),
+            Self::TeamId => 30.into_dart(),
+            Self::IssuerId => 31.into_dart(),
+            Self::Endpoint => 32.into_dart(),
+            Self::Variables => 33.into_dart(),
+            Self::Url => 34.into_dart(),
+            Self::Domain => 35.into_dart(),
+            Self::CookieName => 36.into_dart(),
+            Self::HotpSeed => 37.into_dart(),
+            Self::Counter => 38.into_dart(),
+            Self::Product => 39.into_dart(),
+            Self::Ssid => 40.into_dart(),
+            Self::Device => 41.into_dart(),
+            Self::Pin => 42.into_dart(),
+            Self::Carrier => 43.into_dart(),
+            Self::Puk => 44.into_dart(),
+            Self::CardNumber => 45.into_dart(),
+            Self::Holder => 46.into_dart(),
+            Self::ExpiryMonth => 47.into_dart(),
+            Self::Iban => 48.into_dart(),
+            Self::AccountNumber => 49.into_dart(),
+            Self::Bic => 50.into_dart(),
+            Self::DocumentType => 51.into_dart(),
+            Self::DocumentNumber => 52.into_dart(),
+            Self::Authority => 53.into_dart(),
+            Self::Mnemonic => 54.into_dart(),
+            Self::WalletPassphrase => 55.into_dart(),
+            Self::Network => 56.into_dart(),
+            Self::Address => 57.into_dart(),
+            Self::Scopes => 58.into_dart(),
             _ => unreachable!(),
         }
     }
@@ -4038,6 +4250,27 @@ impl flutter_rust_bridge::IntoIntoDart<crate::api::content::GroupRecordV1>
     for crate::api::content::GroupRecordV1
 {
     fn into_into_dart(self) -> crate::api::content::GroupRecordV1 {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::api::cards::HotpAdvanceV1 {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.snapshot.into_into_dart().into_dart(),
+            self.code.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::api::cards::HotpAdvanceV1
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::api::cards::HotpAdvanceV1>
+    for crate::api::cards::HotpAdvanceV1
+{
+    fn into_into_dart(self) -> crate::api::cards::HotpAdvanceV1 {
         self
     }
 }
@@ -4417,6 +4650,36 @@ impl SseEncode for crate::api::cards::CardTypeV1 {
                 crate::api::cards::CardTypeV1::WebhookSecret => 16,
                 crate::api::cards::CardTypeV1::SecureNote => 17,
                 crate::api::cards::CardTypeV1::File => 18,
+                crate::api::cards::CardTypeV1::ApiKey => 19,
+                crate::api::cards::CardTypeV1::Totp => 20,
+                crate::api::cards::CardTypeV1::AwsIam => 21,
+                crate::api::cards::CardTypeV1::GoogleCloudKey => 22,
+                crate::api::cards::CardTypeV1::AzureAppSecret => 23,
+                crate::api::cards::CardTypeV1::BearerToken => 24,
+                crate::api::cards::CardTypeV1::AppPassword => 25,
+                crate::api::cards::CardTypeV1::SshCertificate => 26,
+                crate::api::cards::CardTypeV1::KubernetesToken => 27,
+                crate::api::cards::CardTypeV1::OpenVpn => 28,
+                crate::api::cards::CardTypeV1::Ipsec => 29,
+                crate::api::cards::CardTypeV1::KeyContainer => 30,
+                crate::api::cards::CardTypeV1::ArtifactSigningKey => 31,
+                crate::api::cards::CardTypeV1::ApnsKey => 32,
+                crate::api::cards::CardTypeV1::AppStoreConnectKey => 33,
+                crate::api::cards::CardTypeV1::RegistryAccess => 34,
+                crate::api::cards::CardTypeV1::EnvironmentVariables => 35,
+                crate::api::cards::CardTypeV1::SmtpAccess => 36,
+                crate::api::cards::CardTypeV1::PresignedUrl => 37,
+                crate::api::cards::CardTypeV1::SessionCookie => 38,
+                crate::api::cards::CardTypeV1::Hotp => 39,
+                crate::api::cards::CardTypeV1::LicenseKey => 40,
+                crate::api::cards::CardTypeV1::Wifi => 41,
+                crate::api::cards::CardTypeV1::DevicePin => 42,
+                crate::api::cards::CardTypeV1::SimPinPuk => 43,
+                crate::api::cards::CardTypeV1::PaymentCard => 44,
+                crate::api::cards::CardTypeV1::BankDetails => 45,
+                crate::api::cards::CardTypeV1::IdentityDocument => 46,
+                crate::api::cards::CardTypeV1::WalletMnemonic => 47,
+                crate::api::cards::CardTypeV1::WalletPrivateKey => 48,
                 _ => {
                     unimplemented!("");
                 }
@@ -4499,6 +4762,47 @@ impl SseEncode for crate::api::cards::FieldIdV1 {
                 crate::api::cards::FieldIdV1::RefreshToken => 15,
                 crate::api::cards::FieldIdV1::Question => 16,
                 crate::api::cards::FieldIdV1::Answer => 17,
+                crate::api::cards::FieldIdV1::KeyId => 18,
+                crate::api::cards::FieldIdV1::AccessKeyId => 19,
+                crate::api::cards::FieldIdV1::SessionToken => 20,
+                crate::api::cards::FieldIdV1::JsonKey => 21,
+                crate::api::cards::FieldIdV1::Project => 22,
+                crate::api::cards::FieldIdV1::TenantId => 23,
+                crate::api::cards::FieldIdV1::ExpiresAt => 24,
+                crate::api::cards::FieldIdV1::Namespace => 25,
+                crate::api::cards::FieldIdV1::AccountName => 26,
+                crate::api::cards::FieldIdV1::Configuration => 27,
+                crate::api::cards::FieldIdV1::Identity => 28,
+                crate::api::cards::FieldIdV1::ContainerFormat => 29,
+                crate::api::cards::FieldIdV1::TeamId => 30,
+                crate::api::cards::FieldIdV1::IssuerId => 31,
+                crate::api::cards::FieldIdV1::Endpoint => 32,
+                crate::api::cards::FieldIdV1::Variables => 33,
+                crate::api::cards::FieldIdV1::Url => 34,
+                crate::api::cards::FieldIdV1::Domain => 35,
+                crate::api::cards::FieldIdV1::CookieName => 36,
+                crate::api::cards::FieldIdV1::HotpSeed => 37,
+                crate::api::cards::FieldIdV1::Counter => 38,
+                crate::api::cards::FieldIdV1::Product => 39,
+                crate::api::cards::FieldIdV1::Ssid => 40,
+                crate::api::cards::FieldIdV1::Device => 41,
+                crate::api::cards::FieldIdV1::Pin => 42,
+                crate::api::cards::FieldIdV1::Carrier => 43,
+                crate::api::cards::FieldIdV1::Puk => 44,
+                crate::api::cards::FieldIdV1::CardNumber => 45,
+                crate::api::cards::FieldIdV1::Holder => 46,
+                crate::api::cards::FieldIdV1::ExpiryMonth => 47,
+                crate::api::cards::FieldIdV1::Iban => 48,
+                crate::api::cards::FieldIdV1::AccountNumber => 49,
+                crate::api::cards::FieldIdV1::Bic => 50,
+                crate::api::cards::FieldIdV1::DocumentType => 51,
+                crate::api::cards::FieldIdV1::DocumentNumber => 52,
+                crate::api::cards::FieldIdV1::Authority => 53,
+                crate::api::cards::FieldIdV1::Mnemonic => 54,
+                crate::api::cards::FieldIdV1::WalletPassphrase => 55,
+                crate::api::cards::FieldIdV1::Network => 56,
+                crate::api::cards::FieldIdV1::Address => 57,
+                crate::api::cards::FieldIdV1::Scopes => 58,
                 _ => {
                     unimplemented!("");
                 }
@@ -4538,6 +4842,14 @@ impl SseEncode for crate::api::content::GroupRecordV1 {
         <String>::sse_encode(self.description, serializer);
         <String>::sse_encode(self.icon, serializer);
         <Vec<u8>>::sse_encode(self.logo, serializer);
+    }
+}
+
+impl SseEncode for crate::api::cards::HotpAdvanceV1 {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <crate::api::cards::ContentSnapshotV2>::sse_encode(self.snapshot, serializer);
+        <String>::sse_encode(self.code, serializer);
     }
 }
 

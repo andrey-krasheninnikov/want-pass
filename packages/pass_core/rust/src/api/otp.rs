@@ -163,3 +163,25 @@ pub(super) fn current_code(fields: &[CardValueV1]) -> Result<TotpCodeV1, VaultFa
         .as_secs();
     code(&value, time)
 }
+
+fn hotp_config(fields: &[CardValueV1]) -> Result<(Totp, u64), VaultFailure> {
+    let seed = field(fields, FieldIdV1::HotpSeed).ok_or(VaultFailure::Unsupported)?;
+    let counter = field(fields, FieldIdV1::Counter)
+        .ok_or(VaultFailure::Unsupported)?
+        .parse::<u64>()
+        .map_err(|_| VaultFailure::Unsupported)?;
+    // With a step of one the existing primitive signs the supplied counter directly.
+    Ok((build(seed, "SHA1", 6, 1)?, counter))
+}
+
+pub(super) fn validate_hotp(fields: &[CardValueV1]) -> Result<(), VaultFailure> {
+    hotp_config(fields).map(|_| ())
+}
+
+pub(super) fn advance_hotp(
+    fields: &[CardValueV1],
+) -> Result<(Zeroizing<String>, u64), VaultFailure> {
+    let (value, counter) = hotp_config(fields)?;
+    let next = counter.checked_add(1).ok_or(VaultFailure::Unsupported)?;
+    Ok((Zeroizing::new(value.generate(counter).to_string()), next))
+}

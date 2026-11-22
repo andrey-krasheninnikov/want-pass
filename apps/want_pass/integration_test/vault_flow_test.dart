@@ -377,6 +377,7 @@ Future<void> _tap(WidgetTester tester, String key) async {
   }
   await tester.ensureVisible(button);
   await _settle(tester);
+  await _until(tester, () => button.hitTestable().evaluate().isNotEmpty);
   await tester.tap(button);
   await tester.pump();
 }
@@ -405,11 +406,10 @@ Future<void> _captureQr(
 }
 
 Future<void> _settle(WidgetTester tester) async {
-  await tester.pumpAndSettle(
-    const Duration(milliseconds: 100),
-    EnginePhase.sendSemanticsUpdate,
-    const Duration(seconds: 10),
-  );
+  // Ambient artwork can keep scheduling frames after the controls are ready.
+  await tester.pump();
+  await tester.pump(const Duration(milliseconds: 450));
+  await tester.pump();
 }
 
 Future<void> _captureWorkspace(

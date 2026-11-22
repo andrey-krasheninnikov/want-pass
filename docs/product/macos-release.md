@@ -55,6 +55,8 @@ For v1.0.0, run acceptance on the MacBook and its built-in display. The next rel
 
 Run the local integration checks from the repository root. They use temporary vaults and test entries. / Выполняйте локальные интеграционные проверки из корня репозитория. Они используют временные сейфы и тестовые записи.
 
+If Flutter reports `Failed to foreground app`, bring the running Want Pass Dev window to the front so it receives keyboard input. / Если Flutter сообщает `Failed to foreground app`, выведите запущенное окно Want Pass Dev на передний план для ввода с клавиатуры.
+
 ```sh
 make native-ui
 python3 tool/test_macos_shortcuts.py

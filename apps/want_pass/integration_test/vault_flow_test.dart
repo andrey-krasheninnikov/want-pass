@@ -352,9 +352,17 @@ Future<void> _tap(WidgetTester tester, String key) async {
   debugPrint('Native UI action: $label');
   await _foreground(tester, label);
   final button = find.byKey(ValueKey(key));
+  final groupsMenu = find.byKey(const ValueKey('groups-open'));
+  await _until(
+    tester,
+    () =>
+        button.evaluate().isNotEmpty ||
+        (key == 'group-create' && groupsMenu.evaluate().isNotEmpty),
+  );
   if (key == 'group-create' && button.evaluate().isEmpty) {
     await _tap(tester, 'groups-open');
     await _settle(tester);
+    await _until(tester, () => button.evaluate().isNotEmpty);
   }
   await tester.ensureVisible(button);
   await _settle(tester);

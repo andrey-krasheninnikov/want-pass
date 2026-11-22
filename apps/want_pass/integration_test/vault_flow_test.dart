@@ -241,10 +241,11 @@ void main() {
         'Synthetic\naccount value',
       );
       expect(account.summary.service, 'github');
-      expect(
-        tester.widget<VaultFilaments>(find.byType(VaultFilaments)).enabled,
-        isFalse,
-      );
+      await _settle(tester);
+      final activeFilaments = tester
+          .widgetList<VaultFilaments>(find.byType(VaultFilaments))
+          .where((background) => background.enabled);
+      expect(activeFilaments, isEmpty);
       expect(find.byType(WantBackgroundMotion), findsNothing);
       await _captureWorkspace(tester, captureBoundary, 'workspace-native');
       completed = true;

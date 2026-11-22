@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:domain_error/domain_error.dart';
 import 'package:equatable/equatable.dart';
@@ -19,7 +20,7 @@ final class VaultController extends CubitWithEffects<VaultState, VaultEffect> {
   VaultHandleV1? _handle;
   StreamSubscription<VaultLockSignal>? _subscription;
   Timer? _idle;
-  final _idleClock = Stopwatch();
+  final Stopwatch _idleClock;
   Duration get idleRemaining => Duration(
     microseconds:
         (const Duration(minutes: 5).inMicroseconds -
@@ -47,8 +48,10 @@ final class VaultController extends CubitWithEffects<VaultState, VaultEffect> {
   VaultController(
     this._useCase,
     this._reporter,
-    @Named('vaultLockEvents') this._lockEvents,
-  ) : super(const VaultState(phase: VaultPhase.loading));
+    @Named('vaultLockEvents') this._lockEvents, {
+    @ignoreParam Stopwatch? idleClock,
+  }) : _idleClock = idleClock ?? Stopwatch(),
+       super(const VaultState(phase: VaultPhase.loading));
 
   @PostConstruct(preResolve: true)
   Future<void> init() {
@@ -362,7 +365,8 @@ final class VaultController extends CubitWithEffects<VaultState, VaultEffect> {
 
   Future<void> downloadRecovery() {
     const op = 'VaultController.downloadRecovery():';
-    if (_closing ||
+    if (!_withinIdleDeadline ||
+        _closing ||
         state.busy ||
         state.setupChallenge == null ||
         _exportOperation != null ||
@@ -380,7 +384,12 @@ final class VaultController extends CubitWithEffects<VaultState, VaultEffect> {
             ),
             cancelled.future.then((_) => null),
           ]);
-      if (selected == null || _closing || epoch != _epoch) return;
+      if (selected == null ||
+          _closing ||
+          epoch != _epoch ||
+          !_withinIdleDeadline) {
+        return;
+      }
       if (selected.isError) {
         _fail(op, _error(selected.error));
         return;
@@ -415,7 +424,8 @@ final class VaultController extends CubitWithEffects<VaultState, VaultEffect> {
 
   Future<void> copyRecovery() async {
     const op = 'VaultController.copyRecovery():';
-    if (_closing ||
+    if (!_withinIdleDeadline ||
+        _closing ||
         state.busy ||
         state.setupChallenge == null ||
         _exportOperation != null) {
@@ -425,11 +435,11 @@ final class VaultController extends CubitWithEffects<VaultState, VaultEffect> {
     final phrase = state.setupChallenge!.json;
     final operation = () async {
       await _clearClipboard();
-      if (_closing || epoch != _epoch) return;
+      if (_closing || epoch != _epoch || !_withinIdleDeadline) return;
       final result = await _useCase.copyRecoveryV1(
         params: RecoveryClipboardParamsV1(phrase: phrase),
       );
-      if (_closing || epoch != _epoch) {
+      if (_closing || epoch != _epoch || !_withinIdleDeadline) {
         await _useCase.clearRecoveryClipboardV1(
           params: RecoveryClipboardParamsV1(phrase: phrase),
         );
@@ -629,6 +639,120 @@ final class VaultController extends CubitWithEffects<VaultState, VaultEffect> {
     return operation;
   }
 
+  Future<T?> _readProtection<T>(
+    String name,
+    FutureDomainResult<T> Function(VaultProtectionSessionV1 session) action,
+  ) => _readCatalog(name, (handle, _) async {
+    if (handle is! VaultProtectionSessionV1) {
+      return Result.error(
+        const VaultRejectedErrorV1(VaultFailureKindV1.unsupported),
+      );
+    }
+    return action(handle as VaultProtectionSessionV1);
+  });
+
+  Future<ProtectionSettingsDtoV1?> readProtection() => _readProtection(
+    'VaultController.readProtection():',
+    (session) => session.protectionSettings(),
+  );
+
+  Future<String?> beginExternalFactor() => _readProtection(
+    'VaultController.beginExternalFactor():',
+    (session) => session.beginEnrollment(),
+  );
+
+  Future<bool> saveExternalFactor(
+    String code,
+    Set<ProtectedOperationV1> operations, {
+    required bool enrolling,
+    bool disable = false,
+  }) async {
+    var saved = false;
+    if (!_hasUnlockedSession) return false;
+    await _perform<void>(
+      'VaultController.saveExternalFactor():',
+      (handle) async {
+        if (handle is! VaultProtectionSessionV1) {
+          return Result.error(
+            const VaultRejectedErrorV1(VaultFailureKindV1.unsupported),
+          );
+        }
+        final session = handle as VaultProtectionSessionV1;
+        return enrolling
+            ? session.enroll(code, operations)
+            : session.configureFactor(code, operations, disable: disable);
+      },
+      (_) {
+        saved = true;
+        emit(state.copyWith(busy: false));
+      },
+      contentMutation: true,
+    );
+    if (saved) await loadContent();
+    return saved;
+  }
+
+  Future<({bool available, bool enabled})> biometricStatus() async {
+    final handle = _handle, epoch = _epoch;
+    if (_closing || isClosed || handle is! VaultProtectionSessionV1) {
+      return (available: false, enabled: false);
+    }
+    final session = handle as VaultProtectionSessionV1;
+    try {
+      final available = await session.biometricAvailable();
+      final enrolled = await session.biometricEnabled();
+      if (_closing || epoch != _epoch) {
+        return (available: false, enabled: false);
+      }
+      return (
+        available: available,
+        enabled: enrolled.isSuccess && enrolled.value,
+      );
+    } on Object {
+      return (available: false, enabled: false);
+    }
+  }
+
+  Future<bool> setBiometricEnabled(bool enable) async {
+    if (!_hasUnlockedSession) return false;
+    var saved = false;
+    await _perform<void>(
+      'VaultController.setBiometricEnabled():',
+      (handle) async {
+        if (handle is! VaultProtectionSessionV1) {
+          return Result.error(
+            const VaultRejectedErrorV1(VaultFailureKindV1.unsupported),
+          );
+        }
+        return (handle as VaultProtectionSessionV1).configureBiometric(enable);
+      },
+      (_) {
+        saved = true;
+        emit(state.copyWith(busy: false));
+      },
+    );
+    return saved;
+  }
+
+  Future<void> unlockWithBiometric() async {
+    if (state.phase != VaultPhase.locked) return;
+    await _perform<void>(
+      'VaultController.unlockWithBiometric():',
+      (handle) async {
+        if (handle is! VaultProtectionSessionV1) {
+          return Result.error(
+            const VaultRejectedErrorV1(VaultFailureKindV1.unsupported),
+          );
+        }
+        return (handle as VaultProtectionSessionV1).unlockBiometric();
+      },
+      (_) {
+        emit(const VaultState(phase: VaultPhase.unlocked));
+        emitEffect(const VaultNotice(VaultNoticeKind.unlocked));
+      },
+    );
+  }
+
   Future<void> unlock(String password) {
     const op = 'VaultController.unlock():';
     _passwordEpoch++;
@@ -654,7 +778,8 @@ final class VaultController extends CubitWithEffects<VaultState, VaultEffect> {
     bool preserveError = false,
     bool Function(VaultErrorV1)? handleFailure,
   }) async {
-    if (_closing ||
+    if (!_withinIdleDeadline ||
+        _closing ||
         isClosed ||
         !_monitorAvailable ||
         state.busy ||
@@ -675,7 +800,7 @@ final class VaultController extends CubitWithEffects<VaultState, VaultEffect> {
     final future = () async {
       try {
         final result = await run(_handle!);
-        if (_closing || epoch != _epoch) return;
+        if (_closing || epoch != _epoch || !_withinIdleDeadline) return;
         if (result.isError) {
           final error = _error(result.error);
           if (handleFailure?.call(error) == true) return;
@@ -723,7 +848,7 @@ final class VaultController extends CubitWithEffects<VaultState, VaultEffect> {
     final handle = _handle;
     if (_closing ||
         !_monitorAvailable ||
-        state.phase != VaultPhase.unlocked ||
+        !_hasUnlockedSession ||
         state.busy ||
         handle == null ||
         !LaunchMode.isInitialized ||
@@ -819,9 +944,18 @@ final class VaultController extends CubitWithEffects<VaultState, VaultEffect> {
     }
   }
 
+  bool get _withinIdleDeadline {
+    if (!_idleClock.isRunning || idleRemaining > Duration.zero) return true;
+    unawaited(lock());
+    return false;
+  }
+
+  bool get _hasUnlockedSession =>
+      state.phase == VaultPhase.unlocked && _withinIdleDeadline;
+
   void activity() {
     const op = 'VaultController.activity():';
-    if (_closing || isClosed) return;
+    if (_closing || isClosed || !_withinIdleDeadline) return;
     if (!LaunchMode.isInitialized || !LaunchMode.isForeground) {
       reportVaultSafely(
         _reporter,
@@ -880,9 +1014,260 @@ final class VaultController extends CubitWithEffects<VaultState, VaultEffect> {
     }
   }
 
+  Future<AccountImportPreviewV1?> prepareAccountImport(
+    AccountImportSourceV1 source, {
+    required bool clipboard,
+  }) async {
+    const op = 'VaultController.prepareAccountImport():';
+    final revision = state.content?.revision;
+    final epoch = _epoch;
+    if (_closing ||
+        !_hasUnlockedSession ||
+        state.busy ||
+        revision == null ||
+        _handle == null) {
+      return null;
+    }
+    if (state.error != null) emit(state.copyWith(error: () => null));
+    final input = await _useCase.selectAccountImportV1(
+      source: source,
+      clipboard: clipboard,
+    );
+    if (_closing ||
+        isClosed ||
+        _epoch != epoch ||
+        !_hasUnlockedSession ||
+        state.content?.revision != revision) {
+      return null;
+    }
+    if (input.isError) {
+      _fail(op, _error(input.error));
+      return null;
+    }
+    final payloads = input.value;
+    if (payloads == null) return null;
+    AccountImportPreviewV1? preview;
+    await _perform(
+      op,
+      (handle) => _useCase.prepareAccountImportV1(
+        handle: handle,
+        source: source,
+        payloads: payloads,
+        revision: revision,
+      ),
+      (value) {
+        preview = value;
+        emit(state.copyWith(busy: false));
+      },
+    );
+    return preview;
+  }
+
+  Future<bool> applyAccountImport(String token, List<int> selected) async {
+    if (!_hasUnlockedSession) return false;
+    var applied = false;
+    await _perform(
+      'VaultController.applyAccountImport():',
+      (handle) => _useCase.applyAccountImportV1(
+        handle: handle,
+        token: token,
+        selected: selected,
+      ),
+      (value) {
+        applied = true;
+        emit(state.copyWith(content: () => value, busy: false));
+      },
+      contentMutation: true,
+    );
+    return applied;
+  }
+
+  Future<void> cancelAccountImport(String token) async {
+    final handle = _handle;
+    if (_closing || isClosed || handle == null || !_hasUnlockedSession) {
+      return;
+    }
+    await _useCase.cancelAccountImportV1(handle: handle, token: token);
+  }
+
+  Future<RecoveryWordsV1?> inspectRecoveryWords(String text) async {
+    final epoch = _epoch;
+    final result = await _useCase.inspectRecoveryWordsV1(text);
+    if (_closing || isClosed || epoch != _epoch || result.isError) return null;
+    return result.value;
+  }
+
+  Future<String?> exportBackupToDirectory() async {
+    final revision = state.content?.revision, epoch = _epoch;
+    if (_closing ||
+        isClosed ||
+        !_hasUnlockedSession ||
+        state.busy ||
+        revision == null) {
+      return null;
+    }
+    activity();
+    final result = await _useCase.withBackupDestinationV1((path) async {
+      if (_closing ||
+          isClosed ||
+          epoch != _epoch ||
+          !_hasUnlockedSession ||
+          state.content?.revision != revision) {
+        return false;
+      }
+      return exportBackup(path, revision);
+    });
+    if (_closing || isClosed || epoch != _epoch || !_hasUnlockedSession) {
+      return null;
+    }
+    if (result.isError) {
+      _fail('VaultController.exportBackup():', _error(result.error));
+      return null;
+    }
+    return result.value;
+  }
+
+  Future<String?> selectBackupSource() async {
+    const op = 'VaultController.selectBackupPath():';
+    final epoch = _epoch, revision = state.content?.revision;
+    if (_closing ||
+        isClosed ||
+        !_hasUnlockedSession ||
+        state.busy ||
+        revision == null) {
+      return null;
+    }
+    activity();
+    final result = await _useCase.selectBackupSourceV1();
+    if (_closing ||
+        isClosed ||
+        epoch != _epoch ||
+        !_hasUnlockedSession ||
+        state.content?.revision != revision) {
+      return null;
+    }
+    if (result.isError) {
+      _fail(op, _error(result.error));
+      return null;
+    }
+    return result.value;
+  }
+
+  Future<bool> exportBackup(String destination, BigInt revision) async {
+    if (!_hasUnlockedSession || state.content?.revision != revision) {
+      return false;
+    }
+    var saved = false;
+    await _perform(
+      'VaultController.exportBackup():',
+      (handle) => _useCase.exportBackupV1(
+        handle: handle,
+        destination: destination,
+        revision: revision,
+      ),
+      (_) {
+        saved = true;
+        emit(state.copyWith(busy: false));
+      },
+    );
+    return saved;
+  }
+
+  Future<BackupReviewV1?> previewBackup(
+    String source,
+    String phrase,
+    BackupModeV1 mode,
+    List<BackupSelectionV1> choices,
+  ) async {
+    if (!_hasUnlockedSession) return null;
+    BackupReviewV1? preview;
+    await _perform(
+      'VaultController.previewBackup():',
+      (handle) => _useCase.previewBackupV1(
+        handle: handle,
+        source: source,
+        phrase: phrase,
+        mode: mode,
+        choices: choices,
+      ),
+      (value) {
+        preview = value;
+        emit(state.copyWith(busy: false));
+      },
+    );
+    return preview;
+  }
+
+  Future<bool> applyBackup(
+    String source,
+    String phrase,
+    BackupModeV1 mode,
+    List<BackupSelectionV1> choices,
+    BackupReviewV1 review,
+  ) async {
+    if (!_hasUnlockedSession ||
+        !review.resolved ||
+        state.content?.revision != review.revision) {
+      return false;
+    }
+    var applied = false;
+    await _perform(
+      'VaultController.applyBackup():',
+      (handle) => _useCase.applyBackupV1(
+        handle: handle,
+        source: source,
+        phrase: phrase,
+        mode: mode,
+        choices: choices,
+        review: review,
+      ),
+      (_) {
+        applied = true;
+        emit(state.copyWith(busy: false, content: () => null));
+      },
+      contentMutation: true,
+    );
+    return applied;
+  }
+
+  Future<Object?> localTool(
+    LocalToolCommandV1 command,
+    Object body, {
+    Future<bool> Function()? admitted,
+  }) async {
+    final handle = _handle;
+    final epoch = _epoch;
+    if (_closing ||
+        !_hasUnlockedSession ||
+        handle is! VaultLocalToolsSessionV1) {
+      return null;
+    }
+    final result = await (handle as VaultLocalToolsSessionV1).localTool(
+      command,
+      jsonEncode(body),
+      admitted: admitted,
+    );
+    if (_closing ||
+        isClosed ||
+        _epoch != epoch ||
+        !_hasUnlockedSession ||
+        result.isError) {
+      return null;
+    }
+    if (command == LocalToolCommandV1.configure ||
+        command == LocalToolCommandV1.disconnect ||
+        command == LocalToolCommandV1.request &&
+            body is Map &&
+            body['scope'] is Map &&
+            (body['scope'] as Map)['action'] == 'store') {
+      await loadContent();
+    }
+    return jsonDecode(result.value);
+  }
+
   Future<void> loadContent() {
     const op = 'VaultController.loadContent():';
-    if (state.phase != VaultPhase.unlocked) return Future.value();
+    if (!_hasUnlockedSession) return Future.value();
     return _perform(
       op,
       (handle) =>
@@ -901,7 +1286,7 @@ final class VaultController extends CubitWithEffects<VaultState, VaultEffect> {
     const op = 'VaultController.readCardPreview():';
     if (_closing ||
         isClosed ||
-        state.phase != VaultPhase.unlocked ||
+        !_hasUnlockedSession ||
         state.busy ||
         _handle == null ||
         state.content == null ||
@@ -924,7 +1309,7 @@ final class VaultController extends CubitWithEffects<VaultState, VaultEffect> {
           isClosed ||
           epoch != _epoch ||
           state.content?.revision != revision ||
-          state.phase != VaultPhase.unlocked) {
+          !_hasUnlockedSession) {
         return null;
       }
       if (result.isError) {
@@ -942,7 +1327,7 @@ final class VaultController extends CubitWithEffects<VaultState, VaultEffect> {
     const op = 'VaultController.revealCardField():';
     if (_closing ||
         isClosed ||
-        state.phase != VaultPhase.unlocked ||
+        !_hasUnlockedSession ||
         state.busy ||
         _handle == null ||
         state.content == null ||
@@ -961,7 +1346,7 @@ final class VaultController extends CubitWithEffects<VaultState, VaultEffect> {
           isClosed ||
           epoch != _epoch ||
           state.content?.revision != revision ||
-          state.phase != VaultPhase.unlocked) {
+          !_hasUnlockedSession) {
         return null;
       }
       if (result.isError) {
@@ -977,7 +1362,7 @@ final class VaultController extends CubitWithEffects<VaultState, VaultEffect> {
 
   Future<CardV1?> readCard(String id) async {
     const op = 'VaultController.readCard():';
-    if (state.phase != VaultPhase.unlocked) return null;
+    if (!_hasUnlockedSession) return null;
     CardV1? card;
     await _perform(
       op,
@@ -992,10 +1377,88 @@ final class VaultController extends CubitWithEffects<VaultState, VaultEffect> {
     return card;
   }
 
+  Future<T?> _readCatalog<T>(
+    String operation,
+    FutureDomainResult<T> Function(VaultHandleV1 handle, BigInt revision) read,
+  ) async {
+    final handle = _handle, revision = state.content?.revision, epoch = _epoch;
+    if (_closing ||
+        isClosed ||
+        state.busy ||
+        handle == null ||
+        revision == null ||
+        !_hasUnlockedSession ||
+        !LaunchMode.isInitialized ||
+        !LaunchMode.isForeground) {
+      return null;
+    }
+    final done = Completer<void>();
+    _browseOperations.add(done.future);
+    try {
+      final result = await read(handle, revision);
+      if (_closing ||
+          isClosed ||
+          epoch != _epoch ||
+          state.content?.revision != revision ||
+          !_hasUnlockedSession) {
+        return null;
+      }
+      if (result.isError) {
+        _fail(operation, _error(result.error), clearBusy: false);
+        return null;
+      }
+      return result.value;
+    } finally {
+      done.complete();
+      _browseOperations.remove(done.future);
+    }
+  }
+
+  Future<List<ResourceBindingV1>?> readBindings(String id) => _readCatalog(
+    'VaultController.readBindings():',
+    (h, r) => _useCase.bindingsV1(handle: h, revision: r, id: id),
+  );
+
+  Future<List<CustomValueViewV1>?> readCustomValues(String id) => _readCatalog(
+    'VaultController.readCustomValues():',
+    (h, r) => _useCase.customValuesV1(handle: h, revision: r, id: id),
+  );
+
+  Future<List<HistorySummaryV1>?> readHistory([String? cardId]) => _readCatalog(
+    'VaultController.readHistory():',
+    (h, r) => _useCase.historyV1(handle: h, revision: r, cardId: cardId),
+  );
+
+  Future<HistoricalCardV1?> readHistoricalCard(String id) => _readCatalog(
+    'VaultController.readHistoricalCard():',
+    (h, r) => _useCase.historicalCardV1(handle: h, revision: r, id: id),
+  );
+
+  Future<bool> editCatalog(CatalogEditV1 edit, BigInt revision) async {
+    if (!_hasUnlockedSession || state.content?.revision != revision) {
+      return false;
+    }
+    var saved = false;
+    await _perform(
+      'VaultController.editCatalog():',
+      (handle) => _useCase.catalogEditV1(
+        handle: handle,
+        revision: revision,
+        edit: edit,
+      ),
+      (snapshot) {
+        saved = true;
+        emit(state.copyWith(content: () => snapshot, busy: false));
+      },
+      contentMutation: true,
+    );
+    return saved;
+  }
+
   Future<bool> saveGroup(GroupDraftV1 input, {BigInt? revision}) async {
     const op = 'VaultController.saveGroup():';
     final snapshot = state.content;
-    if (state.phase != VaultPhase.unlocked || snapshot == null) return false;
+    if (!_hasUnlockedSession || snapshot == null) return false;
     var saved = false;
     await _perform(
       op,
@@ -1018,7 +1481,7 @@ final class VaultController extends CubitWithEffects<VaultState, VaultEffect> {
   Future<bool> deleteGroup(String id, {BigInt? revision}) async {
     const op = 'VaultController.deleteGroup():';
     final snapshot = state.content;
-    if (state.phase != VaultPhase.unlocked || snapshot == null) return false;
+    if (!_hasUnlockedSession || snapshot == null) return false;
     var saved = false;
     await _perform(
       op,
@@ -1041,7 +1504,7 @@ final class VaultController extends CubitWithEffects<VaultState, VaultEffect> {
   Future<bool> saveCard(CardDraftV1 input, {BigInt? revision}) async {
     const op = 'VaultController.saveCard():';
     final snapshot = state.content;
-    if (state.phase != VaultPhase.unlocked || snapshot == null) return false;
+    if (!_hasUnlockedSession || snapshot == null) return false;
     var saved = false;
     await _perform(
       op,
@@ -1064,7 +1527,7 @@ final class VaultController extends CubitWithEffects<VaultState, VaultEffect> {
   Future<bool> deleteCard(String id, {BigInt? revision}) async {
     const op = 'VaultController.deleteCard():';
     final snapshot = state.content;
-    if (state.phase != VaultPhase.unlocked || snapshot == null) return false;
+    if (!_hasUnlockedSession || snapshot == null) return false;
     var saved = false;
     await _perform(
       op,
@@ -1088,7 +1551,7 @@ final class VaultController extends CubitWithEffects<VaultState, VaultEffect> {
     const op = 'VaultController.searchCards():';
     if (_closing ||
         isClosed ||
-        state.phase != VaultPhase.unlocked ||
+        !_hasUnlockedSession ||
         state.busy ||
         _handle == null ||
         state.content == null ||
@@ -1112,7 +1575,7 @@ final class VaultController extends CubitWithEffects<VaultState, VaultEffect> {
           epoch != _epoch ||
           search != _searchEpoch ||
           state.content?.revision != revision ||
-          state.phase != VaultPhase.unlocked) {
+          !_hasUnlockedSession) {
         return null;
       }
       if (result.isError) {
@@ -1130,7 +1593,7 @@ final class VaultController extends CubitWithEffects<VaultState, VaultEffect> {
     const op = 'VaultController.readCardListRows():';
     if (_closing ||
         isClosed ||
-        state.phase != VaultPhase.unlocked ||
+        !_hasUnlockedSession ||
         state.busy ||
         _handle == null ||
         state.content == null ||
@@ -1153,7 +1616,7 @@ final class VaultController extends CubitWithEffects<VaultState, VaultEffect> {
       if (_closing ||
           epoch != _epoch ||
           state.content?.revision != revision ||
-          state.phase != VaultPhase.unlocked) {
+          !_hasUnlockedSession) {
         return null;
       }
       if (result.isError) {
@@ -1168,7 +1631,7 @@ final class VaultController extends CubitWithEffects<VaultState, VaultEffect> {
   }
 
   Future<HotpAdvanceV1?> nextHotp(String id, BigInt revision) async {
-    if (state.phase != VaultPhase.unlocked ||
+    if (!_hasUnlockedSession ||
         state.content?.revision != revision ||
         !LaunchMode.isInitialized ||
         !LaunchMode.isForeground) {
@@ -1193,7 +1656,7 @@ final class VaultController extends CubitWithEffects<VaultState, VaultEffect> {
     const op = 'VaultController.readTotp():';
     if (_closing ||
         isClosed ||
-        state.phase != VaultPhase.unlocked ||
+        !_hasUnlockedSession ||
         state.busy ||
         _handle == null ||
         _totpOperation != null ||
@@ -1209,7 +1672,8 @@ final class VaultController extends CubitWithEffects<VaultState, VaultEffect> {
       final result = await _useCase.readTotpV1(
         params: ReadTotpParamsV1(handle: _handle!, id: id),
       );
-      if (_closing ||
+      if (!_hasUnlockedSession ||
+          _closing ||
           epoch != _epoch ||
           state.content?.revision != revision ||
           state.busy) {
@@ -1226,15 +1690,49 @@ final class VaultController extends CubitWithEffects<VaultState, VaultEffect> {
     }
   }
 
+  Future<String?> revealCustomField(String id, String fieldId) => _readCatalog(
+    'VaultController.revealCustomField():',
+    (h, r) => _useCase.customFieldV1(
+      handle: h,
+      revision: r,
+      id: id,
+      fieldId: fieldId,
+      copy: false,
+    ),
+  );
+
   Future<void> copyCard(
     String id, {
+    String? customField,
+    void Function()? onCopied,
     FieldIdV1? field,
     bool currentOtp = false,
+  }) => _copyCard(
+    id,
+    customField: customField,
+    field: field,
+    currentOtp: currentOtp,
+    onCopied: onCopied,
+  );
+
+  Future<void> copyQuickCard(
+    String id,
+    BigInt revision, {
+    required void Function() onCopied,
+  }) => _copyCard(id, quickRevision: revision, onCopied: onCopied);
+
+  Future<void> _copyCard(
+    String id, {
+    String? customField,
+    void Function()? onCopied,
+    FieldIdV1? field,
+    bool currentOtp = false,
+    BigInt? quickRevision,
   }) async {
     const op = 'VaultController.copyCard():';
     if (_closing ||
         isClosed ||
-        state.phase != VaultPhase.unlocked ||
+        !_hasUnlockedSession ||
         state.busy ||
         _handle == null ||
         _exportOperation != null) {
@@ -1245,14 +1743,35 @@ final class VaultController extends CubitWithEffects<VaultState, VaultEffect> {
     activity();
     final operation = () async {
       await _clearClipboard();
-      if (_closing || epoch != _epoch) return;
-      final params = field != null
+      bool mayPublish() =>
+          !_closing &&
+          epoch == _epoch &&
+          _hasUnlockedSession &&
+          (quickRevision == null || state.content?.revision == quickRevision);
+      if (!mayPublish()) return;
+      final params = quickRevision != null
+          ? CopyCardParamsV1.quickCard(
+              handle: _handle!,
+              id: id,
+              revision: quickRevision,
+            )
+          : customField != null
+          ? CopyCardParamsV1.custom(
+              handle: _handle!,
+              id: id,
+              customField: customField,
+              revision: state.content!.revision,
+            )
+          : field != null
           ? CopyCardParamsV1.field(handle: _handle!, id: id, field: field)
           : currentOtp
           ? CopyCardParamsV1.otp(handle: _handle!, id: id)
           : CopyCardParamsV1.account(handle: _handle!, id: id);
-      final result = await _useCase.copyCardV1(params: params);
-      if (_closing || epoch != _epoch) {
+      final result = await _useCase.copyCardV1(
+        params: params,
+        mayPublish: mayPublish,
+      );
+      if (!mayPublish()) {
         if (result.isSuccess) {
           await _useCase.clearRecoveryClipboardV1(
             params: RecoveryClipboardParamsV1(phrase: result.value.text),
@@ -1265,6 +1784,7 @@ final class VaultController extends CubitWithEffects<VaultState, VaultEffect> {
         return;
       }
       _clipboardContent = result.value.text;
+      onCopied?.call();
       _clipboardExpiry = Timer(
         const Duration(seconds: 30),
         () => unawaited(_clearClipboard()),
@@ -1289,7 +1809,7 @@ final class VaultController extends CubitWithEffects<VaultState, VaultEffect> {
     const op = 'VaultController.selectAttachment():';
     if (_closing ||
         isClosed ||
-        state.phase != VaultPhase.unlocked ||
+        !_hasUnlockedSession ||
         state.busy ||
         _exportOperation != null) {
       return null;
@@ -1323,11 +1843,15 @@ final class VaultController extends CubitWithEffects<VaultState, VaultEffect> {
     }
   }
 
-  Future<void> downloadAttachment(String id, String name) async {
+  Future<void> downloadAttachment(
+    String id,
+    String name, {
+    String? fieldId,
+  }) async {
     const op = 'VaultController.downloadAttachment():';
     if (_closing ||
         isClosed ||
-        state.phase != VaultPhase.unlocked ||
+        !_hasUnlockedSession ||
         state.busy ||
         _handle == null ||
         state.content == null ||
@@ -1348,7 +1872,12 @@ final class VaultController extends CubitWithEffects<VaultState, VaultEffect> {
             ),
             cancelled.future.then((_) => null),
           ]);
-      if (selected == null || _closing || epoch != _epoch) return;
+      if (selected == null ||
+          _closing ||
+          epoch != _epoch ||
+          !_withinIdleDeadline) {
+        return;
+      }
       if (selected.isError) {
         _fail(op, _error(selected.error));
         return;
@@ -1358,6 +1887,7 @@ final class VaultController extends CubitWithEffects<VaultState, VaultEffect> {
       emitEffect(const VaultNotice(VaultNoticeKind.exportStarted));
       final result = await _useCase.exportCardAttachmentV1(
         params: ExportCardAttachmentParamsV1(
+          fieldId: fieldId,
           handle: _handle!,
           id: id,
           destination: path,
@@ -1390,7 +1920,7 @@ final class VaultController extends CubitWithEffects<VaultState, VaultEffect> {
     const op = 'VaultController.selectGroupLogo():';
     if (_closing ||
         isClosed ||
-        state.phase != VaultPhase.unlocked ||
+        !_hasUnlockedSession ||
         state.busy ||
         _exportOperation != null ||
         !LaunchMode.isInitialized ||

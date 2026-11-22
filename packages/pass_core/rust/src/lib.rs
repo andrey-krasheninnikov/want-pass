@@ -1,7 +1,10 @@
 pub mod api;
+mod authenticator_import;
+mod backup_crypto;
 pub mod format;
 #[allow(unsafe_code)]
 mod frb_generated;
+mod ssh_authentication;
 mod storage;
 
 // Native Assets resolves this anchor; dladdr identifies that exact loaded library.

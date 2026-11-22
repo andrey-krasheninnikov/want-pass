@@ -1,5 +1,6 @@
 import 'package:domain_error/domain_error.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter/foundation.dart';
 import 'package:file_selector/file_selector.dart';
 import 'package:injectable/injectable.dart';
 import 'package:want_pass/src/feature/vault/application/_barrel.dart';
@@ -7,6 +8,7 @@ import 'package:want_pass_core/want_pass_core.dart';
 
 @Singleton(as: RecoveryExportService)
 final class PlatformRecoveryExportService implements RecoveryExportService {
+  static const _ownedClipboard = MethodChannel('want_pass/clipboard');
   final VaultReporter _reporter;
   const PlatformRecoveryExportService(this._reporter);
   @override
@@ -59,7 +61,9 @@ final class PlatformRecoveryExportService implements RecoveryExportService {
   FutureDomainResult<void> copyV1(String phrase) async {
     const op = 'PlatformRecoveryExportService.copyV1():';
     final result = await captureResult<void>(
-      () => Clipboard.setData(ClipboardData(text: phrase)),
+      () => defaultTargetPlatform == TargetPlatform.macOS
+          ? _ownedClipboard.invokeMethod<void>('write', phrase)
+          : Clipboard.setData(ClipboardData(text: phrase)),
       mapToDomainError: (_, _) => const VaultUnexpectedErrorV1(),
     );
     if (result.isError) {
@@ -77,6 +81,10 @@ final class PlatformRecoveryExportService implements RecoveryExportService {
   FutureDomainResult<void> clearClipboardV1(String expected) async {
     const op = 'PlatformRecoveryExportService.clearClipboardV1():';
     final result = await captureResult<void>(() async {
+      if (defaultTargetPlatform == TargetPlatform.macOS) {
+        await _ownedClipboard.invokeMethod<void>('clearOwned', expected);
+        return;
+      }
       if ((await Clipboard.getData(Clipboard.kTextPlain))?.text == expected) {
         await Clipboard.setData(const ClipboardData(text: ''));
       }

@@ -19,7 +19,7 @@ format-check:
 	cargo fmt --manifest-path packages/pass_core/rust/Cargo.toml -- --check
 
 check: format-check
-	python3 -m unittest discover -s tool -p 'test_clean_data.py'
+	python3 -m unittest discover -s tool -p 'test_*.py'
 	fvm flutter analyze --no-pub
 	cd packages/pass_core && fvm dart test
 	cd apps/want_pass && fvm flutter test --no-pub
@@ -36,6 +36,10 @@ server:
 
 build-macos:
 	cd apps/want_pass && fvm flutter build macos --debug --no-pub
+
+.PHONY: build-macos-production
+build-macos-production:
+	cd apps/want_pass && FLUTTER_MACOS_ARM64_ONLY=false FLUTTER_XCODE_WANT_PASS_CHANNEL=Production fvm flutter build macos --release --no-pub
 
 VAULT_UI_RUN := local_$(shell date +%Y%m%d_%H%M%S)
 native-ui:

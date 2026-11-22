@@ -4,9 +4,9 @@ import 'package:want_pass_core/src/feature/vault/infrastructure/_barrel.dart';
 
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `bytes`, `decode`, `mutate_cards_with`, `mutate_cards`, `primary_login`, `read_cards`, `requires_attachment`, `row`, `snapshot`, `summary`, `summary`, `validate`
+// These functions are ignored because they are not marked as `pub`: `bytes`, `decode`, `mutate_cards_with`, `mutate_cards`, `portable_document`, `primary_login`, `publish_attachment`, `read_cards`, `read_current_totp`, `read_field`, `requires_attachment`, `row`, `snapshot`, `summary`, `summary`, `validate`
 // These types are ignored because they are neither used by any `pub` functions nor (for structs and enums) marked `#[frb(unignore)]`: `DocumentV2`, `StoredAttachment`, `StoredCard`
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_receiver_is_total_eq`, `assert_receiver_is_total_eq`, `assert_receiver_is_total_eq`, `clone`, `clone`, `clone`, `clone`, `cmp`, `drop`, `drop`, `drop`, `eq`, `eq`, `eq`, `partial_cmp`, `zeroize`, `zeroize`, `zeroize`, `zeroize`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_receiver_is_total_eq`, `assert_receiver_is_total_eq`, `assert_receiver_is_total_eq`, `assert_receiver_is_total_eq`, `assert_receiver_is_total_eq`, `assert_receiver_is_total_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `cmp`, `drop`, `drop`, `drop`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `partial_cmp`, `zeroize`, `zeroize`, `zeroize`, `zeroize`
 
 Future<List<String>> servicesV1() =>
     VaultRustLib.instance.api.crateApiCardsServicesV1();
@@ -278,6 +278,7 @@ class CardSummaryV1 {
   final List<String> groupIds;
   final CardTypeV1 cardType;
   final int templateVersion;
+  final String? customTemplateId;
 
   const CardSummaryV1({
     required this.id,
@@ -287,6 +288,7 @@ class CardSummaryV1 {
     required this.groupIds,
     required this.cardType,
     required this.templateVersion,
+    this.customTemplateId,
   });
 
   @override
@@ -297,7 +299,8 @@ class CardSummaryV1 {
       environment.hashCode ^
       groupIds.hashCode ^
       cardType.hashCode ^
-      templateVersion.hashCode;
+      templateVersion.hashCode ^
+      customTemplateId.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -310,7 +313,8 @@ class CardSummaryV1 {
           environment == other.environment &&
           groupIds == other.groupIds &&
           cardType == other.cardType &&
-          templateVersion == other.templateVersion;
+          templateVersion == other.templateVersion &&
+          customTemplateId == other.customTemplateId;
 }
 
 enum CardTypeV1 {
@@ -363,6 +367,7 @@ enum CardTypeV1 {
   identityDocument,
   walletMnemonic,
   walletPrivateKey,
+  custom,
 }
 
 class CardValueV1 {
@@ -387,15 +392,24 @@ class ContentSnapshotV2 {
   final BigInt revision;
   final List<GroupRecordV1> groups;
   final List<CardSummaryV1> cards;
+  final List<ServiceDefinitionV1> services;
+  final List<TemplateDefinitionV1> templates;
 
   const ContentSnapshotV2({
     required this.revision,
     required this.groups,
     required this.cards,
+    required this.services,
+    required this.templates,
   });
 
   @override
-  int get hashCode => revision.hashCode ^ groups.hashCode ^ cards.hashCode;
+  int get hashCode =>
+      revision.hashCode ^
+      groups.hashCode ^
+      cards.hashCode ^
+      services.hashCode ^
+      templates.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -404,7 +418,9 @@ class ContentSnapshotV2 {
           runtimeType == other.runtimeType &&
           revision == other.revision &&
           groups == other.groups &&
-          cards == other.cards;
+          cards == other.cards &&
+          services == other.services &&
+          templates == other.templates;
 }
 
 enum EnvironmentV1 {

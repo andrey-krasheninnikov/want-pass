@@ -1,0 +1,8 @@
+// Only the distribution build selects Production; all local build modes use Development.
+WANT_PASS_CHANNEL = Development
+WANT_PASS_NAME_Development = Want Pass Dev
+WANT_PASS_NAME_Production = Want Pass
+WANT_PASS_ID_Development = foundation.want.pass.dev
+WANT_PASS_ID_Production = foundation.want.pass
+WANT_PASS_PRODUCT_NAME = $(WANT_PASS_NAME_$(WANT_PASS_CHANNEL))
+WANT_PASS_BUNDLE_ID = $(WANT_PASS_ID_$(WANT_PASS_CHANNEL))

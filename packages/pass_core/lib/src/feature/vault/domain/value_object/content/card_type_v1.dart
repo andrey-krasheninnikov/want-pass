@@ -49,7 +49,8 @@ enum CardTypeV1 {
   bankDetails,
   identityDocument,
   walletMnemonic,
-  walletPrivateKey;
+  walletPrivateKey,
+  custom;
 
   bool get requiresAttachment => this == file || this == keyContainer;
 
@@ -60,7 +61,7 @@ enum CardTypeV1 {
     oauth => const {FieldIdV1.clientId, FieldIdV1.clientSecret},
     secretQa => const {FieldIdV1.question, FieldIdV1.answer},
     recoveryCodes => const {FieldIdV1.recoveryCodes},
-    file => const {},
+    file || custom => const {},
     apiKey => const {FieldIdV1.value},
     totp => const {FieldIdV1.totpSeed},
     awsIam => const {FieldIdV1.accessKeyId, FieldIdV1.value},

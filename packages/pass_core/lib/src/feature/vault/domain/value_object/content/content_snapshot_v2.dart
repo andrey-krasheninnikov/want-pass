@@ -5,15 +5,21 @@ final class ContentSnapshotV2 extends Equatable {
   final BigInt revision;
   final List<GroupV1> groups;
   final List<CardSummaryV1> cards;
+  final List<ServiceDefinitionV1> services;
+  final List<TemplateDefinitionV1> templates;
   const ContentSnapshotV2._({
     required this.revision,
     required this.groups,
     required this.cards,
+    required this.services,
+    required this.templates,
   });
   factory ContentSnapshotV2({
     required BigInt revision,
     required List<GroupV1> groups,
     required List<CardSummaryV1> cards,
+    List<ServiceDefinitionV1> services = const [],
+    List<TemplateDefinitionV1> templates = const [],
   }) {
     if (revision.isNegative || groups.length > 10000 || cards.length > 100000) {
       throw const VaultRejectedErrorV1(VaultFailureKindV1.unsupported);
@@ -28,19 +34,25 @@ final class ContentSnapshotV2 extends Equatable {
       revision: revision,
       groups: List.unmodifiable(groups),
       cards: List.unmodifiable(cards),
+      services: List.unmodifiable(services),
+      templates: List.unmodifiable(templates),
     );
   }
   ContentSnapshotV2 copyWith({
     BigInt? revision,
     List<GroupV1>? groups,
     List<CardSummaryV1>? cards,
+    List<ServiceDefinitionV1>? services,
+    List<TemplateDefinitionV1>? templates,
   }) => ContentSnapshotV2(
     revision: revision ?? this.revision,
     groups: groups ?? this.groups,
     cards: cards ?? this.cards,
+    services: services ?? this.services,
+    templates: templates ?? this.templates,
   );
   @override
-  List<Object?> get props => [revision, groups, cards];
+  List<Object?> get props => [revision, groups, cards, services, templates];
   @override
   String toString() => 'ContentSnapshotV2(<redacted>)';
   String toDebugString() =>

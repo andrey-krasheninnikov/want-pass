@@ -104,6 +104,7 @@ const _services = <String, (String, bool)>{
 };
 
 const _types = <CardTypeV1, (String, String, IconData)>{
+  CardTypeV1.custom: ('Custom template', 'Свой шаблон', Icons.tune),
   CardTypeV1.account: ('Account', 'Учётная запись', Icons.person_outline),
   CardTypeV1.apiKey: ('API key', 'API-ключ', Icons.vpn_key_outlined),
   CardTypeV1.pat: ('PAT', 'PAT', Icons.key),
@@ -283,8 +284,23 @@ const _types = <CardTypeV1, (String, String, IconData)>{
   ),
 };
 
-String _serviceLabel(BuildContext context, String id) =>
-    id == 'other' ? _text(context, 'Other', 'Другое') : _services[id]?.$1 ?? id;
+ContentSnapshotV2? _activeCatalog(BuildContext context) => context
+    .findAncestorWidgetOfExactType<VaultContentView>()
+    ?.controller
+    .state
+    .content;
+ServiceDefinitionV1? _customService(BuildContext context, String id) =>
+    _activeCatalog(context)?.services.where((s) => s.id == id).firstOrNull;
+String _serviceLabel(
+  BuildContext context,
+  String id, [
+  List<ServiceDefinitionV1>? custom,
+]) => id == 'other'
+    ? _text(context, 'Other', 'Другое')
+    : _services[id]?.$1 ??
+          custom?.where((s) => s.id == id).firstOrNull?.name ??
+          _customService(context, id)?.name ??
+          id;
 
 String _typeLabel(BuildContext context, CardTypeV1 type) {
   final (en, ru, _) = _types[type]!;
@@ -305,7 +321,20 @@ String _serviceAliases(String id) => switch (id) {
   _ => '',
 };
 
-Widget _serviceIcon(BuildContext context, String service) {
+Widget _serviceIcon(
+  BuildContext context,
+  String service, [
+  List<ServiceDefinitionV1>? custom,
+]) {
+  final item =
+      custom?.where((s) => s.id == service).firstOrNull ??
+      _customService(context, service);
+  if (item != null) {
+    return SizedBox.square(
+      dimension: 22,
+      child: VaultGroupLogo(icon: item.icon, bytes: item.logo),
+    );
+  }
   if (service == 'other') return const Icon(Icons.apps_outlined, size: 20);
   final (label, asset) = _services[service] ?? (service, false);
   final foreground = WantTheme.of(context).color('muted-foreground');

@@ -5,6 +5,7 @@ enum _VaultSection {
   services('Services', 'Сервисы', Icons.apps_outlined),
   types('Types', 'Типы', Icons.category_outlined),
   environments('Environments', 'Окружения', Icons.layers_outlined),
+  history('History', 'История', Icons.history),
   resources('Target resources', 'Ресурсы назначения', Icons.adjust),
   integrations('Integrations', 'Интеграции', Icons.extension_outlined),
   ai('AI settings', 'Настройки AI', Icons.auto_awesome_outlined),
@@ -19,47 +20,59 @@ enum _VaultSection {
 
 final class _VaultSectionView extends StatelessWidget {
   final _VaultSection section;
+  final VaultController controller;
   final CardCatalogV1 catalog;
   final AppearanceController? appearance;
   final VoidCallback? onReset;
+  final ValueChanged<bool>? onBackup;
 
   const _VaultSectionView({
     super.key,
     required this.section,
+    required this.controller,
     required this.catalog,
     required this.appearance,
     required this.onReset,
+    required this.onBackup,
   });
 
   @override
   Widget build(BuildContext context) {
     final child = switch (section) {
-      _VaultSection.services => _CatalogPanel(
-        addLabel: _text(context, 'Add service', 'Добавить сервис'),
-        label: _text(context, 'Built-in services', 'Встроенные сервисы'),
-        entries: [
-          for (final service in catalog.services.where((id) => id != 'other'))
-            _catalogLabel(
-              _serviceIcon(context, service),
-              _serviceLabel(context, service),
-            ),
-        ],
+      _VaultSection.services => _ManagedCatalog(
+        controller: controller,
+        services: true,
+        builtins: _CatalogPanel(
+          addLabel: '',
+          label: _text(context, 'Built-in services', 'Встроенные сервисы'),
+          entries: [
+            for (final service in catalog.services.where((id) => id != 'other'))
+              _catalogLabel(
+                _serviceIcon(context, service),
+                _serviceLabel(context, service),
+              ),
+          ],
+        ),
       ),
-      _VaultSection.types => _CatalogPanel(
-        addLabel: _text(context, 'Add type', 'Добавить тип'),
-        label: _text(context, 'Built-in types', 'Встроенные типы'),
-        entries: [
-          for (final type in _catalogTypes(catalog))
-            _catalogLabel(_typeIcon(type), _typeLabel(context, type)),
-          _catalogLabel(
-            const Icon(Icons.lock_person_outlined, size: 20),
-            _text(
-              context,
-              'Passkey · requires a system provider',
-              'Passkey · требуется системный провайдер',
+      _VaultSection.types => _ManagedCatalog(
+        controller: controller,
+        services: false,
+        builtins: _CatalogPanel(
+          addLabel: '',
+          label: _text(context, 'Built-in types', 'Встроенные типы'),
+          entries: [
+            for (final type in _catalogTypes(catalog))
+              _catalogLabel(_typeIcon(type), _typeLabel(context, type)),
+            _catalogLabel(
+              const Icon(Icons.lock_person_outlined, size: 20),
+              _text(
+                context,
+                'Passkey · requires a system provider',
+                'Passkey · требуется системный провайдер',
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
       _VaultSection.environments => _CatalogPanel(
         addLabel: _text(context, 'Add environment', 'Добавить окружение'),
@@ -69,28 +82,73 @@ final class _VaultSectionView extends StatelessWidget {
             Text(_environmentLabel(environment)),
         ],
       ),
-      _VaultSection.resources => _SectionPanel(
-        title: _text(context, 'No target resources', 'Нет ресурсов назначения'),
-        content: _UnavailableAction(
-          _text(context, 'Add resource', 'Добавить ресурс'),
-        ),
-      ),
-      _VaultSection.integrations => _SectionPanel(
-        title: _text(context, 'No integrations', 'Нет интеграций'),
-        content: _UnavailableAction(
-          _text(context, 'Add integration', 'Добавить интеграцию'),
-        ),
-      ),
+      _VaultSection.resources => _ResourceEditor(controller: controller),
+      _VaultSection.history => _HistoryBrowser(controller: controller),
+      _VaultSection.integrations => _LocalToolsSettings(controller: controller),
       _VaultSection.ai => const _AISettingsView(),
       _VaultSection.general => Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         spacing: 16,
         children: [
           _SectionPanel(
+            title: _text(context, 'Security', 'Безопасность'),
+            content: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                WantButton(
+                  onPressed: () => showProtectionSettings(context, controller),
+                  child: Text(
+                    _text(
+                      context,
+                      'External authenticator',
+                      'Внешний аутентификатор',
+                    ),
+                  ),
+                ),
+                _BiometrySettings(controller),
+              ],
+            ),
+          ),
+          _SectionPanel(
+            title: _text(context, 'Import accounts', 'Импорт учётных записей'),
+            content: WantButton(
+              onPressed: () => showAccountImportDialog(context, controller),
+              child: Text(
+                _text(
+                  context,
+                  'Apple Passwords or Google Authenticator',
+                  'Пароли Apple или Google Authenticator',
+                ),
+              ),
+            ),
+          ),
+          if (defaultTargetPlatform == TargetPlatform.macOS)
+            const _ShortcutSettings(),
+          _SectionPanel(
             title: _text(context, 'Appearance', 'Оформление'),
             content: appearance == null
                 ? null
                 : AppearanceControls(controller: appearance!),
+          ),
+          _SectionPanel(
+            title: _text(context, 'Backups', 'Резервные копии'),
+            content: _Actions(
+              children: [
+                WantButton(
+                  key: const ValueKey('vault-backup-export'),
+                  onPressed: onBackup == null ? null : () => onBackup!(true),
+                  child: Text(_text(context, 'Export backup', 'Экспорт копии')),
+                ),
+                WantButton(
+                  key: const ValueKey('vault-backup-restore'),
+                  variant: WantButtonVariant.secondary,
+                  onPressed: onBackup == null ? null : () => onBackup!(false),
+                  child: Text(
+                    _text(context, 'Restore backup', 'Восстановление из копии'),
+                  ),
+                ),
+              ],
+            ),
           ),
           if (appearance != null)
             _SectionPanel(
@@ -151,7 +209,7 @@ final class _ResetVaultDialog extends StatefulWidget {
 
 final class _ResetVaultDialogState extends State<_ResetVaultDialog> {
   final _phrase = TextEditingController();
-  bool _busy = false, _failed = false;
+  bool _busy = false, _failed = false, _valid = false;
 
   @override
   void dispose() {
@@ -160,7 +218,7 @@ final class _ResetVaultDialogState extends State<_ResetVaultDialog> {
   }
 
   Future<void> _submit() async {
-    if (_busy || _phrase.text.trim().isEmpty) return;
+    if (_busy || !_valid) return;
     setState(() {
       _busy = true;
       _failed = false;
@@ -198,9 +256,7 @@ final class _ResetVaultDialogState extends State<_ResetVaultDialog> {
             WantButton(
               key: const ValueKey('vault-reset-confirm'),
               variant: WantButtonVariant.destructive,
-              onPressed: _busy || _phrase.text.trim().isEmpty
-                  ? null
-                  : () => unawaited(_submit()),
+              onPressed: _busy || !_valid ? null : () => unawaited(_submit()),
               child: Text(
                 _text(context, 'Erase local data', 'Удалить локальные данные'),
               ),
@@ -220,22 +276,15 @@ final class _ResetVaultDialogState extends State<_ResetVaultDialog> {
                     'Локальный сейф и настройки устройства будут удалены без возможности отмены. Введите фразу восстановления словами или в виде JSON с номерами.',
                   ),
                 ),
-                VaultSecretInput(
+                RecoveryPhraseInput(
                   key: const ValueKey('vault-reset-phrase'),
-                  label: _text(
-                    context,
-                    'Recovery phrase',
-                    'Фраза восстановления',
-                  ),
                   controller: _phrase,
+                  inspect: widget.controller.inspectRecoveryWords,
                   enabled: !_busy,
-                  autofocus: true,
-                  last: true,
-                  multiline: true,
-                  concealed: false,
-                  invalid: _failed && rejected,
-                  onSubmitted: () {},
-                  onChanged: (_) => setState(() => _failed = false),
+                  onValidChanged: (valid) => setState(() {
+                    _valid = valid;
+                    _failed = false;
+                  }),
                 ),
                 if (_failed)
                   WantTypography(
@@ -298,7 +347,7 @@ final class _CatalogPanel extends StatelessWidget {
               ),
           ],
         ),
-        _UnavailableAction(addLabel),
+        if (addLabel.isNotEmpty) _UnavailableAction(addLabel),
       ],
     ),
   );

@@ -11,12 +11,16 @@ final class VaultUnlockForm extends StatefulWidget {
   final VaultController controller;
   final FocusNode focusNode;
   final VoidCallback onRecovery;
+  final VoidCallback? onBackup;
+  final bool backupRequested;
   final String Function(VaultErrorV1) errorText;
   const VaultUnlockForm({
     super.key,
     required this.controller,
     required this.focusNode,
     required this.onRecovery,
+    this.onBackup,
+    this.backupRequested = false,
     required this.errorText,
   });
   @override
@@ -25,6 +29,7 @@ final class VaultUnlockForm extends StatefulWidget {
 
 final class _VaultUnlockFormState extends State<VaultUnlockForm> {
   final _password = TextEditingController();
+  late final _biometric = widget.controller.biometricStatus();
   Timer? _debounce;
   String _lastText = '';
   int _revision = 0;
@@ -90,150 +95,190 @@ final class _VaultUnlockFormState extends State<VaultUnlockForm> {
   }
 
   @override
-  Widget build(BuildContext context) =>
-      BlocBuilder<VaultController, VaultState>(
-        bloc: widget.controller,
-        builder: (context, state) {
-          final busy = state.busy || _submitting;
-          final rejected =
-              state.error is VaultRejectedErrorV1 &&
-              (state.error! as VaultRejectedErrorV1).kind ==
-                  VaultFailureKindV1.credentials;
-          final operationalError = switch (state.error) {
-            VaultRejectedErrorV1(
-              kind: VaultFailureKindV1.credentials ||
-                  VaultFailureKindV1.invalidPassword,
-            ) =>
-              null,
-            final error => error,
-          };
-          final showHalo =
-              state.passwordValid == true &&
-              !busy &&
-              !MediaQuery.highContrastOf(context);
-          final submit = WantButton(
-            key: const ValueKey('vault-unlock'),
-            size: WantButtonSize.icon,
-            variant: state.passwordValid == true
-                ? WantButtonVariant.primary
-                : WantButtonVariant.secondary,
-            semanticsLabel: _text('Continue', 'Продолжить'),
-            onPressed: busy ? null : () => unawaited(_submit()),
-            child: const WantIcon(WantIcons.arrowRight),
-          );
-          final help = WantPopover(
-            child: const Icon(Icons.help_outline, size: 18),
-            triggerBuilder: (context, toggle, child) => VaultSecretAction(
-              key: const ValueKey('vault-show-hint'),
-              label: _text('Password hint', 'Подсказка к паролю'),
-              onPressed: busy ? null : toggle,
-              child: child,
-            ),
-            contentBuilder: (context, close) => ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 286),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                mainAxisSize: MainAxisSize.min,
-                spacing: 12,
-                children: [
-                  if (state.hints.password.trim().isEmpty)
-                    WantTypography(
-                      _text(
-                        'No password hint was added.',
-                        'Подсказка к паролю не добавлена.',
-                      ),
-                    )
-                  else
-                    _CopyableHint(
-                      text: state.hints.password,
-                      copy: widget.controller.copyPasswordHint,
-                      enabled: !busy,
-                    ),
-                  WantButton(
-                    key: const ValueKey('vault-recovery'),
-                    variant: WantButtonVariant.secondary,
-                    onPressed: busy
-                        ? null
-                        : () {
-                            close();
-                            widget.onRecovery();
-                          },
-                    child: Text(_text('Recovery', 'Восстановление')),
+  Widget build(
+    BuildContext context,
+  ) => BlocBuilder<VaultController, VaultState>(
+    bloc: widget.controller,
+    builder: (context, state) {
+      final busy = state.busy || _submitting;
+      final rejected =
+          state.error is VaultRejectedErrorV1 &&
+          (state.error! as VaultRejectedErrorV1).kind ==
+              VaultFailureKindV1.credentials;
+      final operationalError = switch (state.error) {
+        VaultRejectedErrorV1(
+          kind: VaultFailureKindV1.credentials ||
+              VaultFailureKindV1.invalidPassword,
+        ) =>
+          null,
+        final error => error,
+      };
+      final showHalo =
+          state.passwordValid == true &&
+          !busy &&
+          !MediaQuery.highContrastOf(context);
+      final submit = WantButton(
+        key: const ValueKey('vault-unlock'),
+        size: WantButtonSize.icon,
+        variant: state.passwordValid == true
+            ? WantButtonVariant.primary
+            : WantButtonVariant.secondary,
+        semanticsLabel: _text('Continue', 'Продолжить'),
+        onPressed: busy ? null : () => unawaited(_submit()),
+        child: const WantIcon(WantIcons.arrowRight),
+      );
+      final help = WantPopover(
+        child: const Icon(Icons.help_outline, size: 18),
+        triggerBuilder: (context, toggle, child) => VaultSecretAction(
+          key: const ValueKey('vault-show-hint'),
+          label: _text('Password hint', 'Подсказка к паролю'),
+          onPressed: busy ? null : toggle,
+          child: child,
+        ),
+        contentBuilder: (context, close) => ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 286),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            mainAxisSize: MainAxisSize.min,
+            spacing: 12,
+            children: [
+              if (state.hints.password.trim().isEmpty)
+                WantTypography(
+                  _text(
+                    'No password hint was added.',
+                    'Подсказка к паролю не добавлена.',
                   ),
-                ],
+                )
+              else
+                _CopyableHint(
+                  text: state.hints.password,
+                  copy: widget.controller.copyPasswordHint,
+                  enabled: !busy,
+                ),
+              WantButton(
+                key: const ValueKey('vault-recovery'),
+                variant: WantButtonVariant.secondary,
+                onPressed: busy
+                    ? null
+                    : () {
+                        close();
+                        widget.onRecovery();
+                      },
+                child: Text(_text('Recovery', 'Восстановление')),
               ),
-            ),
-          );
-          return ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 440),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              spacing: 12,
-              children: [
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  spacing: 8,
-                  children: [
-                    Expanded(
-                      child: VaultSecretInput(
-                        key: const ValueKey('unlock-password'),
-                        label: _text('Master password', 'Мастер-пароль'),
-                        controller: _password,
-                        enabled: !busy,
-                        autofocus: true,
-                        focusNode: widget.focusNode,
-                        last: true,
-                        invalid: _invalidAttempt || rejected,
-                        postfix: help,
-                        onSubmitted: () => unawaited(_submit()),
-                      ),
+              if (widget.onBackup != null)
+                WantButton(
+                  variant: WantButtonVariant.ghost,
+                  onPressed: busy
+                      ? null
+                      : () {
+                          close();
+                          widget.onBackup!();
+                        },
+                  child: Text(
+                    _text(
+                      'Restore a backup after unlock',
+                      'Восстановить копию после входа',
                     ),
-                    Stack(
-                      clipBehavior: Clip.none,
-                      children: [
-                        Positioned.fill(
-                          child: IgnorePointer(
-                            child: ExcludeSemantics(
-                              // Paint the shadow's alpha directly for Impeller.
-                              child: AnimatedContainer(
-                                duration: WantTheme.reducedMotionOf(context)
-                                    ? Duration.zero
-                                    : const Duration(milliseconds: 180),
-                                decoration: BoxDecoration(
-                                  borderRadius: BorderRadius.circular(999),
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: WantTheme.of(context)
-                                          .color('primary')
-                                          .withValues(
-                                            alpha: showHalo ? .25 : 0,
-                                          ),
-                                      blurRadius: 24,
-                                      spreadRadius: 2,
-                                    ),
-                                  ],
+                  ),
+                ),
+            ],
+          ),
+        ),
+      );
+      return ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 440),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          spacing: 12,
+          children: [
+            if (widget.backupRequested)
+              Text(
+                _text(
+                  'Unlock to import your backup.',
+                  'Разблокируйте сейф, чтобы импортировать копию.',
+                ),
+              ),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              spacing: 8,
+              children: [
+                Expanded(
+                  child: VaultSecretInput(
+                    key: const ValueKey('unlock-password'),
+                    label: _text('Master password', 'Мастер-пароль'),
+                    controller: _password,
+                    enabled: !busy,
+                    autofocus: true,
+                    focusNode: widget.focusNode,
+                    last: true,
+                    invalid: _invalidAttempt || rejected,
+                    postfix: help,
+                    onSubmitted: () => unawaited(_submit()),
+                  ),
+                ),
+                Stack(
+                  clipBehavior: Clip.none,
+                  children: [
+                    Positioned.fill(
+                      child: IgnorePointer(
+                        child: ExcludeSemantics(
+                          // Paint the shadow's alpha directly for Impeller.
+                          child: AnimatedContainer(
+                            duration: WantTheme.reducedMotionOf(context)
+                                ? Duration.zero
+                                : const Duration(milliseconds: 180),
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(999),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: WantTheme.of(context)
+                                      .color('primary')
+                                      .withValues(alpha: showHalo ? .25 : 0),
+                                  blurRadius: 24,
+                                  spreadRadius: 2,
                                 ),
-                              ),
+                              ],
                             ),
                           ),
                         ),
-                        submit,
-                      ],
+                      ),
                     ),
+                    submit,
                   ],
                 ),
-                if (operationalError != null)
-                  WantTypography(
-                    widget.errorText(operationalError),
-                    colorRole: 'destructive',
-                    liveRegion: true,
-                  ),
               ],
             ),
-          );
-        },
+            FutureBuilder(
+              future: _biometric,
+              builder: (context, snapshot) {
+                final status = snapshot.data;
+                if (status == null || !status.available || !status.enabled) {
+                  return const SizedBox.shrink();
+                }
+                return WantButton(
+                  variant: WantButtonVariant.secondary,
+                  onPressed: busy
+                      ? null
+                      : widget.controller.unlockWithBiometric,
+                  child: Text(
+                    _text('Unlock with Touch ID', 'Войти с Touch ID'),
+                  ),
+                );
+              },
+            ),
+            if (operationalError != null)
+              WantTypography(
+                widget.errorText(operationalError),
+                colorRole: 'destructive',
+                liveRegion: true,
+              ),
+          ],
+        ),
       );
+    },
+  );
 }
 
 final class _CopyableHint extends StatefulWidget {

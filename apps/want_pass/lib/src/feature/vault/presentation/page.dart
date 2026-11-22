@@ -22,6 +22,24 @@ class VaultPage extends StatefulWidget {
 }
 
 class _VaultPageState extends State<VaultPage> {
+  (int, String, String?)? _shortcutRequest;
+  int _shortcutCount = 0;
+  late final _shortcuts = VaultQuickAccess(widget.controller, () => context, (
+    action,
+    id,
+  ) {
+    if (!mounted) return;
+    if (action != 'unlock') {
+      setState(() => _shortcutRequest = (++_shortcutCount, action, id));
+    }
+    if (widget.controller.state.phase == VaultPhase.locked) _showUnlock();
+  });
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _shortcuts.sync();
+  }
+
   final _password = TextEditingController();
   final _obscurePasswords = ValueNotifier(true);
   PasswordPolicyStatusV4? _passwordPolicy;
@@ -29,8 +47,10 @@ class _VaultPageState extends State<VaultPage> {
   int _passwordRevision = 0;
   bool _savingRecovery = false, _celebratingSetup = false;
   bool _completingRecovery = false;
+  bool _restoreAfterAccess = false;
   final _confirmation = TextEditingController();
   final _phrase = TextEditingController();
+  bool _phraseValid = false;
   final _passwordHint = TextEditingController();
   final _recoveryHint = TextEditingController();
   final _background = WantBackgroundController();
@@ -108,6 +128,7 @@ class _VaultPageState extends State<VaultPage> {
   }
 
   void _clear() {
+    _phraseValid = false;
     _passwordRevision++;
     _passwordDebounce?.cancel();
     _passwordPolicy = null;
@@ -127,6 +148,7 @@ class _VaultPageState extends State<VaultPage> {
 
   @override
   void dispose() {
+    _shortcuts.dispose();
     HardwareKeyboard.instance.removeHandler(_keyboard);
     _password.removeListener(_passwordChanged);
     _confirmation.removeListener(_phraseChanged);
@@ -191,7 +213,7 @@ class _VaultPageState extends State<VaultPage> {
       !_sliding &&
       widget.appearance?.state.busy != true &&
       switch (_step) {
-        0 => !_recovering || _phrase.text.trim().isNotEmpty,
+        0 => !_recovering || _phraseValid,
         1 =>
           _passwordPolicy?.valid == true &&
               _password.text == _confirmation.text,
@@ -627,7 +649,8 @@ class _VaultPageState extends State<VaultPage> {
         if (widget.controller.state.phase == VaultPhase.unlocked) {
           setState(() => _celebratingSetup = true);
         }
-      case VaultCredentialCopiedV1():
+      case VaultCredentialCopiedV1(:final cardId):
+        unawaited(VaultQuickAccess.notifyNative('used', cardId));
         return;
       case VaultNotice(:final kind):
         if (kind == VaultNoticeKind.locked ||
@@ -759,6 +782,33 @@ class _VaultPageState extends State<VaultPage> {
     );
   }
 
+  Widget _restoreChoice(VaultState state) => Column(
+    crossAxisAlignment: CrossAxisAlignment.stretch,
+    spacing: 6,
+    children: [
+      WantCheckbox(
+        key: const ValueKey('setup-restore-backup'),
+        value: _restoreAfterAccess,
+        label: Text(
+          _text(
+            'Restore an encrypted backup after setup',
+            'Восстановить копию после настройки',
+          ),
+        ),
+        onChanged: state.busy
+            ? null
+            : (value) => setState(() => _restoreAfterAccess = value),
+      ),
+      if (_restoreAfterAccess)
+        Text(
+          _text(
+            'First create a password and save a new recovery phrase for this device. Then choose the backup and enter its original phrase.',
+            'Создайте пароль и сохраните новую фразу для этого устройства. Затем выберите копию и введите её исходную фразу.',
+          ),
+        ),
+    ],
+  );
+
   List<Widget> _slides(VaultState state) {
     final challenge = state.setupChallenge;
     final uncertain =
@@ -783,15 +833,16 @@ class _VaultPageState extends State<VaultPage> {
                   ),
                 ),
                 if (state.hints.recovery.isNotEmpty) Text(state.hints.recovery),
-                _secret(
-                  'recovery-phrase',
-                  _text(
-                    'Recovery phrase or JSON',
-                    'Фраза восстановления или JSON',
-                  ),
-                  _phrase,
-                  state,
-                  multiline: true,
+                RecoveryPhraseInput(
+                  key: const ValueKey('recovery-phrase'),
+                  controller: _phrase,
+                  inspect: widget.controller.inspectRecoveryWords,
+                  enabled: !state.busy,
+                  onValidChanged: (valid) {
+                    if (mounted && valid != _phraseValid) {
+                      setState(() => _phraseValid = valid);
+                    }
+                  },
                 ),
               ]
             : [
@@ -801,9 +852,13 @@ class _VaultPageState extends State<VaultPage> {
                     'Выберите язык и тему. Позже их можно изменить вверху.',
                   ),
                 ),
+                if (state.phase == VaultPhase.missing && _firstStep == 0)
+                  _restoreChoice(state),
               ],
       ),
       _slide([
+        if (state.phase == VaultPhase.missing && _firstStep == 1)
+          _restoreChoice(state),
         _secret(
           'master-password',
           _text('Master password', 'Мастер-пароль'),
@@ -847,8 +902,8 @@ class _VaultPageState extends State<VaultPage> {
       _slide([
         Text(
           _text(
-            'These 24 words grant access to this vault. They cannot restore a deleted vault file.',
-            'Эти 24 слова дают доступ к сейфу. Они не восстанавливают удалённый файл сейфа.',
+            'Keep these 24 words. They can recover access to this vault or open a backup exported with this phrase.',
+            'Сохраните 24 слова. С ними можно восстановить доступ к сейфу или открыть копию, созданную с этой фразой.',
           ),
         ),
         if (challenge != null)
@@ -994,11 +1049,20 @@ class _VaultPageState extends State<VaultPage> {
       bloc: widget.controller,
       listenWhen: (a, b) => a.phase != b.phase,
       listener: (context, state) {
+        _shortcuts.sync();
+        if (state.phase == VaultPhase.locked ||
+            state.phase == VaultPhase.unavailable) {
+          _shortcutRequest = null;
+        }
         if (state.phase != VaultPhase.confirmation) {
           _navigationEpoch++;
           _clear();
           setState(() {
             _recovering = false;
+            if (state.phase == VaultPhase.locked ||
+                state.phase == VaultPhase.unavailable) {
+              _restoreAfterAccess = false;
+            }
             if (state.phase != VaultPhase.unlocked) _celebratingSetup = false;
             _includeAppearance =
                 widget.appearance?.state.settings.configured == false;
@@ -1162,6 +1226,15 @@ class _VaultPageState extends State<VaultPage> {
                                             child: VaultContentView(
                                               controller: widget.controller,
                                               appearance: widget.appearance,
+                                              shortcutRequest: _shortcutRequest,
+                                              onShortcutOpened: () {
+                                                _shortcutRequest = null;
+                                              },
+                                              restoreRequested:
+                                                  _restoreAfterAccess,
+                                              onRestoreOpened: () {
+                                                _restoreAfterAccess = false;
+                                              },
                                             ),
                                           )
                                         else if (state.phase ==
@@ -1172,6 +1245,15 @@ class _VaultPageState extends State<VaultPage> {
                                                 controller: widget.controller,
                                                 focusNode: _unlockFocus,
                                                 onRecovery: _startRecovery,
+                                                onBackup: () {
+                                                  setState(
+                                                    () => _restoreAfterAccess =
+                                                        true,
+                                                  );
+                                                  _unlockFocus.requestFocus();
+                                                },
+                                                backupRequested:
+                                                    _restoreAfterAccess,
                                                 errorText: _error,
                                               ),
                                             ),

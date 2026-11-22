@@ -1,6 +1,6 @@
 name: want_pass
 description: Want Pass desktop and mobile client.
-version: 0.1.0+1
+version: 1.0.0+2
 publish_to: none
 resolution: workspace
 environment:

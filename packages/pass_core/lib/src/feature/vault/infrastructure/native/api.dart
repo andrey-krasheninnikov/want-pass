@@ -4,7 +4,7 @@ import 'package:want_pass_core/src/feature/vault/infrastructure/_barrel.dart';
 
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `from_store`
+// These functions are ignored because they are not marked as `pub`: `clear_active`, `from_store`, `unlock_with`
 // These types are ignored because they are neither used by any `pub` functions nor (for structs and enums) marked `#[frb(unignore)]`: `Draft`, `State`
 // These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_receiver_is_total_eq`, `assert_receiver_is_total_eq`, `clone`, `clone`, `eq`, `eq`, `fmt`, `fmt`
 
@@ -12,6 +12,44 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 abstract class Vault implements RustOpaqueInterface {
   Future<AccountRecordV1> accountV1({
     required String id,
+    required BigInt generation,
+  });
+
+  Future<ContentSnapshotV2> applyAccountImportV1({
+    required String token,
+    required List<int> selected,
+    required BigInt generation,
+  });
+
+  Future<void> applyBackupV1({
+    required String source,
+    required String phrase,
+    required BackupStrategyV1 strategy,
+    required List<BackupChoiceV1> choices,
+    required BigInt revision,
+    required String fingerprint,
+    required BigInt generation,
+  });
+
+  Future<void> authorizeOperationV1({
+    required OperationV1 action,
+    required String subject,
+    required String code,
+    required BigInt generation,
+  });
+
+  Future<String> beginExternalTotpV1({required BigInt generation});
+
+  Future<List<ResourceBindingV1>> bindingsV1({
+    required String id,
+    required BigInt revision,
+    required BigInt generation,
+  });
+
+  Future<bool> biometricEnabledV1({required BigInt generation});
+
+  Future<void> cancelAccountImportV1({
+    required String token,
     required BigInt generation,
   });
 
@@ -35,7 +73,26 @@ abstract class Vault implements RustOpaqueInterface {
 
   Future<CardRecordV1> cardV1({required String id, required BigInt generation});
 
+  Future<ContentSnapshotV2> clearHistoryV1({
+    String? cardId,
+    required bool confirmed,
+    required BigInt revision,
+    required BigInt generation,
+  });
+
   Future<void> close();
+
+  Future<void> configureBiometricV1({
+    required bool enable,
+    required BigInt generation,
+  });
+
+  Future<void> configureExternalTotpV1({
+    required String code,
+    required List<OperationV1> operations,
+    required bool disable,
+    required BigInt generation,
+  });
 
   Future<void> confirm({
     required List<String> answers,
@@ -73,8 +130,33 @@ abstract class Vault implements RustOpaqueInterface {
     required BigInt generation,
   });
 
+  Future<TotpCodeV1> copyCurrentTotpV1({
+    required String id,
+    required BigInt generation,
+  });
+
+  Future<String> copyQuickCardV1({
+    required String id,
+    required BigInt revision,
+    required BigInt generation,
+  });
+
   Future<TotpCodeV1> currentTotpV1({
     required String id,
+    required BigInt generation,
+  });
+
+  Future<List<CustomValueViewV1>> customCardValuesV1({
+    required String id,
+    required BigInt revision,
+    required BigInt generation,
+  });
+
+  Future<String> customFieldValueV1({
+    required String id,
+    required String fieldId,
+    required bool copy,
+    required BigInt revision,
     required BigInt generation,
   });
 
@@ -102,8 +184,28 @@ abstract class Vault implements RustOpaqueInterface {
     required BigInt generation,
   });
 
+  Future<void> enrollExternalTotpV1({
+    required String code,
+    required List<OperationV1> operations,
+    required BigInt generation,
+  });
+
   Future<void> exportAttachmentV1({
     required String id,
+    required String destination,
+    required BigInt revision,
+    required BigInt generation,
+  });
+
+  Future<void> exportBackupV1({
+    required String destination,
+    required BigInt revision,
+    required BigInt generation,
+  });
+
+  Future<void> exportCustomFileV1({
+    required String id,
+    required String fieldId,
     required String destination,
     required BigInt revision,
     required BigInt generation,
@@ -123,6 +225,24 @@ abstract class Vault implements RustOpaqueInterface {
 
   Future<VaultHintsV2> hintsV2();
 
+  Future<HistoricalCardV1> historicalCardV1({
+    required String id,
+    required BigInt revision,
+    required BigInt generation,
+  });
+
+  Future<List<HistorySummaryV1>> historyV1({
+    String? cardId,
+    required BigInt revision,
+    required BigInt generation,
+  });
+
+  Future<String> localToolsV1({
+    required LocalToolCommandV1 command,
+    required String body,
+    required BigInt generation,
+  });
+
   void lock();
 
   Future<HotpAdvanceV1> nextHotpV1({
@@ -138,6 +258,13 @@ abstract class Vault implements RustOpaqueInterface {
       VaultRustLib.instance.api.crateApiVaultOpenApplicationV1(
         directory: directory,
       );
+
+  Future<AccountImportPreviewV1> prepareAccountImportV1({
+    required AccountImportSourceV1 source,
+    required List<String> payloads,
+    required BigInt revision,
+    required BigInt generation,
+  });
 
   Future<RecoveryChallenge> prepareCreation({
     required String password,
@@ -172,12 +299,44 @@ abstract class Vault implements RustOpaqueInterface {
     required BigInt generation,
   });
 
+  Future<BackupPreviewV1> previewBackupV1({
+    required String source,
+    required String phrase,
+    required BackupStrategyV1 strategy,
+    required List<BackupChoiceV1> choices,
+    required BigInt generation,
+  });
+
+  Future<ProtectionSettingsV1> protectionSettingsV1({
+    required BigInt generation,
+  });
+
   Future<RecoveryChallengeV3> regenerateRecoveryV3({
+    required BigInt generation,
+  });
+
+  Future<ContentSnapshotV2> removeServiceV1({
+    required String id,
+    String? replacement,
+    required bool preserve,
+    required BigInt revision,
     required BigInt generation,
   });
 
   Future<void> resetApplicationV1({
     required String phrase,
+    required BigInt generation,
+  });
+
+  Future<ContentSnapshotV2> restoreHistoryV1({
+    required String id,
+    required BigInt revision,
+    required BigInt generation,
+  });
+
+  Future<String> revealCardFieldV1({
+    required String id,
+    required FieldIdV1 field,
     required BigInt generation,
   });
 
@@ -187,8 +346,21 @@ abstract class Vault implements RustOpaqueInterface {
     required BigInt generation,
   });
 
+  Future<ContentSnapshotV2> saveBindingsV1({
+    required String id,
+    required List<ResourceBindingV1> bindings,
+    required BigInt revision,
+    required BigInt generation,
+  });
+
   Future<ContentSnapshotV2> saveCardV1({
     required CardInputV1 input,
+    required BigInt revision,
+    required BigInt generation,
+  });
+
+  Future<ContentSnapshotV2> saveCustomCardV1({
+    required CustomCardInputV1 input,
     required BigInt revision,
     required BigInt generation,
   });
@@ -205,6 +377,20 @@ abstract class Vault implements RustOpaqueInterface {
     required BigInt generation,
   });
 
+  Future<ContentSnapshotV2> saveServiceV1({
+    required ServiceDefinitionV1 service,
+    required BigInt revision,
+    required BigInt generation,
+  });
+
+  Future<ContentSnapshotV2> saveTemplateV1({
+    String? id,
+    required String name,
+    required List<TemplateFieldV1> fields,
+    required BigInt revision,
+    required BigInt generation,
+  });
+
   Future<CardMatchesV1> searchCardsV1({
     required CardSearchV1 query,
     required BigInt revision,
@@ -214,6 +400,8 @@ abstract class Vault implements RustOpaqueInterface {
   Future<VaultStatus> status();
 
   Future<void> unlock({required String password, required BigInt generation});
+
+  Future<void> unlockBiometricV1({required BigInt generation});
 
   Future<void> unlockV3({required String password, required BigInt generation});
 

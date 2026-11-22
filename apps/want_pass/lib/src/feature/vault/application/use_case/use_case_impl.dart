@@ -5,7 +5,174 @@ import 'package:want_pass_core/want_pass_core.dart';
 
 @Singleton(as: VaultUseCase)
 final class VaultUseCaseImpl implements VaultUseCase {
+  FutureDomainResult<T> _catalogCall<T>(
+    String operation,
+    FutureDomainResult<T> Function(VaultCatalogAccessV1) call,
+  ) async {
+    final access = _access;
+    if (access is! VaultCatalogAccessV1) {
+      return Result.error(
+        const VaultRejectedErrorV1(VaultFailureKindV1.unavailable),
+      );
+    }
+    final result = await call(access as VaultCatalogAccessV1);
+    if (result.isError) {
+      reportVaultSafely(
+        _reporter,
+        layer: VaultDiagnosticLayer.application,
+        operation: operation,
+        error: result.error is VaultErrorV1
+            ? result.error as VaultErrorV1
+            : const VaultUnexpectedErrorV1(),
+      );
+    }
+    return result;
+  }
+
+  @override
+  FutureDomainResult<List<ResourceBindingV1>> bindingsV1({
+    required VaultHandleV1 handle,
+    required BigInt revision,
+    required String id,
+  }) => _catalogCall(
+    'VaultUseCaseImpl.bindingsV1():',
+    (access) => access.bindingsV1(handle: handle, revision: revision, id: id),
+  );
+  @override
+  FutureDomainResult<List<CustomValueViewV1>> customValuesV1({
+    required VaultHandleV1 handle,
+    required BigInt revision,
+    required String id,
+  }) => _catalogCall(
+    'VaultUseCaseImpl.customValuesV1():',
+    (access) =>
+        access.customValuesV1(handle: handle, revision: revision, id: id),
+  );
+  @override
+  FutureDomainResult<List<HistorySummaryV1>> historyV1({
+    required VaultHandleV1 handle,
+    required BigInt revision,
+    required String? cardId,
+  }) => _catalogCall(
+    'VaultUseCaseImpl.historyV1():',
+    (access) =>
+        access.historyV1(handle: handle, revision: revision, cardId: cardId),
+  );
+  @override
+  FutureDomainResult<HistoricalCardV1> historicalCardV1({
+    required VaultHandleV1 handle,
+    required BigInt revision,
+    required String id,
+  }) => _catalogCall(
+    'VaultUseCaseImpl.historicalCardV1():',
+    (access) =>
+        access.historicalCardV1(handle: handle, revision: revision, id: id),
+  );
+  @override
+  FutureDomainResult<ContentSnapshotV2> catalogEditV1({
+    required VaultHandleV1 handle,
+    required BigInt revision,
+    required CatalogEditV1 edit,
+  }) => _catalogCall(
+    'VaultUseCaseImpl.catalogEditV1():',
+    (access) =>
+        access.catalogEditV1(handle: handle, revision: revision, edit: edit),
+  );
+  @override
+  FutureDomainResult<String> copyQuickCardV1({
+    required VaultHandleV1 handle,
+    required BigInt revision,
+    required String id,
+  }) => _catalogCall(
+    'VaultUseCaseImpl.copyQuickCardV1():',
+    (access) =>
+        access.copyQuickCardV1(handle: handle, revision: revision, id: id),
+  );
+  @override
+  FutureDomainResult<String> customFieldV1({
+    required VaultHandleV1 handle,
+    required BigInt revision,
+    required String id,
+    required String fieldId,
+    required bool copy,
+  }) => _catalogCall(
+    'VaultUseCaseImpl.customFieldV1():',
+    (access) => access.customFieldV1(
+      handle: handle,
+      revision: revision,
+      id: id,
+      fieldId: fieldId,
+      copy: copy,
+    ),
+  );
+  @override
+  FutureDomainResult<void> exportCustomFileV1({
+    required VaultHandleV1 handle,
+    required BigInt revision,
+    required String id,
+    required String fieldId,
+    required String destination,
+  }) => _catalogCall(
+    'VaultUseCaseImpl.exportCustomFileV1():',
+    (access) => access.exportCustomFileV1(
+      handle: handle,
+      revision: revision,
+      id: id,
+      fieldId: fieldId,
+      destination: destination,
+    ),
+  );
   final VaultAccessService _access;
+  @override
+  FutureDomainResult<RecoveryWordsV1> inspectRecoveryWordsV1(String input) =>
+      _access.inspectRecoveryWordsV1(input);
+  @override
+  FutureDomainResult<String?> selectBackupSourceV1() =>
+      _files.selectBackupSourceV1();
+  @override
+  FutureDomainResult<String?> withBackupDestinationV1(
+    Future<bool> Function(String) save,
+  ) => _files.withBackupDestinationV1(save);
+  @override
+  FutureDomainResult<void> exportBackupV1({
+    required VaultHandleV1 handle,
+    required String destination,
+    required BigInt revision,
+  }) => _access.exportBackupV1(
+    handle: handle,
+    destination: destination,
+    revision: revision,
+  );
+  @override
+  FutureDomainResult<BackupReviewV1> previewBackupV1({
+    required VaultHandleV1 handle,
+    required String source,
+    required String phrase,
+    required BackupModeV1 mode,
+    required List<BackupSelectionV1> choices,
+  }) => _access.previewBackupV1(
+    handle: handle,
+    source: source,
+    phrase: phrase,
+    mode: mode,
+    choices: choices,
+  );
+  @override
+  FutureDomainResult<void> applyBackupV1({
+    required VaultHandleV1 handle,
+    required String source,
+    required String phrase,
+    required BackupModeV1 mode,
+    required List<BackupSelectionV1> choices,
+    required BackupReviewV1 review,
+  }) => _access.applyBackupV1(
+    handle: handle,
+    source: source,
+    phrase: phrase,
+    mode: mode,
+    choices: choices,
+    review: review,
+  );
   final VaultReporter _reporter;
   final RecoveryExportService _export;
   final GroupLogoService _logos;
@@ -17,6 +184,38 @@ final class VaultUseCaseImpl implements VaultUseCase {
     this._logos,
     this._files,
   );
+  @override
+  FutureDomainResult<AccountImportPreviewV1> prepareAccountImportV1({
+    required VaultHandleV1 handle,
+    required AccountImportSourceV1 source,
+    required List<String> payloads,
+    required BigInt revision,
+  }) => _access.prepareAccountImportV1(
+    handle: handle,
+    source: source,
+    payloads: payloads,
+    revision: revision,
+  );
+  @override
+  FutureDomainResult<ContentSnapshotV2> applyAccountImportV1({
+    required VaultHandleV1 handle,
+    required String token,
+    required List<int> selected,
+  }) => _access.applyAccountImportV1(
+    handle: handle,
+    token: token,
+    selected: selected,
+  );
+  @override
+  FutureDomainResult<void> cancelAccountImportV1({
+    required VaultHandleV1 handle,
+    required String token,
+  }) => _access.cancelAccountImportV1(handle: handle, token: token);
+  @override
+  FutureDomainResult<List<String>?> selectAccountImportV1({
+    required AccountImportSourceV1 source,
+    required bool clipboard,
+  }) => _files.selectAccountImportV1(source, clipboard: clipboard);
   @override
   FutureDomainResult<InitializeVaultResultV1> initializeV1({
     required InitializeVaultParamsV1 params,
@@ -1052,11 +1251,17 @@ final class VaultUseCaseImpl implements VaultUseCase {
   }) async {
     const op = 'VaultUseCaseImpl.readCardFieldV1():';
     final result = await captureResult<ReadCardFieldResultV1>(() async {
-      final value = await _access.copyCardFieldV1(
-        handle: params.handle,
-        id: params.id,
-        field: params.field,
-      );
+      final handle = params.handle;
+      final value = handle is VaultProtectionSessionV1
+          ? await (handle as VaultProtectionSessionV1).revealField(
+              params.id,
+              params.field,
+            )
+          : await _access.copyCardFieldV1(
+              handle: handle,
+              id: params.id,
+              field: params.field,
+            );
       if (value.isError) throw value.error;
       return ReadCardFieldResultV1(value: value.value);
     }, mapToDomainError: (_, _) => const VaultUnexpectedErrorV1());
@@ -1202,11 +1407,30 @@ final class VaultUseCaseImpl implements VaultUseCase {
   @override
   FutureDomainResult<CopyCardResultV1> copyCardV1({
     required CopyCardParamsV1 params,
+    required bool Function() mayPublish,
   }) async {
     const op = 'VaultUseCaseImpl.copyCardV1():';
     final result = await captureResult<CopyCardResultV1>(() async {
       String text;
       switch (params.kind) {
+        case CardCopyKindV1.custom:
+          final result = await customFieldV1(
+            handle: params.handle,
+            revision: params.revision!,
+            id: params.id,
+            fieldId: params.customField!,
+            copy: true,
+          );
+          if (result.isError) throw result.error;
+          text = result.value;
+        case CardCopyKindV1.quickCard:
+          final result = await copyQuickCardV1(
+            handle: params.handle,
+            revision: params.revision!,
+            id: params.id,
+          );
+          if (result.isError) throw result.error;
+          text = result.value;
         case CardCopyKindV1.account:
           final result = await _access.copyAccountV1(
             handle: params.handle,
@@ -1215,10 +1439,12 @@ final class VaultUseCaseImpl implements VaultUseCase {
           if (result.isError) throw result.error;
           text = result.value;
         case CardCopyKindV1.otp:
-          final result = await _access.currentTotpV1(
-            handle: params.handle,
-            id: params.id,
-          );
+          final handle = params.handle;
+          final result = handle is VaultProtectionSessionV1
+              ? await (handle as VaultProtectionSessionV1).copyCurrentOtp(
+                  params.id,
+                )
+              : await _access.currentTotpV1(handle: handle, id: params.id);
           if (result.isError) throw result.error;
           text = result.value.code;
         case CardCopyKindV1.field:
@@ -1229,6 +1455,9 @@ final class VaultUseCaseImpl implements VaultUseCase {
           );
           if (result.isError) throw result.error;
           text = result.value;
+      }
+      if (!mayPublish()) {
+        throw const VaultRejectedErrorV1(VaultFailureKindV1.stale);
       }
       final copied = await _export.copyV1(text);
       if (copied.isError) throw copied.error;
@@ -1299,12 +1528,20 @@ final class VaultUseCaseImpl implements VaultUseCase {
   }) async {
     const op = 'VaultUseCaseImpl.exportCardAttachmentV1():';
     final result = await captureResult<ExportCardAttachmentResultV1>(() async {
-      final result = await _access.exportAttachmentV1(
-        handle: params.handle,
-        id: params.id,
-        destination: params.destination,
-        revision: params.revision,
-      );
+      final result = params.fieldId != null
+          ? await exportCustomFileV1(
+              handle: params.handle,
+              revision: params.revision,
+              id: params.id,
+              fieldId: params.fieldId!,
+              destination: params.destination,
+            )
+          : await _access.exportAttachmentV1(
+              handle: params.handle,
+              id: params.id,
+              destination: params.destination,
+              revision: params.revision,
+            );
       if (result.isError) throw result.error;
       return const ExportCardAttachmentResultV1();
     }, mapToDomainError: (_, _) => const VaultUnexpectedErrorV1());

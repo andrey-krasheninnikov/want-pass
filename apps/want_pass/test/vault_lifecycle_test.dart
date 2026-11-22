@@ -1,3 +1,5 @@
+import 'support/backup_access_fixture.dart';
+
 import 'package:want_pass/src/feature/vault/infrastructure/_barrel.dart';
 
 import 'dart:async';
@@ -355,6 +357,65 @@ void main() {
     await controller.close();
     await events.close();
   });
+
+  test(
+    'an expired asynchronous field read cannot publish to the clipboard',
+    () async {
+      final access = _Access();
+      access.handle.state = VaultAccessStateV1.unlocked;
+      final clock = _SuspendedClock();
+      final exported = _Export();
+      final events = StreamController<VaultLockSignal>.broadcast();
+      final controller = _controller(access, events.stream, exported, clock);
+      try {
+        await controller.init();
+        final pending = Completer<DomainResult<String>>();
+        access.delayedField = pending;
+        final copying = controller.copyCard(
+          'synthetic-id',
+          field: FieldIdV1.password,
+        );
+        await Future<void>.delayed(Duration.zero);
+        expect(access.fieldCopies, 1);
+        clock.elapsedAfterPause = const Duration(minutes: 6);
+        pending.complete(const Result.success('synthetic value'));
+        await copying;
+        expect(exported.writes, 0);
+        expect(access.handle.invalidations, 1);
+      } finally {
+        await controller.close();
+        await events.close();
+      }
+    },
+  );
+
+  test(
+    'activity cannot renew an expired session before its timer callback',
+    () async {
+      final access = _Access();
+      final clock = _SuspendedClock();
+      final events = StreamController<VaultLockSignal>.broadcast();
+      final controller = _controller(access, events.stream, null, clock);
+      try {
+        await controller.init();
+        await controller.prepareCreation(
+          password: _password,
+          confirmation: _password,
+        );
+        expect(controller.state.phase, VaultPhase.confirmation);
+        clock.elapsedAfterPause = const Duration(minutes: 6);
+        final locked = controller.stream.firstWhere(
+          (state) => state.phase == VaultPhase.missing,
+        );
+        controller.activity();
+        await locked;
+        expect(access.handle.invalidations, 1);
+      } finally {
+        await controller.close();
+        await events.close();
+      }
+    },
+  );
 
   testWidgets('five idle minutes lock; activity renews the deadline', (
     tester,
@@ -888,11 +949,7 @@ void main() {
         of: find.byKey(ValueKey(key)),
         matching: find.bySubtype<EditableText>(),
       );
-      await _enter(
-        tester,
-        field('recovery-phrase'),
-        'synthetic recovery phrase',
-      );
+      await _enter(tester, field('recovery-phrase'), backupFixturePhrase);
       await tester.tap(find.byKey(const ValueKey('setup-next')));
       await tester.pumpAndSettle();
       await _enter(tester, field('master-password'), _password);
@@ -1821,7 +1878,7 @@ void main() {
         of: find.byKey(const ValueKey('recovery-phrase')),
         matching: find.bySubtype<EditableText>(),
       );
-      const input = '{\n"1":"one",\n"2":"two"\n}';
+      final input = backupFixtureJson;
       await _enter(tester, field, input);
       expect(tester.widget<EditableText>(field).controller.text, input);
       access.validation = Completer<DomainResult<void>>();
@@ -1944,6 +2001,7 @@ VaultController _controller(
   _Access access,
   Stream<VaultLockSignal> events, [
   RecoveryExportService? export,
+  Stopwatch? idleClock,
 ]) => VaultController(
   VaultUseCaseImpl(
     access,
@@ -1954,7 +2012,14 @@ VaultController _controller(
   ),
   const _Reporter(),
   events,
+  idleClock: idleClock,
 );
+
+final class _SuspendedClock extends Stopwatch {
+  Duration elapsedAfterPause = Duration.zero;
+  @override
+  int get elapsedMicroseconds => elapsedAfterPause.inMicroseconds;
+}
 
 final class _Handle implements VaultHandleV1 {
   VaultAccessStateV1 state = VaultAccessStateV1.missing;
@@ -1974,8 +2039,31 @@ final class _Handle implements VaultHandleV1 {
   }
 }
 
-final class _Access implements VaultAccessService {
+final class _Access with BackupAccessFixture implements VaultAccessService {
+  @override
+  FutureDomainResult<AccountImportPreviewV1> prepareAccountImportV1({
+    required VaultHandleV1 handle,
+    required AccountImportSourceV1 source,
+    required List<String> payloads,
+    required BigInt revision,
+  }) async =>
+      const Result.error(VaultRejectedErrorV1(VaultFailureKindV1.unavailable));
+  @override
+  FutureDomainResult<ContentSnapshotV2> applyAccountImportV1({
+    required VaultHandleV1 handle,
+    required String token,
+    required List<int> selected,
+  }) async =>
+      const Result.error(VaultRejectedErrorV1(VaultFailureKindV1.unavailable));
+  @override
+  FutureDomainResult<void> cancelAccountImportV1({
+    required VaultHandleV1 handle,
+    required String token,
+  }) async =>
+      const Result.error(VaultRejectedErrorV1(VaultFailureKindV1.unavailable));
+
   String? accountCopy, fieldCopy;
+  Completer<DomainResult<String>>? delayedField;
   int fullCardReads = 0, fieldCopies = 0, rowReads = 0, previewReads = 0;
   ContentSnapshotV2? snapshot;
   List<CardRowV1> rows = const [];
@@ -2128,6 +2216,7 @@ final class _Access implements VaultAccessService {
     required FieldIdV1 field,
   }) async {
     fieldCopies++;
+    if (delayedField != null) return delayedField!.future;
     return fieldCopy == null
         ? const Result.error(
             VaultRejectedErrorV1(VaultFailureKindV1.unavailable),
@@ -2462,12 +2551,12 @@ final class _Startup implements StartupUseCase {
 
 Future<void> _enter(WidgetTester tester, Finder field, String value) async {
   await tester.ensureVisible(field);
-  await tester.tap(field);
-  await tester.pump();
-  expect(
-    tester.state<EditableTextState>(field).widget.focusNode.hasFocus,
-    isTrue,
-  );
+  final focus = tester.state<EditableTextState>(field).widget.focusNode;
+  if (!focus.hasFocus) {
+    await tester.tap(field);
+    await tester.pump();
+  }
+  expect(focus.hasFocus, isTrue);
   // WidgetTester.showKeyboard matches only the exact EditableText runtime type.
   tester.testTextInput.enterText(value);
   await tester.pump();
@@ -2478,7 +2567,7 @@ final class _Export implements RecoveryExportService {
   String clipboard = '';
   Completer<void>? clearing;
   Completer<void>? writing;
-  int clears = 0;
+  int clears = 0, writes = 0;
   @override
   FutureDomainResult<String?> selectFileV1() => selection.future;
   @override
@@ -2486,6 +2575,7 @@ final class _Export implements RecoveryExportService {
   @override
   FutureDomainResult<void> copyV1(String phrase) async {
     await writing?.future;
+    writes++;
     clipboard = phrase;
     return const Result.success(null);
   }

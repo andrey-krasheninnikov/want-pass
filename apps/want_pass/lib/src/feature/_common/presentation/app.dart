@@ -15,6 +15,7 @@ class WantPassApp extends StatefulWidget {
   final VaultController vault;
   final AppearanceController? appearance;
   final bool playStartupIntro;
+  final GlobalKey<NavigatorState>? navigatorKey;
 
   const WantPassApp({
     super.key,
@@ -22,6 +23,7 @@ class WantPassApp extends StatefulWidget {
     required this.vault,
     this.appearance,
     this.playStartupIntro = false,
+    this.navigatorKey,
   });
 
   @override
@@ -45,6 +47,7 @@ class _WantPassAppState extends State<WantPassApp> {
 
   Widget _application(AppearanceState appearanceState) => MaterialApp(
     title: 'Want Pass',
+    navigatorKey: widget.navigatorKey,
     debugShowCheckedModeBanner: false,
     locale: appearanceState.settings.language == null
         ? null

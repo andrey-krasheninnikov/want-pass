@@ -2,15 +2,22 @@ import 'package:flutter/material.dart';
 import 'package:launch_mode/launch_mode.dart';
 import 'package:want_allure/want_allure.dart';
 import 'package:want_pass/src/core/_barrel.dart';
+import 'package:want_pass/src/feature/vault/presentation/_barrel.dart';
 import 'package:want_pass/src/feature/_common/presentation/_barrel.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   LaunchMode.initializeAutomatically();
   try {
-    final runtime = await AppRuntime.bootstrap();
+    final navigator = GlobalKey<NavigatorState>();
+    late final AppRuntime runtime;
+    runtime = await AppRuntime.bootstrap(
+      codePrompt: (operation) =>
+          promptVaultOperation(navigator, runtime.vault, operation),
+    );
     await presentWantPass(
       WantPassApp(
+        navigatorKey: navigator,
         startup: runtime.startup,
         vault: runtime.vault,
         appearance: runtime.appearance,

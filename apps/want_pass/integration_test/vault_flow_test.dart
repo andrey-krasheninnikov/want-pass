@@ -177,8 +177,13 @@ void main() {
           'unlock-password',
           'Wrong synthetic UI password 2026!',
         );
+        final denied = runtime.vault.stream.firstWhere(
+          (state) =>
+              state.phase == VaultPhase.locked &&
+              state.error is VaultRejectedErrorV1,
+        );
         await _tap(tester, 'vault-unlock');
-        await _until(tester, () => runtime.vault.state.error != null);
+        await denied.timeout(const Duration(seconds: 15));
         expect(runtime.vault.state.phase, VaultPhase.locked);
         expect(find.text('Synthetic password hint'), findsNothing);
         await _tap(tester, 'vault-show-hint');
@@ -249,11 +254,16 @@ void main() {
       expect(find.byType(WantBackgroundMotion), findsNothing);
       await _captureWorkspace(tester, captureBoundary, 'workspace-native');
       completed = true;
+    } catch (_) {
+      debugPrint(
+        'Native UI failure during $phase, vault phase: ${runtime.vault.state.phase.name}',
+      );
+      rethrow;
     } finally {
-      FlutterError.onError = productErrorHandler;
-      await runtime.close();
       await tester.pumpWidget(const SizedBox.shrink());
       await tester.pump();
+      FlutterError.onError = productErrorHandler;
+      await runtime.close().timeout(const Duration(seconds: 20));
       if ((!completed || phase == 'reopen') && await directory.exists()) {
         await directory.delete(recursive: true);
       }

@@ -15,6 +15,17 @@ class CleanDataTest(unittest.TestCase):
         for name in ["vault.wpass", "vault.lock"]:
             (self.root / "vault" / name).write_bytes(b"synthetic")
         (self.root / "appearance.json").write_text("{}")
+    def test_dev_reset_preserves_production_and_legacy_vaults(self):
+        support = self.home / "Library/Application Support"
+        production = support / "foundation.want.pass/production/vault/vault.wpass"
+        legacy = support / "foundation.want.pass/vault/vault.wpass"
+        for path in (production, legacy):
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(b"preserve")
+        self.assertEqual(clean(self.home), 2)
+        for path in (production, legacy):
+            self.assertEqual(path.read_bytes(), b"preserve")
+
     def test_reset_preserves_exports_and_old_namespace(self):
         export = self.home / "recovery.txt"; export.write_text("synthetic")
         old = self.root.parent / "io.github.andreykrasheninnikov.wantPass"

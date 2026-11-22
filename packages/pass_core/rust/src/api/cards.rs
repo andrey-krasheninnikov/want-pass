@@ -1,6 +1,12 @@
+mod catalog_operations;
+mod import_store;
+mod tool_store;
+use super::catalog::*;
 use super::content::{StoredGroup, bounded, new_id, validate_logo};
 use super::{GroupInputV1, GroupRecordV1, Vault, VaultFailure};
 use base64::{Engine, engine::general_purpose::STANDARD as BASE64};
+pub(super) use catalog_operations::CardRevision;
+use catalog_operations::CustomCardDataV1;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
 use zeroize::{Zeroize, ZeroizeOnDrop, Zeroizing};
@@ -57,6 +63,7 @@ pub enum CardTypeV1 {
     IdentityDocument,
     WalletMnemonic,
     WalletPrivateKey,
+    Custom,
 }
 #[derive(Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
@@ -135,7 +142,7 @@ pub enum FieldIdV1 {
     Address,
     Scopes,
 }
-#[derive(Clone, Serialize, Deserialize, Zeroize)]
+#[derive(Clone, PartialEq, Eq, Serialize, Deserialize, Zeroize)]
 #[serde(deny_unknown_fields)]
 pub struct CardValueV1 {
     #[zeroize(skip)]
@@ -165,6 +172,7 @@ pub struct CardSummaryV1 {
     pub group_ids: Vec<String>,
     pub card_type: CardTypeV1,
     pub template_version: u32,
+    pub custom_template_id: Option<String>,
 }
 pub struct AttachmentSummaryV1 {
     pub name: String,
@@ -181,6 +189,8 @@ pub struct ContentSnapshotV2 {
     pub revision: u64,
     pub groups: Vec<GroupRecordV1>,
     pub cards: Vec<CardSummaryV1>,
+    pub services: Vec<ServiceDefinitionV1>,
+    pub templates: Vec<TemplateDefinitionV1>,
 }
 pub struct CardSearchV1 {
     pub text: String,
@@ -327,14 +337,24 @@ pub struct HotpAdvanceV1 {
 
 #[derive(Serialize, Deserialize, Zeroize, ZeroizeOnDrop)]
 #[serde(deny_unknown_fields)]
-struct DocumentV2 {
-    schema: u32,
-    revision: u64,
-    groups: Vec<StoredGroup>,
-    cards: Vec<StoredCard>,
+pub(crate) struct DocumentV2 {
+    pub(super) schema: u32,
+    pub(crate) revision: u64,
+    pub(super) groups: Vec<StoredGroup>,
+    pub(crate) cards: Vec<StoredCard>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    services: Vec<ServiceDefinitionV1>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    templates: Vec<TemplateDefinitionV1>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    history: Vec<CardRevision>,
+    #[serde(default, skip_serializing_if = "super::policy::Policy::is_empty")]
+    pub(crate) policy: super::policy::Policy,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub(crate) ssh_profiles: Vec<super::local_tools::SshProfile>,
 }
 const MAX_ATTACHMENT: usize = 20 * 1024 * 1024;
-#[derive(Serialize, Deserialize, Zeroize, ZeroizeOnDrop)]
+#[derive(Clone, PartialEq, Eq, Serialize, Deserialize, Zeroize, ZeroizeOnDrop)]
 #[serde(deny_unknown_fields)]
 struct StoredAttachment {
     name: String,
@@ -368,9 +388,9 @@ impl StoredAttachment {
         })
     }
 }
-#[derive(Serialize, Deserialize, Zeroize, ZeroizeOnDrop)]
+#[derive(Clone, PartialEq, Eq, Serialize, Deserialize, Zeroize, ZeroizeOnDrop)]
 #[serde(deny_unknown_fields)]
-struct StoredCard {
+pub(crate) struct StoredCard {
     id: String,
     name: String,
     description: String,
@@ -383,6 +403,10 @@ struct StoredCard {
     template_version: u32,
     fields: Vec<CardValueV1>,
     attachment: Option<StoredAttachment>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    bindings: Vec<ResourceBindingV1>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    custom: Option<CustomCardDataV1>,
 }
 impl CardTypeV1 {
     pub(super) fn requires_attachment(self) -> bool {
@@ -400,14 +424,22 @@ impl StoredCard {
             group_ids: self.group_ids.clone(),
             card_type: self.card_type,
             template_version: self.template_version,
+            custom_template_id: self.custom.as_ref().map(|v| v.template_id.clone()),
         }
     }
-    fn validate(&self) -> Result<(), VaultFailure> {
+    fn validate(&self, document: &DocumentV2) -> Result<(), VaultFailure> {
         bounded(&self.name, 512, true)?;
         bounded(&self.description, 16384, false)?;
-        if !(self.template_version == 1
-            || self.card_type == CardTypeV1::Pat && self.template_version == 2)
-            || !SERVICES_V1.contains(&self.service.as_str())
+        if !document.recognizes_service(&self.service) {
+            return Err(VaultFailure::Unsupported);
+        }
+        self.validate_bindings(document)?;
+        if self.card_type == CardTypeV1::Custom {
+            return self.validate_custom(document);
+        }
+        if self.custom.is_some()
+            || !(self.template_version == 1
+                || self.card_type == CardTypeV1::Pat && self.template_version == 2)
             || (self.card_type == CardTypeV1::Pat
                 && self.template_version == 1
                 && self
@@ -432,20 +464,31 @@ impl StoredCard {
     }
 }
 impl DocumentV2 {
-    fn decode(bytes: &[u8]) -> Result<Self, VaultFailure> {
-        let document = if bytes.is_empty() {
+    pub(crate) fn decode(bytes: &[u8]) -> Result<Self, VaultFailure> {
+        let mut document = if bytes.is_empty() {
             Self {
                 schema: 2,
                 revision: 0,
                 groups: vec![],
                 cards: vec![],
+                services: vec![],
+                templates: vec![],
+                history: vec![],
+                policy: Default::default(),
+                ssh_profiles: vec![],
             }
         } else {
             serde_json::from_slice(bytes).map_err(|_| VaultFailure::Unsupported)?
         };
-        if document.schema != 2 || document.groups.len() > 10000 || document.cards.len() > 100000 {
+        if !matches!(document.schema, 2 | 3)
+            || document.groups.len() > 10000
+            || document.cards.len() > 100000
+        {
             return Err(VaultFailure::Unsupported);
         }
+        document.prune_history(catalog_operations::now()?);
+        document.validate_tool_profiles()?;
+        document.validate_catalog()?;
         let mut groups = BTreeSet::new();
         for g in &document.groups {
             bounded(&g.id, 32, true)?;
@@ -458,7 +501,7 @@ impl DocumentV2 {
         }
         let mut ids = BTreeSet::new();
         for c in &document.cards {
-            c.validate()?;
+            c.validate(&document)?;
             if !ids.insert(c.id.clone())
                 || c.id.len() != 32
                 || c.group_ids.iter().any(|g| !groups.contains(g))
@@ -484,8 +527,19 @@ impl DocumentV2 {
                 })
                 .collect(),
             cards: self.cards.iter().map(StoredCard::summary).collect(),
+            services: self.services.clone(),
+            templates: self.templates.clone(),
         }
     }
+}
+pub(crate) fn portable_document(bytes: &[u8]) -> Result<Zeroizing<Vec<u8>>, VaultFailure> {
+    let mut doc = DocumentV2::decode(bytes)?;
+    doc.policy = Default::default();
+    doc.ssh_profiles.clear();
+    doc.schema = 3;
+    serde_json::to_vec(&doc)
+        .map(Zeroizing::new)
+        .map_err(|_| VaultFailure::Unsupported)
 }
 impl Vault {
     pub fn content_v2(&self, generation: u64) -> Result<ContentSnapshotV2, VaultFailure> {
@@ -501,10 +555,6 @@ impl Vault {
         if text.len() > 16384
             || text.contains('\0')
             || (query.without_environment && query.environment.is_some())
-            || query
-                .service
-                .as_ref()
-                .is_some_and(|s| !SERVICES_V1.contains(&s.as_str()))
         {
             return Err(VaultFailure::Unsupported);
         }
@@ -512,7 +562,15 @@ impl Vault {
             if d.revision != revision {
                 return Err(VaultFailure::Stale);
             }
+            if query
+                .service
+                .as_ref()
+                .is_some_and(|s| !d.recognizes_service(s))
+            {
+                return Err(VaultFailure::Unsupported);
+            }
             let needle = Zeroizing::new(text.to_lowercase());
+            let search_values = !d.policy.requires(super::OperationV1::Reveal);
             let group_ids: Vec<String> = d
                 .groups
                 .iter()
@@ -531,9 +589,17 @@ impl Vault {
                         && (needle.is_empty()
                             || c.name.to_lowercase().contains(needle.as_str())
                             || c.group_ids.iter().any(|id| groups.contains(id.as_str()))
-                            || c.fields.iter().any(|f| {
-                                Zeroizing::new(f.value.to_lowercase()).contains(needle.as_str())
-                            }))
+                            || (search_values
+                                && c.custom.as_ref().is_some_and(|custom| {
+                                    custom.values.iter().any(|f| {
+                                        Zeroizing::new(f.value.to_lowercase())
+                                            .contains(needle.as_str())
+                                    })
+                                }))
+                            || (search_values
+                                && c.fields.iter().any(|f| {
+                                    Zeroizing::new(f.value.to_lowercase()).contains(needle.as_str())
+                                })))
                 })
                 .collect();
             matches.sort_by_cached_key(|c| {
@@ -577,7 +643,9 @@ impl Vault {
                         .ok_or(VaultFailure::Missing)?;
                     Ok(CardListRowV1 {
                         id: c.id.clone(),
-                        login: c.primary_login(),
+                        login: c
+                            .primary_login()
+                            .filter(|_| !d.policy.requires(super::OperationV1::Reveal)),
                     })
                 })
                 .collect()
@@ -603,7 +671,7 @@ impl Vault {
                         .iter()
                         .find(|c| c.id == *id)
                         .ok_or(VaultFailure::Missing)?;
-                    c.row()
+                    c.row(!d.policy.requires(super::OperationV1::Reveal))
                 })
                 .collect()
         })
@@ -624,13 +692,14 @@ impl Vault {
                 .find(|c| c.id == id)
                 .ok_or(VaultFailure::Missing)?;
             Ok(CardPreviewV1 {
-                row: c.row()?,
+                row: c.row(!d.policy.requires(super::OperationV1::Reveal))?,
                 description: c.description.clone(),
                 protected_container: super::presets::validate_fields(c.card_type, &c.fields)?,
             })
         })
     }
     pub fn card_v1(&self, id: String, generation: u64) -> Result<CardRecordV1, VaultFailure> {
+        self.require_operation(super::OperationV1::Reveal, &id, generation)?;
         self.read_cards(generation, |d| {
             let c = d
                 .cards
@@ -689,8 +758,11 @@ impl Vault {
             template_version: 1,
             fields: std::mem::take(&mut *fields),
             attachment,
+            bindings: vec![],
+            custom: None,
         };
         self.mutate_cards(revision, generation, |d| {
+            d.check_service_assignment(input.id.as_deref(), &card.service)?;
             card.name = card.name.trim().into();
             card.group_ids.sort();
             card.group_ids.dedup();
@@ -727,7 +799,13 @@ impl Vault {
                     card.template_version = 2;
                 }
             }
-            card.validate()?;
+            if card.card_type == CardTypeV1::Custom {
+                return Err(VaultFailure::Unsupported);
+            }
+            if let Some(previous) = d.cards.iter().find(|c| Some(&c.id) == input.id.as_ref()) {
+                card.bindings = previous.bindings.clone();
+            }
+            card.validate(d)?;
             if card
                 .group_ids
                 .iter()
@@ -736,15 +814,11 @@ impl Vault {
                 return Err(VaultFailure::Missing);
             }
             if let Some(id) = input.id {
-                let previous = d
-                    .cards
-                    .iter_mut()
-                    .find(|c| c.id == id)
-                    .ok_or(VaultFailure::Missing)?;
-                if previous.card_type != card.card_type {
+                let index = d.card_index(&id)?;
+                if d.cards[index].card_type != card.card_type {
                     return Err(VaultFailure::Unsupported);
                 }
-                std::mem::swap(previous, &mut card);
+                d.replace_card(index, card)?;
             } else {
                 card.id = new_id()?;
                 d.cards.push(card);
@@ -758,17 +832,20 @@ impl Vault {
         revision: u64,
         generation: u64,
     ) -> Result<HotpAdvanceV1, VaultFailure> {
+        self.require_operation(
+            super::OperationV1::Reveal,
+            &format!("{id}:hotp"),
+            generation,
+        )?;
         let (snapshot, code) = self.mutate_cards_with(revision, generation, |document| {
-            let card = document
-                .cards
-                .iter_mut()
-                .find(|card| card.id == id)
-                .ok_or(VaultFailure::Missing)?;
+            let index = document.card_index(&id)?;
+            let card = &document.cards[index];
             if card.card_type != CardTypeV1::Hotp {
                 return Err(VaultFailure::Unsupported);
             }
             let (code, next) = super::otp::advance_hotp(&card.fields)?;
-            let counter = card
+            document.archive(index)?;
+            let counter = document.cards[index]
                 .fields
                 .iter_mut()
                 .find(|field| field.id == FieldIdV1::Counter)
@@ -783,6 +860,26 @@ impl Vault {
     }
 
     pub fn current_totp_v1(
+        &self,
+        id: String,
+        generation: u64,
+    ) -> Result<super::TotpCodeV1, VaultFailure> {
+        self.require_operation(
+            super::OperationV1::Reveal,
+            &format!("{id}:totp"),
+            generation,
+        )?;
+        self.read_current_totp(id, generation)
+    }
+    pub fn copy_current_totp_v1(
+        &self,
+        id: String,
+        generation: u64,
+    ) -> Result<super::TotpCodeV1, VaultFailure> {
+        self.require_operation(super::OperationV1::Copy, &format!("{id}:totp"), generation)?;
+        self.read_current_totp(id, generation)
+    }
+    fn read_current_totp(
         &self,
         id: String,
         generation: u64,
@@ -802,6 +899,32 @@ impl Vault {
         field: FieldIdV1,
         generation: u64,
     ) -> Result<String, VaultFailure> {
+        self.require_operation(
+            super::OperationV1::Copy,
+            &format!("{id}:field:{}", field as u32),
+            generation,
+        )?;
+        self.read_field(id, field, generation)
+    }
+    pub fn reveal_card_field_v1(
+        &self,
+        id: String,
+        field: FieldIdV1,
+        generation: u64,
+    ) -> Result<String, VaultFailure> {
+        self.require_operation(
+            super::OperationV1::Reveal,
+            &format!("{id}:field:{}", field as u32),
+            generation,
+        )?;
+        self.read_field(id, field, generation)
+    }
+    fn read_field(
+        &self,
+        id: String,
+        field: FieldIdV1,
+        generation: u64,
+    ) -> Result<String, VaultFailure> {
         self.read_cards(generation, |d| {
             let c = d
                 .cards
@@ -816,24 +939,32 @@ impl Vault {
         })
     }
     pub fn copy_account_v1(&self, id: String, generation: u64) -> Result<String, VaultFailure> {
+        self.require_operation(super::OperationV1::Copy, &id, generation)?;
         self.read_cards(generation, |d| {
-            let c = d
-                .cards
-                .iter()
-                .find(|c| c.id == id)
-                .ok_or(VaultFailure::Missing)?;
-            let login =
-                super::otp::field(&c.fields, FieldIdV1::Login).ok_or(VaultFailure::Unsupported)?;
-            let password = super::otp::field(&c.fields, FieldIdV1::Password)
-                .ok_or(VaultFailure::Unsupported)?;
-            let mut text = format!("Login: {login}\nPassword: {password}");
-            if super::otp::field(&c.fields, FieldIdV1::TotpSeed).is_some() {
-                text.push_str(&format!(
-                    "\nOTP: {}",
-                    super::otp::current_code(&c.fields)?.code
-                ));
+            d.cards[d.card_index(&id)?].account_copy_text()
+        })
+    }
+    pub fn copy_quick_card_v1(
+        &self,
+        id: String,
+        revision: u64,
+        generation: u64,
+    ) -> Result<String, VaultFailure> {
+        self.require_operation(
+            super::OperationV1::Copy,
+            &format!("{id}:quick-all"),
+            generation,
+        )?;
+        self.read_cards(generation, |d| {
+            if d.revision != revision {
+                return Err(VaultFailure::Stale);
             }
-            Ok(text)
+            let card = &d.cards[d.card_index(&id)?];
+            match card.card_type {
+                CardTypeV1::Account => card.account_copy_text(),
+                CardTypeV1::Hotp => Err(VaultFailure::Unsupported),
+                _ => card.quick_copy_text(d),
+            }
         })
     }
     pub fn export_attachment_v1(
@@ -843,7 +974,11 @@ impl Vault {
         revision: u64,
         generation: u64,
     ) -> Result<(), VaultFailure> {
-        use std::{fs, io::Write, path::Path};
+        self.require_operation(
+            super::OperationV1::Export,
+            &format!("{id}:{destination}"),
+            generation,
+        )?;
         let bytes = self.read_cards(generation, |d| {
             if d.revision != revision {
                 return Err(VaultFailure::Stale);
@@ -856,6 +991,45 @@ impl Vault {
                 .ok_or(VaultFailure::Missing)?;
             file.bytes()
         })?;
+        self.publish_attachment(bytes, destination, revision, generation)
+    }
+
+    pub fn export_custom_file_v1(
+        &self,
+        id: String,
+        field_id: String,
+        destination: String,
+        revision: u64,
+        generation: u64,
+    ) -> Result<(), VaultFailure> {
+        self.require_operation(
+            super::OperationV1::Export,
+            &format!("{id}:{field_id}:{destination}"),
+            generation,
+        )?;
+        let bytes = self.read_cards(generation, |doc| {
+            if doc.revision != revision {
+                return Err(VaultFailure::Stale);
+            }
+            let card = &doc.cards[doc.card_index(&id)?];
+            card.custom
+                .as_ref()
+                .and_then(|c| c.values.iter().find(|v| v.field_id == field_id))
+                .and_then(|v| v.file.as_ref())
+                .ok_or(VaultFailure::Missing)?
+                .bytes()
+        })?;
+        self.publish_attachment(bytes, destination, revision, generation)
+    }
+
+    fn publish_attachment(
+        &self,
+        bytes: Zeroizing<Vec<u8>>,
+        destination: String,
+        revision: u64,
+        generation: u64,
+    ) -> Result<(), VaultFailure> {
+        use std::{fs, io::Write, path::Path};
         let directory = {
             let state = self.state.lock().map_err(|_| VaultFailure::Unavailable)?;
             state.store.directory().to_owned()
@@ -904,12 +1078,14 @@ impl Vault {
         revision: u64,
         generation: u64,
     ) -> Result<ContentSnapshotV2, VaultFailure> {
+        self.require_operation(super::OperationV1::Delete, &id, generation)?;
         self.mutate_cards(revision, generation, |d| {
             let index = d
                 .cards
                 .iter()
                 .position(|c| c.id == id)
                 .ok_or(VaultFailure::Missing)?;
+            d.archive(index)?;
             d.cards.remove(index);
             Ok(())
         })
@@ -950,6 +1126,11 @@ impl Vault {
         revision: u64,
         generation: u64,
     ) -> Result<ContentSnapshotV2, VaultFailure> {
+        self.require_operation(
+            super::OperationV1::Delete,
+            &format!("group:{id}"),
+            generation,
+        )?;
         self.mutate_cards(revision, generation, |d| {
             let index = d
                 .groups
@@ -957,13 +1138,16 @@ impl Vault {
                 .position(|g| g.id == id)
                 .ok_or(VaultFailure::Missing)?;
             d.groups.remove(index);
-            for c in &mut d.cards {
-                c.group_ids.retain(|g| g != &id);
+            for index in 0..d.cards.len() {
+                if d.cards[index].group_ids.contains(&id) {
+                    d.archive(index)?;
+                    d.cards[index].group_ids.retain(|g| g != &id);
+                }
             }
             Ok(())
         })
     }
-    fn read_cards<T>(
+    pub(crate) fn read_cards<T>(
         &self,
         generation: u64,
         read: impl FnOnce(&DocumentV2) -> Result<T, VaultFailure>,
@@ -987,7 +1171,7 @@ impl Vault {
         result
     }
 
-    fn mutate_cards(
+    pub(crate) fn mutate_cards(
         &self,
         revision: u64,
         generation: u64,
@@ -997,7 +1181,7 @@ impl Vault {
             .map(|(snapshot, ())| snapshot)
     }
 
-    fn mutate_cards_with<T>(
+    pub(crate) fn mutate_cards_with<T>(
         &self,
         revision: u64,
         generation: u64,
@@ -1009,6 +1193,19 @@ impl Vault {
                 return Err(VaultFailure::Stale);
             }
             let result = operation(&mut document)?;
+            document.prune_tool_profiles();
+            if !document.services.is_empty()
+                || !document.templates.is_empty()
+                || !document.history.is_empty()
+                || !document.policy.is_empty()
+                || !document.ssh_profiles.is_empty()
+                || document
+                    .cards
+                    .iter()
+                    .any(|c| !c.bindings.is_empty() || c.custom.is_some())
+            {
+                document.schema = 3;
+            }
             document.revision = revision.checked_add(1).ok_or(VaultFailure::Unsupported)?;
             let bytes = Zeroizing::new(
                 serde_json::to_vec(&document).map_err(|_| VaultFailure::Unsupported)?,
@@ -1028,7 +1225,7 @@ impl StoredCard {
         }
     }
 
-    fn row(&self) -> Result<CardRowV1, VaultFailure> {
+    fn row(&self, reveal: bool) -> Result<CardRowV1, VaultFailure> {
         Ok(CardRowV1 {
             id: self.id.clone(),
             fields: self
@@ -1037,8 +1234,8 @@ impl StoredCard {
                 .filter(|f| !f.value.is_empty())
                 .map(|f| f.id)
                 .collect(),
-            login: self.primary_login(),
-            otp: if super::otp::field(&self.fields, FieldIdV1::TotpSeed).is_some() {
+            login: self.primary_login().filter(|_| reveal),
+            otp: if reveal && super::otp::field(&self.fields, FieldIdV1::TotpSeed).is_some() {
                 Some(super::otp::current_code(&self.fields)?)
             } else {
                 None

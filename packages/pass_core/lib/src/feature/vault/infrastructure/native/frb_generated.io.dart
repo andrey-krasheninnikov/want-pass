@@ -42,6 +42,15 @@ abstract class VaultRustLibApiImplPlatform
   String dco_decode_String(dynamic raw);
 
   @protected
+  AccountImportPreviewV1 dco_decode_account_import_preview_v_1(dynamic raw);
+
+  @protected
+  AccountImportRowV1 dco_decode_account_import_row_v_1(dynamic raw);
+
+  @protected
+  AccountImportSourceV1 dco_decode_account_import_source_v_1(dynamic raw);
+
+  @protected
   AccountInputV1 dco_decode_account_input_v_1(dynamic raw);
 
   @protected
@@ -55,6 +64,27 @@ abstract class VaultRustLibApiImplPlatform
 
   @protected
   AttachmentSummaryV1 dco_decode_attachment_summary_v_1(dynamic raw);
+
+  @protected
+  BackupChoiceV1 dco_decode_backup_choice_v_1(dynamic raw);
+
+  @protected
+  BackupConflictV1 dco_decode_backup_conflict_v_1(dynamic raw);
+
+  @protected
+  BackupEntityV1 dco_decode_backup_entity_v_1(dynamic raw);
+
+  @protected
+  BackupPreviewV1 dco_decode_backup_preview_v_1(dynamic raw);
+
+  @protected
+  BackupResolutionV1 dco_decode_backup_resolution_v_1(dynamic raw);
+
+  @protected
+  BackupStrategyV1 dco_decode_backup_strategy_v_1(dynamic raw);
+
+  @protected
+  BindingMethodV1 dco_decode_binding_method_v_1(dynamic raw);
 
   @protected
   bool dco_decode_bool(dynamic raw);
@@ -71,6 +101,9 @@ abstract class VaultRustLibApiImplPlatform
   );
 
   @protected
+  BackupResolutionV1 dco_decode_box_autoadd_backup_resolution_v_1(dynamic raw);
+
+  @protected
   CardInputV1 dco_decode_box_autoadd_card_input_v_1(dynamic raw);
 
   @protected
@@ -80,10 +113,18 @@ abstract class VaultRustLibApiImplPlatform
   CardTypeV1 dco_decode_box_autoadd_card_type_v_1(dynamic raw);
 
   @protected
+  CustomCardInputV1 dco_decode_box_autoadd_custom_card_input_v_1(dynamic raw);
+
+  @protected
   EnvironmentV1 dco_decode_box_autoadd_environment_v_1(dynamic raw);
 
   @protected
   GroupInputV1 dco_decode_box_autoadd_group_input_v_1(dynamic raw);
+
+  @protected
+  ServiceDefinitionV1 dco_decode_box_autoadd_service_definition_v_1(
+    dynamic raw,
+  );
 
   @protected
   TotpCodeV1 dco_decode_box_autoadd_totp_code_v_1(dynamic raw);
@@ -128,6 +169,18 @@ abstract class VaultRustLibApiImplPlatform
   ContentSnapshotV2 dco_decode_content_snapshot_v_2(dynamic raw);
 
   @protected
+  CustomCardInputV1 dco_decode_custom_card_input_v_1(dynamic raw);
+
+  @protected
+  CustomFieldKindV1 dco_decode_custom_field_kind_v_1(dynamic raw);
+
+  @protected
+  CustomValueInputV1 dco_decode_custom_value_input_v_1(dynamic raw);
+
+  @protected
+  CustomValueViewV1 dco_decode_custom_value_view_v_1(dynamic raw);
+
+  @protected
   EnvironmentV1 dco_decode_environment_v_1(dynamic raw);
 
   @protected
@@ -143,16 +196,34 @@ abstract class VaultRustLibApiImplPlatform
   GroupRecordV1 dco_decode_group_record_v_1(dynamic raw);
 
   @protected
+  HistoricalCardV1 dco_decode_historical_card_v_1(dynamic raw);
+
+  @protected
+  HistorySummaryV1 dco_decode_history_summary_v_1(dynamic raw);
+
+  @protected
   HotpAdvanceV1 dco_decode_hotp_advance_v_1(dynamic raw);
 
   @protected
   int dco_decode_i_32(dynamic raw);
 
   @protected
+  PlatformInt64 dco_decode_i_64(dynamic raw);
+
+  @protected
   List<String> dco_decode_list_String(dynamic raw);
 
   @protected
+  List<AccountImportRowV1> dco_decode_list_account_import_row_v_1(dynamic raw);
+
+  @protected
   List<AccountSummaryV1> dco_decode_list_account_summary_v_1(dynamic raw);
+
+  @protected
+  List<BackupChoiceV1> dco_decode_list_backup_choice_v_1(dynamic raw);
+
+  @protected
+  List<BackupConflictV1> dco_decode_list_backup_conflict_v_1(dynamic raw);
 
   @protected
   List<CardListRowV1> dco_decode_list_card_list_row_v_1(dynamic raw);
@@ -170,6 +241,12 @@ abstract class VaultRustLibApiImplPlatform
   List<CardValueV1> dco_decode_list_card_value_v_1(dynamic raw);
 
   @protected
+  List<CustomValueInputV1> dco_decode_list_custom_value_input_v_1(dynamic raw);
+
+  @protected
+  List<CustomValueViewV1> dco_decode_list_custom_value_view_v_1(dynamic raw);
+
+  @protected
   List<FieldIdV1> dco_decode_list_field_id_v_1(dynamic raw);
 
   @protected
@@ -179,13 +256,45 @@ abstract class VaultRustLibApiImplPlatform
   List<GroupRecordV1> dco_decode_list_group_record_v_1(dynamic raw);
 
   @protected
+  List<HistorySummaryV1> dco_decode_list_history_summary_v_1(dynamic raw);
+
+  @protected
   List<List<String>> dco_decode_list_list_String(dynamic raw);
+
+  @protected
+  List<OperationV1> dco_decode_list_operation_v_1(dynamic raw);
+
+  @protected
+  List<int> dco_decode_list_prim_u_32_loose(dynamic raw);
 
   @protected
   Uint32List dco_decode_list_prim_u_32_strict(dynamic raw);
 
   @protected
   Uint8List dco_decode_list_prim_u_8_strict(dynamic raw);
+
+  @protected
+  List<ResourceBindingV1> dco_decode_list_resource_binding_v_1(dynamic raw);
+
+  @protected
+  List<ServiceDefinitionV1> dco_decode_list_service_definition_v_1(dynamic raw);
+
+  @protected
+  List<TemplateDefinitionV1> dco_decode_list_template_definition_v_1(
+    dynamic raw,
+  );
+
+  @protected
+  List<TemplateFieldV1> dco_decode_list_template_field_v_1(dynamic raw);
+
+  @protected
+  List<TemplateVersionV1> dco_decode_list_template_version_v_1(dynamic raw);
+
+  @protected
+  LocalToolCommandV1 dco_decode_local_tool_command_v_1(dynamic raw);
+
+  @protected
+  OperationV1 dco_decode_operation_v_1(dynamic raw);
 
   @protected
   String? dco_decode_opt_String(dynamic raw);
@@ -197,6 +306,11 @@ abstract class VaultRustLibApiImplPlatform
 
   @protected
   AttachmentSummaryV1? dco_decode_opt_box_autoadd_attachment_summary_v_1(
+    dynamic raw,
+  );
+
+  @protected
+  BackupResolutionV1? dco_decode_opt_box_autoadd_backup_resolution_v_1(
     dynamic raw,
   );
 
@@ -213,6 +327,9 @@ abstract class VaultRustLibApiImplPlatform
   PasswordPolicyStatusV4 dco_decode_password_policy_status_v_4(dynamic raw);
 
   @protected
+  ProtectionSettingsV1 dco_decode_protection_settings_v_1(dynamic raw);
+
+  @protected
   RecoveryChallenge dco_decode_recovery_challenge(dynamic raw);
 
   @protected
@@ -220,6 +337,27 @@ abstract class VaultRustLibApiImplPlatform
 
   @protected
   RecoveryChallengeV3 dco_decode_recovery_challenge_v_3(dynamic raw);
+
+  @protected
+  RecoveryInputV1 dco_decode_recovery_input_v_1(dynamic raw);
+
+  @protected
+  ResourceBindingV1 dco_decode_resource_binding_v_1(dynamic raw);
+
+  @protected
+  ResourceKindV1 dco_decode_resource_kind_v_1(dynamic raw);
+
+  @protected
+  ServiceDefinitionV1 dco_decode_service_definition_v_1(dynamic raw);
+
+  @protected
+  TemplateDefinitionV1 dco_decode_template_definition_v_1(dynamic raw);
+
+  @protected
+  TemplateFieldV1 dco_decode_template_field_v_1(dynamic raw);
+
+  @protected
+  TemplateVersionV1 dco_decode_template_version_v_1(dynamic raw);
 
   @protected
   TotpCodeV1 dco_decode_totp_code_v_1(dynamic raw);
@@ -270,6 +408,21 @@ abstract class VaultRustLibApiImplPlatform
   String sse_decode_String(SseDeserializer deserializer);
 
   @protected
+  AccountImportPreviewV1 sse_decode_account_import_preview_v_1(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  AccountImportRowV1 sse_decode_account_import_row_v_1(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  AccountImportSourceV1 sse_decode_account_import_source_v_1(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   AccountInputV1 sse_decode_account_input_v_1(SseDeserializer deserializer);
 
   @protected
@@ -287,6 +440,29 @@ abstract class VaultRustLibApiImplPlatform
   AttachmentSummaryV1 sse_decode_attachment_summary_v_1(
     SseDeserializer deserializer,
   );
+
+  @protected
+  BackupChoiceV1 sse_decode_backup_choice_v_1(SseDeserializer deserializer);
+
+  @protected
+  BackupConflictV1 sse_decode_backup_conflict_v_1(SseDeserializer deserializer);
+
+  @protected
+  BackupEntityV1 sse_decode_backup_entity_v_1(SseDeserializer deserializer);
+
+  @protected
+  BackupPreviewV1 sse_decode_backup_preview_v_1(SseDeserializer deserializer);
+
+  @protected
+  BackupResolutionV1 sse_decode_backup_resolution_v_1(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  BackupStrategyV1 sse_decode_backup_strategy_v_1(SseDeserializer deserializer);
+
+  @protected
+  BindingMethodV1 sse_decode_binding_method_v_1(SseDeserializer deserializer);
 
   @protected
   bool sse_decode_bool(SseDeserializer deserializer);
@@ -307,6 +483,11 @@ abstract class VaultRustLibApiImplPlatform
   );
 
   @protected
+  BackupResolutionV1 sse_decode_box_autoadd_backup_resolution_v_1(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   CardInputV1 sse_decode_box_autoadd_card_input_v_1(
     SseDeserializer deserializer,
   );
@@ -320,12 +501,22 @@ abstract class VaultRustLibApiImplPlatform
   CardTypeV1 sse_decode_box_autoadd_card_type_v_1(SseDeserializer deserializer);
 
   @protected
+  CustomCardInputV1 sse_decode_box_autoadd_custom_card_input_v_1(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   EnvironmentV1 sse_decode_box_autoadd_environment_v_1(
     SseDeserializer deserializer,
   );
 
   @protected
   GroupInputV1 sse_decode_box_autoadd_group_input_v_1(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  ServiceDefinitionV1 sse_decode_box_autoadd_service_definition_v_1(
     SseDeserializer deserializer,
   );
 
@@ -376,6 +567,26 @@ abstract class VaultRustLibApiImplPlatform
   );
 
   @protected
+  CustomCardInputV1 sse_decode_custom_card_input_v_1(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  CustomFieldKindV1 sse_decode_custom_field_kind_v_1(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  CustomValueInputV1 sse_decode_custom_value_input_v_1(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  CustomValueViewV1 sse_decode_custom_value_view_v_1(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   EnvironmentV1 sse_decode_environment_v_1(SseDeserializer deserializer);
 
   @protected
@@ -391,16 +602,40 @@ abstract class VaultRustLibApiImplPlatform
   GroupRecordV1 sse_decode_group_record_v_1(SseDeserializer deserializer);
 
   @protected
+  HistoricalCardV1 sse_decode_historical_card_v_1(SseDeserializer deserializer);
+
+  @protected
+  HistorySummaryV1 sse_decode_history_summary_v_1(SseDeserializer deserializer);
+
+  @protected
   HotpAdvanceV1 sse_decode_hotp_advance_v_1(SseDeserializer deserializer);
 
   @protected
   int sse_decode_i_32(SseDeserializer deserializer);
 
   @protected
+  PlatformInt64 sse_decode_i_64(SseDeserializer deserializer);
+
+  @protected
   List<String> sse_decode_list_String(SseDeserializer deserializer);
 
   @protected
+  List<AccountImportRowV1> sse_decode_list_account_import_row_v_1(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   List<AccountSummaryV1> sse_decode_list_account_summary_v_1(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  List<BackupChoiceV1> sse_decode_list_backup_choice_v_1(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  List<BackupConflictV1> sse_decode_list_backup_conflict_v_1(
     SseDeserializer deserializer,
   );
 
@@ -428,6 +663,16 @@ abstract class VaultRustLibApiImplPlatform
   );
 
   @protected
+  List<CustomValueInputV1> sse_decode_list_custom_value_input_v_1(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  List<CustomValueViewV1> sse_decode_list_custom_value_view_v_1(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   List<FieldIdV1> sse_decode_list_field_id_v_1(SseDeserializer deserializer);
 
   @protected
@@ -441,13 +686,57 @@ abstract class VaultRustLibApiImplPlatform
   );
 
   @protected
+  List<HistorySummaryV1> sse_decode_list_history_summary_v_1(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   List<List<String>> sse_decode_list_list_String(SseDeserializer deserializer);
+
+  @protected
+  List<OperationV1> sse_decode_list_operation_v_1(SseDeserializer deserializer);
+
+  @protected
+  List<int> sse_decode_list_prim_u_32_loose(SseDeserializer deserializer);
 
   @protected
   Uint32List sse_decode_list_prim_u_32_strict(SseDeserializer deserializer);
 
   @protected
   Uint8List sse_decode_list_prim_u_8_strict(SseDeserializer deserializer);
+
+  @protected
+  List<ResourceBindingV1> sse_decode_list_resource_binding_v_1(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  List<ServiceDefinitionV1> sse_decode_list_service_definition_v_1(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  List<TemplateDefinitionV1> sse_decode_list_template_definition_v_1(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  List<TemplateFieldV1> sse_decode_list_template_field_v_1(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  List<TemplateVersionV1> sse_decode_list_template_version_v_1(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  LocalToolCommandV1 sse_decode_local_tool_command_v_1(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  OperationV1 sse_decode_operation_v_1(SseDeserializer deserializer);
 
   @protected
   String? sse_decode_opt_String(SseDeserializer deserializer);
@@ -459,6 +748,11 @@ abstract class VaultRustLibApiImplPlatform
 
   @protected
   AttachmentSummaryV1? sse_decode_opt_box_autoadd_attachment_summary_v_1(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  BackupResolutionV1? sse_decode_opt_box_autoadd_backup_resolution_v_1(
     SseDeserializer deserializer,
   );
 
@@ -483,6 +777,11 @@ abstract class VaultRustLibApiImplPlatform
   );
 
   @protected
+  ProtectionSettingsV1 sse_decode_protection_settings_v_1(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   RecoveryChallenge sse_decode_recovery_challenge(SseDeserializer deserializer);
 
   @protected
@@ -492,6 +791,35 @@ abstract class VaultRustLibApiImplPlatform
 
   @protected
   RecoveryChallengeV3 sse_decode_recovery_challenge_v_3(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  RecoveryInputV1 sse_decode_recovery_input_v_1(SseDeserializer deserializer);
+
+  @protected
+  ResourceBindingV1 sse_decode_resource_binding_v_1(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  ResourceKindV1 sse_decode_resource_kind_v_1(SseDeserializer deserializer);
+
+  @protected
+  ServiceDefinitionV1 sse_decode_service_definition_v_1(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  TemplateDefinitionV1 sse_decode_template_definition_v_1(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  TemplateFieldV1 sse_decode_template_field_v_1(SseDeserializer deserializer);
+
+  @protected
+  TemplateVersionV1 sse_decode_template_version_v_1(
     SseDeserializer deserializer,
   );
 
@@ -547,6 +875,24 @@ abstract class VaultRustLibApiImplPlatform
   void sse_encode_String(String self, SseSerializer serializer);
 
   @protected
+  void sse_encode_account_import_preview_v_1(
+    AccountImportPreviewV1 self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_account_import_row_v_1(
+    AccountImportRowV1 self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_account_import_source_v_1(
+    AccountImportSourceV1 self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_account_input_v_1(
     AccountInputV1 self,
     SseSerializer serializer,
@@ -577,6 +923,48 @@ abstract class VaultRustLibApiImplPlatform
   );
 
   @protected
+  void sse_encode_backup_choice_v_1(
+    BackupChoiceV1 self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_backup_conflict_v_1(
+    BackupConflictV1 self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_backup_entity_v_1(
+    BackupEntityV1 self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_backup_preview_v_1(
+    BackupPreviewV1 self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_backup_resolution_v_1(
+    BackupResolutionV1 self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_backup_strategy_v_1(
+    BackupStrategyV1 self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_binding_method_v_1(
+    BindingMethodV1 self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_bool(bool self, SseSerializer serializer);
 
   @protected
@@ -594,6 +982,12 @@ abstract class VaultRustLibApiImplPlatform
   @protected
   void sse_encode_box_autoadd_attachment_summary_v_1(
     AttachmentSummaryV1 self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_box_autoadd_backup_resolution_v_1(
+    BackupResolutionV1 self,
     SseSerializer serializer,
   );
 
@@ -616,6 +1010,12 @@ abstract class VaultRustLibApiImplPlatform
   );
 
   @protected
+  void sse_encode_box_autoadd_custom_card_input_v_1(
+    CustomCardInputV1 self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_box_autoadd_environment_v_1(
     EnvironmentV1 self,
     SseSerializer serializer,
@@ -624,6 +1024,12 @@ abstract class VaultRustLibApiImplPlatform
   @protected
   void sse_encode_box_autoadd_group_input_v_1(
     GroupInputV1 self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_box_autoadd_service_definition_v_1(
+    ServiceDefinitionV1 self,
     SseSerializer serializer,
   );
 
@@ -691,6 +1097,30 @@ abstract class VaultRustLibApiImplPlatform
   );
 
   @protected
+  void sse_encode_custom_card_input_v_1(
+    CustomCardInputV1 self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_custom_field_kind_v_1(
+    CustomFieldKindV1 self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_custom_value_input_v_1(
+    CustomValueInputV1 self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_custom_value_view_v_1(
+    CustomValueViewV1 self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_environment_v_1(EnvironmentV1 self, SseSerializer serializer);
 
   @protected
@@ -709,6 +1139,18 @@ abstract class VaultRustLibApiImplPlatform
   );
 
   @protected
+  void sse_encode_historical_card_v_1(
+    HistoricalCardV1 self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_history_summary_v_1(
+    HistorySummaryV1 self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_hotp_advance_v_1(
     HotpAdvanceV1 self,
     SseSerializer serializer,
@@ -718,11 +1160,32 @@ abstract class VaultRustLibApiImplPlatform
   void sse_encode_i_32(int self, SseSerializer serializer);
 
   @protected
+  void sse_encode_i_64(PlatformInt64 self, SseSerializer serializer);
+
+  @protected
   void sse_encode_list_String(List<String> self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_list_account_import_row_v_1(
+    List<AccountImportRowV1> self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_list_account_summary_v_1(
     List<AccountSummaryV1> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_list_backup_choice_v_1(
+    List<BackupChoiceV1> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_list_backup_conflict_v_1(
+    List<BackupConflictV1> self,
     SseSerializer serializer,
   );
 
@@ -757,6 +1220,18 @@ abstract class VaultRustLibApiImplPlatform
   );
 
   @protected
+  void sse_encode_list_custom_value_input_v_1(
+    List<CustomValueInputV1> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_list_custom_value_view_v_1(
+    List<CustomValueViewV1> self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_list_field_id_v_1(
     List<FieldIdV1> self,
     SseSerializer serializer,
@@ -775,8 +1250,26 @@ abstract class VaultRustLibApiImplPlatform
   );
 
   @protected
+  void sse_encode_list_history_summary_v_1(
+    List<HistorySummaryV1> self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_list_list_String(
     List<List<String>> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_list_operation_v_1(
+    List<OperationV1> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_list_prim_u_32_loose(
+    List<int> self,
     SseSerializer serializer,
   );
 
@@ -793,6 +1286,45 @@ abstract class VaultRustLibApiImplPlatform
   );
 
   @protected
+  void sse_encode_list_resource_binding_v_1(
+    List<ResourceBindingV1> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_list_service_definition_v_1(
+    List<ServiceDefinitionV1> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_list_template_definition_v_1(
+    List<TemplateDefinitionV1> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_list_template_field_v_1(
+    List<TemplateFieldV1> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_list_template_version_v_1(
+    List<TemplateVersionV1> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_local_tool_command_v_1(
+    LocalToolCommandV1 self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_operation_v_1(OperationV1 self, SseSerializer serializer);
+
+  @protected
   void sse_encode_opt_String(String? self, SseSerializer serializer);
 
   @protected
@@ -804,6 +1336,12 @@ abstract class VaultRustLibApiImplPlatform
   @protected
   void sse_encode_opt_box_autoadd_attachment_summary_v_1(
     AttachmentSummaryV1? self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_opt_box_autoadd_backup_resolution_v_1(
+    BackupResolutionV1? self,
     SseSerializer serializer,
   );
 
@@ -832,6 +1370,12 @@ abstract class VaultRustLibApiImplPlatform
   );
 
   @protected
+  void sse_encode_protection_settings_v_1(
+    ProtectionSettingsV1 self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_recovery_challenge(
     RecoveryChallenge self,
     SseSerializer serializer,
@@ -846,6 +1390,48 @@ abstract class VaultRustLibApiImplPlatform
   @protected
   void sse_encode_recovery_challenge_v_3(
     RecoveryChallengeV3 self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_recovery_input_v_1(
+    RecoveryInputV1 self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_resource_binding_v_1(
+    ResourceBindingV1 self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_resource_kind_v_1(
+    ResourceKindV1 self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_service_definition_v_1(
+    ServiceDefinitionV1 self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_template_definition_v_1(
+    TemplateDefinitionV1 self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_template_field_v_1(
+    TemplateFieldV1 self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_template_version_v_1(
+    TemplateVersionV1 self,
     SseSerializer serializer,
   );
 

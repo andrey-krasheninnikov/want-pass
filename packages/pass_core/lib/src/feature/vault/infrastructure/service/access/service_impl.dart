@@ -7,16 +7,237 @@ import 'package:want_pass_core/src/feature/vault/domain/_barrel.dart';
 import 'package:want_pass_core/src/feature/vault/infrastructure/_barrel.dart'
     as native;
 
+part 'catalog.dart';
+part 'backup.dart';
+
 @Singleton(as: VaultAccessService)
-final class RustVaultAccessService implements VaultAccessService {
+final class RustVaultAccessService
+    with _RustBackupAccess
+    implements VaultAccessService, VaultCatalogAccessV1 {
+  @override
+  FutureDomainResult<String> copyQuickCardV1({
+    required VaultHandleV1 handle,
+    required BigInt revision,
+    required String id,
+  }) => _catalogResult('copyQuickCardV1', handle, (vault, g) async {
+    await _confirmOperation(vault, native.OperationV1.copy, '$id:quick-all', g);
+    return vault.copyQuickCardV1(id: id, revision: revision, generation: g);
+  });
+  @override
+  FutureDomainResult<String> customFieldV1({
+    required VaultHandleV1 handle,
+    required BigInt revision,
+    required String id,
+    required String fieldId,
+    required bool copy,
+  }) => _catalogResult('customFieldV1', handle, (vault, g) async {
+    await _confirmOperation(
+      vault,
+      copy ? native.OperationV1.copy : native.OperationV1.reveal,
+      '$id:custom:$fieldId',
+      g,
+    );
+    return vault.customFieldValueV1(
+      id: id,
+      fieldId: fieldId,
+      copy: copy,
+      revision: revision,
+      generation: g,
+    );
+  });
+  @override
+  FutureDomainResult<void> exportCustomFileV1({
+    required VaultHandleV1 handle,
+    required BigInt revision,
+    required String id,
+    required String fieldId,
+    required String destination,
+  }) => _catalogResult('exportCustomFileV1', handle, (vault, g) async {
+    await _confirmOperation(
+      vault,
+      native.OperationV1.export_,
+      '$id:$fieldId:$destination',
+      g,
+    );
+    return vault.exportCustomFileV1(
+      id: id,
+      fieldId: fieldId,
+      destination: destination,
+      revision: revision,
+      generation: g,
+    );
+  });
+  @override
+  FutureDomainResult<List<ResourceBindingV1>> bindingsV1({
+    required VaultHandleV1 handle,
+    required BigInt revision,
+    required String id,
+  }) => _catalogResult(
+    'bindingsV1',
+    handle,
+    (vault, generation) => _bindingsV1(vault, generation, revision, id),
+  );
+  @override
+  FutureDomainResult<List<CustomValueViewV1>> customValuesV1({
+    required VaultHandleV1 handle,
+    required BigInt revision,
+    required String id,
+  }) => _catalogResult(
+    'customValuesV1',
+    handle,
+    (vault, generation) => _customValuesV1(vault, generation, revision, id),
+  );
+  @override
+  FutureDomainResult<List<HistorySummaryV1>> historyV1({
+    required VaultHandleV1 handle,
+    required BigInt revision,
+    required String? cardId,
+  }) => _catalogResult(
+    'historyV1',
+    handle,
+    (vault, generation) => _historyV1(vault, generation, revision, cardId),
+  );
+  @override
+  FutureDomainResult<HistoricalCardV1> historicalCardV1({
+    required VaultHandleV1 handle,
+    required BigInt revision,
+    required String id,
+  }) => _catalogResult(
+    'historicalCardV1',
+    handle,
+    (vault, generation) => _historicalCardV1(vault, generation, revision, id),
+  );
+  @override
+  FutureDomainResult<ContentSnapshotV2> catalogEditV1({
+    required VaultHandleV1 handle,
+    required BigInt revision,
+    required CatalogEditV1 edit,
+  }) => _catalogResult(
+    'catalogEditV1',
+    handle,
+    (vault, generation) => _catalogEditV1(vault, generation, revision, edit),
+  );
+  final VaultCodePromptV1? _codePrompt;
+  final Future<bool> Function()? _biometricAvailable;
   final String _directory;
+  @override
   final VaultReporter _reporter;
   final bool _application;
   const RustVaultAccessService(
     this._directory,
     this._reporter, {
     this._application = false,
+    this._codePrompt,
+    this._biometricAvailable,
   });
+
+  FutureDomainResult<T> _accountImport<T>(
+    String operation,
+    Future<T> Function() action,
+  ) async {
+    final result = await captureResult<T>(
+      action,
+      mapToDomainError: _mapNativeError,
+    );
+    if (result.isError) {
+      reportVaultSafely(
+        _reporter,
+        layer: VaultDiagnosticLayer.infrastructure,
+        operation: operation,
+        error: result.error is VaultErrorV1
+            ? result.error as VaultErrorV1
+            : const VaultUnexpectedErrorV1(),
+      );
+    }
+    return result;
+  }
+
+  @override
+  FutureDomainResult<AccountImportPreviewV1> prepareAccountImportV1({
+    required VaultHandleV1 handle,
+    required AccountImportSourceV1 source,
+    required List<String> payloads,
+    required BigInt revision,
+  }) => _accountImport(
+    'RustVaultAccessService.prepareAccountImportV1():',
+    () async {
+      final vault = (handle as _NativeVaultHandle)._vault;
+      final preview = await vault.prepareAccountImportV1(
+        source: switch (source) {
+          AccountImportSourceV1.applePasswords =>
+            native.AccountImportSourceV1.applePasswords,
+          AccountImportSourceV1.authenticator =>
+            native.AccountImportSourceV1.authenticator,
+        },
+        payloads: payloads,
+        revision: revision,
+        generation: vault.generation(),
+      );
+      return AccountImportPreviewV1(
+        token: preview.token,
+        rows: preview.rows.map(
+          (r) => AccountImportRowV1(name: r.name, duplicate: r.duplicate),
+        ),
+      );
+    },
+  );
+  @override
+  FutureDomainResult<ContentSnapshotV2> applyAccountImportV1({
+    required VaultHandleV1 handle,
+    required String token,
+    required List<int> selected,
+  }) => _accountImport(
+    'RustVaultAccessService.applyAccountImportV1():',
+    () async {
+      final vault = (handle as _NativeVaultHandle)._vault;
+      final saved = await vault.applyAccountImportV1(
+        token: token,
+        selected: selected,
+        generation: vault.generation(),
+      );
+      return _cards(saved);
+    },
+  );
+  @override
+  FutureDomainResult<void> cancelAccountImportV1({
+    required VaultHandleV1 handle,
+    required String token,
+  }) => _accountImport(
+    'RustVaultAccessService.cancelAccountImportV1():',
+    () async {
+      final vault = (handle as _NativeVaultHandle)._vault;
+      await vault.cancelAccountImportV1(
+        token: token,
+        generation: vault.generation(),
+      );
+    },
+  );
+
+  @override
+  Future<void> _confirmOperation(
+    native.Vault vault,
+    native.OperationV1 action,
+    String subject,
+    BigInt generation,
+  ) async {
+    final status = await vault.protectionSettingsV1(generation: generation);
+    if (!status.enrolled ||
+        (action != native.OperationV1.protection &&
+            !status.operations.contains(action))) {
+      return;
+    }
+    final code = await _codePrompt?.call(
+      ProtectedOperationV1.values[action.index],
+    );
+    if (code == null) throw native.VaultFailure.confirmation;
+    await vault.authorizeOperationV1(
+      action: action,
+      subject: subject,
+      code: code,
+      generation: generation,
+    );
+  }
+
   @override
   FutureDomainResult<VaultHandleV1> openV1() async {
     const op = 'RustVaultAccessService.openV1():';
@@ -24,7 +245,7 @@ final class RustVaultAccessService implements VaultAccessService {
       final value = _application
           ? await native.Vault.openApplicationV1(directory: _directory)
           : await native.Vault.open(directory: _directory);
-      return _NativeVaultHandle(value, _reporter);
+      return _NativeVaultHandle(value, _reporter, this);
     }, mapToDomainError: _mapNativeError);
     if (result.isError) {
       reportVaultSafely(
@@ -310,10 +531,15 @@ final class RustVaultAccessService implements VaultAccessService {
   }) async {
     const op = 'RustVaultAccessService.resetApplicationV1():';
     final result = await captureResult<void>(() async {
-      await (handle as _NativeVaultHandle)._vault.resetApplicationV1(
-        phrase: phrase,
-        generation: handle._vault.generation(),
+      final vault = (handle as _NativeVaultHandle)._vault;
+      final generation = vault.generation();
+      await _confirmOperation(
+        vault,
+        native.OperationV1.delete,
+        'reset',
+        generation,
       );
+      await vault.resetApplicationV1(phrase: phrase, generation: generation);
     }, mapToDomainError: _mapNativeError);
     if (result.isError) {
       reportVaultSafely(
@@ -924,11 +1150,18 @@ final class RustVaultAccessService implements VaultAccessService {
     const op = 'RustVaultAccessService.deleteGroupV2():';
     final result = await captureResult<ContentSnapshotV2>(() async {
       final vault = (handle as _NativeVaultHandle)._vault;
+      final generation = vault.generation();
+      await _confirmOperation(
+        vault,
+        native.OperationV1.delete,
+        'group:$id',
+        generation,
+      );
       return _cards(
         await vault.deleteGroupV2(
           id: id,
           revision: revision,
-          generation: vault.generation(),
+          generation: generation,
         ),
       );
     }, mapToDomainError: _mapNativeError);
@@ -1133,7 +1366,9 @@ final class RustVaultAccessService implements VaultAccessService {
     const op = 'RustVaultAccessService.cardV1():';
     final result = await captureResult<CardV1>(() async {
       final vault = (handle as _NativeVaultHandle)._vault;
-      final value = await vault.cardV1(id: id, generation: vault.generation());
+      final generation = vault.generation();
+      await _confirmOperation(vault, native.OperationV1.reveal, id, generation);
+      final value = await vault.cardV1(id: id, generation: generation);
       return CardV1(
         summary: _cardSummary(value.summary),
         description: value.description,
@@ -1225,11 +1460,13 @@ final class RustVaultAccessService implements VaultAccessService {
     const op = 'RustVaultAccessService.deleteCardV1():';
     final result = await captureResult<ContentSnapshotV2>(() async {
       final vault = (handle as _NativeVaultHandle)._vault;
+      final generation = vault.generation();
+      await _confirmOperation(vault, native.OperationV1.delete, id, generation);
       return _cards(
         await vault.deleteCardV1(
           id: id,
           revision: revision,
-          generation: vault.generation(),
+          generation: generation,
         ),
       );
     }, mapToDomainError: _mapNativeError);
@@ -1255,10 +1492,17 @@ final class RustVaultAccessService implements VaultAccessService {
     const op = 'RustVaultAccessService.nextHotpV1():';
     final result = await captureResult<HotpAdvanceV1>(() async {
       final vault = (handle as _NativeVaultHandle)._vault;
+      final generation = vault.generation();
+      await _confirmOperation(
+        vault,
+        native.OperationV1.reveal,
+        '$id:hotp',
+        generation,
+      );
       final response = await vault.nextHotpV1(
         id: id,
         revision: revision,
-        generation: vault.generation(),
+        generation: generation,
       );
       return HotpAdvanceV1(
         snapshot: _cards(response.snapshot),
@@ -1286,10 +1530,14 @@ final class RustVaultAccessService implements VaultAccessService {
     const op = 'RustVaultAccessService.currentTotpV1():';
     final result = await captureResult<TotpCodeV1>(() async {
       final vault = (handle as _NativeVaultHandle)._vault;
-      final value = await vault.currentTotpV1(
-        id: id,
-        generation: vault.generation(),
+      final generation = vault.generation();
+      await _confirmOperation(
+        vault,
+        native.OperationV1.reveal,
+        '$id:totp',
+        generation,
       );
+      final value = await vault.currentTotpV1(id: id, generation: generation);
       return TotpCodeV1(
         code: value.code,
         validUntil: DateTime.fromMillisecondsSinceEpoch(
@@ -1321,10 +1569,17 @@ final class RustVaultAccessService implements VaultAccessService {
     const op = 'RustVaultAccessService.copyCardFieldV1():';
     final result = await captureResult<String>(() async {
       final vault = (handle as _NativeVaultHandle)._vault;
+      final generation = vault.generation();
+      await _confirmOperation(
+        vault,
+        native.OperationV1.copy,
+        '$id:field:${_nativeFieldId(field).index}',
+        generation,
+      );
       return vault.copyCardFieldV1(
         id: id,
         field: _nativeFieldId(field),
-        generation: vault.generation(),
+        generation: generation,
       );
     }, mapToDomainError: _mapNativeError);
     if (result.isError) {
@@ -1348,7 +1603,9 @@ final class RustVaultAccessService implements VaultAccessService {
     const op = 'RustVaultAccessService.copyAccountV1():';
     final result = await captureResult<String>(() async {
       final vault = (handle as _NativeVaultHandle)._vault;
-      return vault.copyAccountV1(id: id, generation: vault.generation());
+      final generation = vault.generation();
+      await _confirmOperation(vault, native.OperationV1.copy, id, generation);
+      return vault.copyAccountV1(id: id, generation: generation);
     }, mapToDomainError: _mapNativeError);
     if (result.isError) {
       reportVaultSafely(
@@ -1373,11 +1630,18 @@ final class RustVaultAccessService implements VaultAccessService {
     const op = 'RustVaultAccessService.exportAttachmentV1():';
     final result = await captureResult<void>(() async {
       final vault = (handle as _NativeVaultHandle)._vault;
+      final generation = vault.generation();
+      await _confirmOperation(
+        vault,
+        native.OperationV1.export_,
+        '$id:$destination',
+        generation,
+      );
       await vault.exportAttachmentV1(
         id: id,
         destination: destination,
         revision: revision,
-        generation: vault.generation(),
+        generation: generation,
       );
     }, mapToDomainError: _mapNativeError);
     if (result.isError) {
@@ -1394,10 +1658,149 @@ final class RustVaultAccessService implements VaultAccessService {
   }
 }
 
-final class _NativeVaultHandle implements VaultHandleV1 {
+final class _NativeVaultHandle
+    implements
+        VaultHandleV1,
+        VaultProtectionSessionV1,
+        VaultLocalToolsSessionV1 {
   final native.Vault _vault;
   final VaultReporter _reporter;
-  const _NativeVaultHandle(this._vault, this._reporter);
+  final RustVaultAccessService _owner;
+  const _NativeVaultHandle(this._vault, this._reporter, this._owner);
+
+  @override
+  FutureDomainResult<String> localTool(
+    LocalToolCommandV1 command,
+    String body, {
+    Future<bool> Function()? admitted,
+  }) => _protected((generation) async {
+    final action = native.LocalToolCommandV1.values.byName(command.name);
+    if (command != LocalToolCommandV1.dashboard &&
+        command != LocalToolCommandV1.revoke &&
+        command != LocalToolCommandV1.agentIdentity) {
+      final subject = await native.localToolSubjectV1(
+        command: action,
+        body: body,
+      );
+      await _owner._confirmOperation(
+        _vault,
+        native.OperationV1.integrationGrant,
+        subject,
+        generation,
+      );
+    }
+    if (admitted != null && !await admitted()) throw native.VaultFailure.stale;
+    return _vault.localToolsV1(
+      command: action,
+      body: body,
+      generation: generation,
+    );
+  });
+
+  FutureDomainResult<T> _protected<T>(
+    Future<T> Function(BigInt generation) call,
+  ) => captureResult<T>(
+    () => call(_vault.generation()),
+    mapToDomainError: _mapNativeError,
+  );
+
+  @override
+  Future<bool> biometricAvailable() async =>
+      await _owner._biometricAvailable?.call() ?? false;
+  @override
+  FutureDomainResult<bool> biometricEnabled() =>
+      _protected((g) => _vault.biometricEnabledV1(generation: g));
+  @override
+  FutureDomainResult<void> configureBiometric(bool enable) =>
+      _protected((g) async {
+        await _owner._confirmOperation(
+          _vault,
+          native.OperationV1.protection,
+          'biometric',
+          g,
+        );
+        await _vault.configureBiometricV1(enable: enable, generation: g);
+      });
+  @override
+  FutureDomainResult<void> unlockBiometric() =>
+      _protected((g) => _vault.unlockBiometricV1(generation: g));
+  @override
+  FutureDomainResult<ProtectionSettingsDtoV1> protectionSettings() =>
+      _protected((g) async {
+        final value = await _vault.protectionSettingsV1(generation: g);
+        return ProtectionSettingsDtoV1(
+          value.enrolled,
+          value.operations.map((op) => ProtectedOperationV1.values[op.index]),
+        );
+      });
+
+  @override
+  FutureDomainResult<String> beginEnrollment() =>
+      _protected((g) => _vault.beginExternalTotpV1(generation: g));
+
+  @override
+  FutureDomainResult<void> enroll(
+    String code,
+    Set<ProtectedOperationV1> operations,
+  ) => _protected(
+    (g) => _vault.enrollExternalTotpV1(
+      code: code,
+      operations: operations
+          .map((op) => native.OperationV1.values[op.index])
+          .toList(),
+      generation: g,
+    ),
+  );
+
+  @override
+  FutureDomainResult<void> configureFactor(
+    String code,
+    Set<ProtectedOperationV1> operations, {
+    required bool disable,
+  }) => _protected(
+    (g) => _vault.configureExternalTotpV1(
+      code: code,
+      operations: operations
+          .map((op) => native.OperationV1.values[op.index])
+          .toList(),
+      disable: disable,
+      generation: g,
+    ),
+  );
+
+  @override
+  FutureDomainResult<String> revealField(String id, FieldIdV1 field) =>
+      _protected((g) async {
+        final key = _nativeFieldId(field);
+        await _owner._confirmOperation(
+          _vault,
+          native.OperationV1.reveal,
+          '$id:field:${key.index}',
+          g,
+        );
+        return _vault.revealCardFieldV1(id: id, field: key, generation: g);
+      });
+
+  @override
+  FutureDomainResult<TotpCodeV1> copyCurrentOtp(String id) =>
+      _protected((g) async {
+        await _owner._confirmOperation(
+          _vault,
+          native.OperationV1.copy,
+          '$id:totp',
+          g,
+        );
+        final value = await _vault.copyCurrentTotpV1(id: id, generation: g);
+        return TotpCodeV1(
+          code: value.code,
+          validUntil: DateTime.fromMillisecondsSinceEpoch(
+            value.validUntil.toInt() * 1000,
+            isUtc: true,
+          ),
+          period: Duration(seconds: value.period.toInt()),
+        );
+      });
+
   @override
   void invalidateSync() {
     const op = '_NativeVaultHandle.invalidateSync():';
@@ -1523,6 +1926,8 @@ ContentSnapshotV2 _cards(native.ContentSnapshotV2 value) => ContentSnapshotV2(
       )
       .toList(),
   cards: value.cards.map(_cardSummary).toList(),
+  services: value.services.map(_serviceDefinition).toList(),
+  templates: value.templates.map(_templateDefinition).toList(),
 );
 CardSummaryV1 _cardSummary(native.CardSummaryV1 value) => CardSummaryV1(
   id: value.id,
@@ -1534,6 +1939,7 @@ CardSummaryV1 _cardSummary(native.CardSummaryV1 value) => CardSummaryV1(
   groupIds: value.groupIds,
   cardType: _cardType(value.cardType),
   templateVersion: value.templateVersion,
+  customTemplateId: value.customTemplateId,
 );
 CardTypeV1 _cardType(native.CardTypeV1 value) => switch (value) {
   native.CardTypeV1.account => CardTypeV1.account,
@@ -1585,6 +1991,7 @@ CardTypeV1 _cardType(native.CardTypeV1 value) => switch (value) {
   native.CardTypeV1.identityDocument => CardTypeV1.identityDocument,
   native.CardTypeV1.walletMnemonic => CardTypeV1.walletMnemonic,
   native.CardTypeV1.walletPrivateKey => CardTypeV1.walletPrivateKey,
+  native.CardTypeV1.custom => CardTypeV1.custom,
 };
 native.CardTypeV1 _nativeCardType(CardTypeV1 value) => switch (value) {
   CardTypeV1.account => native.CardTypeV1.account,
@@ -1636,6 +2043,7 @@ native.CardTypeV1 _nativeCardType(CardTypeV1 value) => switch (value) {
   CardTypeV1.identityDocument => native.CardTypeV1.identityDocument,
   CardTypeV1.walletMnemonic => native.CardTypeV1.walletMnemonic,
   CardTypeV1.walletPrivateKey => native.CardTypeV1.walletPrivateKey,
+  CardTypeV1.custom => native.CardTypeV1.custom,
 };
 EnvironmentV1 _environment(native.EnvironmentV1 value) => switch (value) {
   native.EnvironmentV1.local => EnvironmentV1.local,

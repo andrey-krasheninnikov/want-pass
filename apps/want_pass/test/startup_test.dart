@@ -1,3 +1,5 @@
+import 'support/backup_access_fixture.dart';
+
 import 'package:want_pass/src/feature/vault/infrastructure/_barrel.dart';
 
 import 'dart:async';
@@ -106,7 +108,31 @@ final class _VaultHandle implements VaultHandleV1 {
   Future<void> close() async {}
 }
 
-final class _VaultAccess implements VaultAccessService {
+final class _VaultAccess
+    with BackupAccessFixture
+    implements VaultAccessService {
+  @override
+  FutureDomainResult<AccountImportPreviewV1> prepareAccountImportV1({
+    required VaultHandleV1 handle,
+    required AccountImportSourceV1 source,
+    required List<String> payloads,
+    required BigInt revision,
+  }) async =>
+      const Result.error(VaultRejectedErrorV1(VaultFailureKindV1.unavailable));
+  @override
+  FutureDomainResult<ContentSnapshotV2> applyAccountImportV1({
+    required VaultHandleV1 handle,
+    required String token,
+    required List<int> selected,
+  }) async =>
+      const Result.error(VaultRejectedErrorV1(VaultFailureKindV1.unavailable));
+  @override
+  FutureDomainResult<void> cancelAccountImportV1({
+    required VaultHandleV1 handle,
+    required String token,
+  }) async =>
+      const Result.error(VaultRejectedErrorV1(VaultFailureKindV1.unavailable));
+
   @override
   FutureDomainResult<CardMatchesV1> searchCardsV1({
     required VaultHandleV1 handle,

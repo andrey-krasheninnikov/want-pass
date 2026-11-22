@@ -69,6 +69,23 @@ impl Store {
             reset_pending: AtomicBool::new(false),
         })
     }
+    #[cfg(target_os = "macos")]
+    pub(crate) fn biometric_service(&self) -> Result<&'static str, VaultFailure> {
+        if !self.application {
+            return Err(VaultFailure::Unavailable);
+        }
+        let channel = self
+            .directory
+            .parent()
+            .and_then(Path::file_name)
+            .and_then(|name| name.to_str());
+        match channel {
+            Some("production") => Ok("foundation.want.pass.biometric"),
+            Some("development") => Ok("foundation.want.pass.dev.biometric"),
+            _ => Err(VaultFailure::Unavailable),
+        }
+    }
+
     pub fn directory(&self) -> &Path {
         &self.directory
     }

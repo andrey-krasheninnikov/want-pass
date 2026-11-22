@@ -965,13 +965,7 @@ void main() {
             period: const Duration(seconds: 1),
           ),
         );
-        final oldDeadline = DateTime.now().toUtc().add(
-          const Duration(seconds: 1),
-        );
-        access.rows = [row('123456', oldDeadline)];
-        if (!pendingCopy) {
-          access.rowsReply = Completer<DomainResult<List<CardRowV1>>>();
-        }
+        access.rowsReply = Completer<DomainResult<List<CardRowV1>>>();
         final export = _Export()..writing = Completer<void>();
         final events = StreamController<VaultLockSignal>.broadcast();
         final controller = _controller(access, events.stream, export);
@@ -998,6 +992,13 @@ void main() {
           await tester.pump(const Duration(milliseconds: 20));
         }
         if (pendingCopy) {
+          final oldDeadline = DateTime.now().toUtc().add(
+            const Duration(seconds: 2),
+          );
+          access.rowsReply!.complete(
+            Result.success([row('123456', oldDeadline)]),
+          );
+          access.rowsReply = null;
           await tester.pump();
           await tester.pump();
           expect(find.text('123456'), findsOneWidget);
@@ -1010,7 +1011,7 @@ void main() {
           if (delay > Duration.zero) {
             await tester.runAsync(() => Future<void>.delayed(delay));
           }
-          await tester.pump(const Duration(seconds: 2));
+          await tester.pump(const Duration(seconds: 3));
           expect(find.text('123456'), findsNothing);
           expect(controller.state.busy, isTrue);
           access.rows = [
